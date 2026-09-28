@@ -1,0 +1,61 @@
+name: nova_mobile
+description: "NOVA e-learning mobile app."
+publish_to: 'none'
+
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  dio: ^5.11.1
+  cookie_jar: ^4.0.9
+  dio_cookie_manager: ^3.5.0
+  flutter_secure_storage: ^11.2.0
+  file_picker: ^13.1.0
+  url_launcher: ^6.3.2
+  pdfx: ^2.11.0
+  web_socket_channel: ^3.0.3
+  livekit_client: ^2.13.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+
+  uses-material-design: true
+
+  # Mock course/offer posters and portraits (sourced from the web
+  # app's own assets) until covers come from /api/v1.
+  assets:
+    - assets/images/brand/
+    - assets/images/courses/
+    - assets/images/packs/
+    - assets/images/people/
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+    - family: InterDisplay
+      fonts:
+        - asset: assets/fonts/InterDisplay-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/InterDisplay-Bold.ttf
+          weight: 700
