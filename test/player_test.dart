@@ -510,7 +510,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Quizzes'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Required to unlock the next lesson'));
+      await tester.tap(find.text('Required to complete the lesson'));
       await tester.pumpAndSettle();
 
       expect(find.text('Which law links force and acceleration?'), findsOneWidget);

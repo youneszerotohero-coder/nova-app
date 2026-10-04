@@ -13,8 +13,8 @@ import 'auth_hero.dart';
 import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 
-/// Split auth screen: brand panel + phone/password sign-in.
-/// Password reset is school-managed (no public self-reset).
+/// Split auth screen: brand panel + phone/password sign-in, with the
+/// forgotten-password flow by code (D-093).
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -28,6 +28,9 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscure = true;
   bool _busy = false;
   String? _error;
+
+  /// Back from a forgotten-password reset: "sign in with the new password".
+  bool _passwordReset = false;
 
   @override
   void dispose() {
@@ -55,6 +58,23 @@ class _LoginScreenState extends State<LoginScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// D-093: the forgotten-password flow comes back with the number once
+  /// the password is changed; sign-in opens with it typed.
+  Future<void> _openForgotPassword() async {
+    final String? phone = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        builder: (_) => ForgotPasswordScreen(initialPhone: _phone.text.trim()),
+      ),
+    );
+    if (phone == null || !mounted) return;
+    setState(() {
+      _phone.text = phone;
+      _password.clear();
+      _error = null;
+      _passwordReset = true;
+    });
   }
 
   /// Registration comes back with the phone when that number already
@@ -90,6 +110,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 if (AppScope.of(context).session.endedReason ==
                     ApiException.sessionReplaced)
                   _Banner(text: context.tr('err.sessionReplaced')),
+                if (_passwordReset)
+                  _Banner(text: context.tr('auth.passwordResetDone'), icon: Icons.check_circle_rounded),
                 ...stagger(_fields()),
                 if (_error != null) _Banner(text: _error!, error: true),
                 const SizedBox(height: 8),
@@ -127,11 +149,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 14),
                 Center(
                   child: PressableScale(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const ForgotPasswordScreen(),
-                      ),
-                    ),
+                    onTap: _openForgotPassword,
                     semanticLabel: 'Forgot password',
                     child: Text(
                       context.tr('auth.forgot'),
@@ -243,31 +261,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
-      Container(
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(
-          color: NovaColors.accentMist,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.info_outline_rounded,
-              size: 18,
-              color: NovaColors.accentDeep,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                context.tr('auth.forgotNote'),
-                style: NovaTypography.textTheme.bodySmall!.copyWith(
-                  color: NovaColors.accentDeep,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     ];
   }
 }
@@ -348,10 +341,11 @@ class _AuthField extends StatelessWidget {
 /// Inline notice under the header: a replaced session or a sign-in
 /// error, in the app's own words.
 class _Banner extends StatelessWidget {
-  const _Banner({required this.text, this.error = false});
+  const _Banner({required this.text, this.error = false, this.icon});
 
   final String text;
   final bool error;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -367,7 +361,7 @@ class _Banner extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            error ? Icons.error_outline_rounded : Icons.devices_other_rounded,
+            icon ?? (error ? Icons.error_outline_rounded : Icons.devices_other_rounded),
             size: 18,
             color: hue.onSurface,
           ),

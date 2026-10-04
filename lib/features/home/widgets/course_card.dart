@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/i18n/labels.dart';
 import '../../../core/i18n/nova_strings.dart';
 import '../../../core/theme/nova_colors.dart';
 import '../../../core/theme/nova_dimens.dart';
@@ -196,9 +197,14 @@ class CourseCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
-                          child: course.owned
+                          child: course.owned || course.packOnly
                               ? Text(
-                                  context.tr('common.open'),
+                                  // D-091: sold through Packs only.
+                                  course.owned
+                                      ? context.tr('common.open')
+                                      : packPriceText(context, course),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: NovaTypography.textTheme.titleMedium!
                                       .copyWith(
                                     color: dark

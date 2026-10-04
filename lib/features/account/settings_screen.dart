@@ -9,9 +9,11 @@ import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../core/state/app_state.dart';
 import '../../data/models.dart';
+import 'password_change_form.dart';
 
 /// Settings: appearance controls (dark mode + language), the
-/// school-managed read-only identity, alerts and sign out.
+/// school-managed read-only identity, alerts, the password change by
+/// code (D-093) and sign out.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -118,11 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.lock_outline_rounded,
             hue: NovaHue.mint,
             title: context.tr('settings.security'),
-            child: Text(
-              context.tr('settings.securityNote'),
-              style:
-                  NovaTypography.muted(NovaTypography.textTheme.bodySmall!),
-            ),
+            child: PasswordChangeForm(phone: student?.phone ?? ''),
           ),
           const SizedBox(height: 24),
           PressableScale(

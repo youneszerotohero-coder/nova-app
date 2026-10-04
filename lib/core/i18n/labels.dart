@@ -1,7 +1,14 @@
 import 'package:flutter/widgets.dart';
 
 import '../../data/models.dart';
+import '../utils/format_price.dart';
 import 'nova_strings.dart';
+
+/// D-091: the card price of a course sold through Packs only, "In Packs
+/// from" the cheapest one, or "In Packs only" while none is on sale.
+String packPriceText(BuildContext context, Course course) => course.offerPriceFrom == null
+    ? context.tr('detail.packsOnly')
+    : '${context.tr('detail.packsFrom')} ${formatDaPrice(course.offerPriceFrom!)}';
 
 /// A pack's offer type in the app language, in the website's wording.
 String offerTypeText(BuildContext context, Pack pack) {

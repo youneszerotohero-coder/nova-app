@@ -225,6 +225,18 @@ const Map<String, Map<String, String>> K = {
     'fr': 'Accès vérifié · année scolaire',
     'ar': 'وصول موثّق · السنة الدراسية',
   },
+  // D-091: a course sold through Packs only (the website's wording).
+  'detail.packsFrom': {'en': 'In Packs from', 'fr': 'En pack dès', 'ar': 'ضمن الباقات ابتداءً من'},
+  'detail.packsOnly': {'en': 'In Packs only', 'fr': 'En pack uniquement', 'ar': 'ضمن الباقات فقط'},
+  'detail.addPack': {'en': 'Add the Pack', 'fr': 'Ajouter le pack', 'ar': 'أضف الباقة'},
+  'detail.soldInPack': {'en': 'Sold within the Pack {title}', 'fr': 'Vendu dans le pack {title}', 'ar': 'يُباع ضمن الباقة {title}'},
+  'detail.soldInPacks': {'en': 'Sold within {count} Packs', 'fr': 'Vendu dans {count} packs', 'ar': 'يُباع ضمن {count} باقات'},
+  'detail.choosePackTitle': {'en': 'Choose a Pack', 'fr': 'Choisis un pack', 'ar': 'اختر باقة'},
+  'detail.choosePackHint': {
+    'en': 'This course is sold within Packs. Choose the one you want.',
+    'fr': 'Ce cours est vendu dans des packs. Choisis celui qui te convient.',
+    'ar': 'تُباع هذه الدورة ضمن باقات. اختر الباقة التي تناسبك.',
+  },
   'detail.offersOnly': {
     'en': 'Available through offers only',
     'fr': 'Disponible via les offres uniquement',
@@ -436,12 +448,12 @@ const Map<String, Map<String, String>> K = {
   'learn.lessonOf': {'en': 'Lesson {i} of {n}', 'fr': 'Leçon {i} sur {n}', 'ar': 'الدرس {i} من {n}'},
   'learn.includesPdf': {'en': ' · includes a private PDF', 'fr': ' · inclut un PDF privé', 'ar': ' · يتضمن PDF خاصاً'},
   'learn.quizRequiredToUnlock': {
-    'en': ' · quiz required to unlock next',
-    'fr': ' · quiz requis pour débloquer la suite',
-    'ar': ' · اختبار إلزامي لفتح التالي',
+    'en': ' · quiz required to complete it',
+    'fr': ' · quiz requis pour la valider',
+    'ar': ' · اختبار إلزامي لإتمامه',
   },
   'learn.resumePill': {'en': 'Resumes where you left off', 'fr': 'Reprends où tu t’es arrêté', 'ar': 'يكمل من حيث توقفت'},
-  'learn.locked': {'en': 'Locked · finish the previous lesson', 'fr': 'Verrouillé · termine la leçon précédente', 'ar': 'مقفل · أكمل الدرس السابق'},
+  'learn.locked': {'en': 'Not available yet', 'fr': 'Pas encore disponible', 'ar': 'غير متاح بعد'},
   'learn.pdf': {'en': 'PDF', 'fr': 'PDF', 'ar': 'PDF'},
   'learn.quiz': {'en': 'quiz', 'fr': 'quiz', 'ar': 'اختبار'},
   'learn.play': {'en': 'Play', 'fr': 'Lire', 'ar': 'تشغيل'},
@@ -765,11 +777,10 @@ const Map<String, Map<String, String>> K = {
   'settings.security': {'en': 'Security', 'fr': 'Sécurité', 'ar': 'الأمان'},
   'settings.securityNote': {
     'en': 'One active session at a time — a new login invalidates the '
-        'old one. Password resets go through the school.',
+        'old one.',
     'fr': 'Une seule session active — une nouvelle connexion invalide '
-        'l’ancienne. Les réinitialisations passent par l’école.',
-    'ar': 'جلسة نشطة واحدة — تسجيل دخول جديد يلغي القديم. إعادة تعيين '
-        'كلمة المرور تمر عبر المدرسة.',
+        'l’ancienne.',
+    'ar': 'جلسة نشطة واحدة — تسجيل دخول جديد يلغي القديم.',
   },
   'settings.signOut': {'en': 'Sign out', 'fr': 'Se déconnecter', 'ar': 'تسجيل الخروج'},
 
@@ -783,13 +794,6 @@ const Map<String, Map<String, String>> K = {
   'auth.identifier': {'en': 'Identifier', 'fr': 'Identifiant', 'ar': 'المعرّف'},
   'auth.password': {'en': 'Password', 'fr': 'Mot de passe', 'ar': 'كلمة المرور'},
   'auth.forgot': {'en': 'Forgot your password?', 'fr': 'Mot de passe oublié ?', 'ar': 'نسيت كلمة المرور؟'},
-  'auth.forgotNote': {
-    'en': 'Forgot your password? Contact the school — an admin will '
-        'reset it manually.',
-    'fr': 'Mot de passe oublié ? Contacte l’école — un admin le '
-        'réinitialisera manuellement.',
-    'ar': 'نسيت كلمة المرور؟ اتصل بالمدرسة — سيعيد المشرف ضبطها يدوياً.',
-  },
   'auth.signIn': {'en': 'Sign in', 'fr': 'Se connecter', 'ar': 'تسجيل الدخول'},
   'auth.newHere': {
     'en': 'New to Nova? Create your account in a minute.',
@@ -844,47 +848,141 @@ const Map<String, Map<String, String>> K = {
     'ar': 'سجّل الدخول برقم هاتفك لبدء التعلّم.',
   },
   'auth.goSignIn': {'en': 'Go to sign in', 'fr': 'Aller à la connexion', 'ar': 'اذهب لتسجيل الدخول'},
-  'auth.resetTitle': {'en': 'Reset password', 'fr': 'Réinitialiser le mot de passe', 'ar': 'إعادة تعيين كلمة المرور'},
-  'auth.contactSchool': {'en': 'Contact the school', 'fr': 'Contacte l’école', 'ar': 'اتصل بالمدرسة'},
-  'auth.resetBody': {
-    'en': 'Passwords cannot be reset from the app. Contact the Nova '
-        'administration: after verifying your identity, an admin resets '
-        'your password and revokes all active sessions — you then set a '
-        'new one at your next sign-in.',
-    'fr': 'Le mot de passe ne se réinitialise pas depuis l’app. Contacte '
-        'l’administration Nova : après vérification de ton identité, un '
-        'admin réinitialise ton mot de passe et révoque toutes les '
-        'sessions — tu en définis un nouveau à la prochaine connexion.',
-    'ar': 'لا يمكن إعادة تعيين كلمة المرور من التطبيق. اتصل بإدارة '
-        'نوفا: بعد التحقق من هويتك، يعيد المشرف ضبط كلمة مرورك ويلغي كل '
-        'الجلسات النشطة — ثم تضع كلمة جديدة عند تسجيلك التالي.',
+  // D-093/D-096 codes by SMS or WhatsApp (the website's `otp.*`,
+  // `forgot.*`, `dash.password_*` and `errors.code.*` wording).
+  'otp.codeLabel': {'en': 'Verification code', 'fr': 'Code de vérification', 'ar': 'رمز التحقق'},
+  'otp.codeFormat': {
+    'en': 'Enter the 6-digit code you received.',
+    'fr': 'Saisis le code à 6 chiffres reçu.',
+    'ar': 'أدخل الرمز المكوّن من 6 أرقام الذي وصلك.',
   },
-  'auth.emailUs': {'en': 'Email noova.elearning@gmail.com', 'fr': 'Écrire à noova.elearning@gmail.com', 'ar': 'راسلنا noova.elearning@gmail.com'},
-  'auth.resetStep1': {
-    'en': 'Call or email the school desk',
-    'fr': 'Appelle ou écris à l’accueil de l’école',
-    'ar': 'اتصل بالمدرسة أو راسلها',
+  'otp.sendCode': {'en': 'Send the code', 'fr': 'Envoyer le code', 'ar': 'إرسال الرمز'},
+  'otp.resend': {'en': 'Send a new code', 'fr': 'Envoyer un nouveau code', 'ar': 'إرسال رمز جديد'},
+  'otp.resendIn': {'en': 'New code in {seconds} s', 'fr': 'Nouveau code dans {seconds} s', 'ar': 'رمز جديد بعد {seconds} ث'},
+  'otp.verify': {'en': 'Verify', 'fr': 'Vérifier', 'ar': 'تحقّق'},
+  'otp.remainingAttempts': {'en': '{count} attempt(s) left.', 'fr': 'Encore {count} essai(s).', 'ar': 'بقيت {count} محاولة.'},
+  'otp.channelLabel': {'en': 'Receive the code by', 'fr': 'Recevoir le code par', 'ar': 'استلام الرمز عبر'},
+  'otp.channelSms': {'en': 'SMS', 'fr': 'SMS', 'ar': 'SMS'},
+  'otp.channelWhatsapp': {'en': 'WhatsApp', 'fr': 'WhatsApp', 'ar': 'واتساب'},
+  'otp.invalid': {'en': 'This code is incorrect.', 'fr': 'Ce code est incorrect.', 'ar': 'هذا الرمز غير صحيح.'},
+  'otp.expired': {
+    'en': 'This code has expired or was replaced by a newer one. Request a new code.',
+    'fr': 'Ce code a expiré ou a été remplacé par un nouveau code. Demande un nouveau code.',
+    'ar': 'انتهت صلاحية هذا الرمز أو تم استبداله برمز أحدث. اطلب رمزاً جديداً.',
   },
-  'auth.resetStep2': {
-    'en': 'An admin verifies your identity',
-    'fr': 'Un admin vérifie ton identité',
-    'ar': 'يتحقق المشرف من هويتك',
+  'otp.attemptsExceeded': {
+    'en': 'Too many wrong codes. Request a new code.',
+    'fr': 'Trop de codes erronés. Demande un nouveau code.',
+    'ar': 'محاولات خاطئة كثيرة. اطلب رمزاً جديداً.',
   },
-  'auth.resetStep3': {
-    'en': 'They reset your password',
-    'fr': 'Il réinitialise ton mot de passe',
-    'ar': 'يعيد تعيين كلمة المرور',
+  'otp.resendTooSoon': {
+    'en': 'Wait a moment before requesting a new code.',
+    'fr': 'Patiente un instant avant de demander un nouveau code.',
+    'ar': 'انتظر قليلاً قبل طلب رمز جديد.',
   },
-  'auth.resetStep4': {
-    'en': 'Sign in and set a new password',
-    'fr': 'Connecte-toi et choisis un nouveau mot de passe',
-    'ar': 'سجّل الدخول واختر كلمة مرور جديدة',
+  'otp.tooManyRequests': {
+    'en': 'Too many code requests. Please retry later.',
+    'fr': 'Trop de demandes de code. Réessaie plus tard.',
+    'ar': 'طلبات رموز كثيرة. أعد المحاولة لاحقاً.',
   },
-  'auth.noMailApp': {
-    'en': 'No email app found. Write to noova.elearning@gmail.com',
-    'fr': 'Aucune app e-mail trouvée. Écris à noova.elearning@gmail.com',
-    'ar': 'لا يوجد تطبيق بريد. راسلنا على noova.elearning@gmail.com',
+  'otp.serviceUnavailable': {
+    'en': 'Codes cannot be sent right now. Please retry later.',
+    'fr': 'Les codes ne peuvent pas être envoyés pour le moment. Réessaie plus tard.',
+    'ar': 'لا يمكن إرسال الرموز حالياً. أعد المحاولة لاحقاً.',
   },
+  'otp.resetTokenInvalid': {
+    'en': 'This step has expired. Start again and request a new code.',
+    'fr': 'Cette étape a expiré. Recommence et demande un nouveau code.',
+    'ar': 'انتهت صلاحية هذه الخطوة. ابدأ من جديد واطلب رمزاً جديداً.',
+  },
+  'otp.phoneVerificationRequired': {
+    'en': 'Verify your phone number with the code first.',
+    'fr': 'Vérifie d’abord ton numéro avec le code reçu.',
+    'ar': 'تحقّق أولاً من رقم هاتفك بالرمز الذي وصلك.',
+  },
+  'otp.phoneVerificationInvalid': {
+    'en': 'The phone verification has expired or does not match this number. Request a new code.',
+    'fr': 'La vérification du numéro a expiré ou ne correspond pas à ce numéro. Demande un nouveau code.',
+    'ar': 'انتهت صلاحية التحقق من الرقم أو لا يطابق هذا الرقم. اطلب رمزاً جديداً.',
+  },
+  'forgot.title': {'en': 'Forgot your password?', 'fr': 'Mot de passe oublié ?', 'ar': 'نسيت كلمة المرور؟'},
+  'forgot.subtitle': {
+    'en': 'Enter the phone number of your Student account. We send you a code by SMS or WhatsApp.',
+    'fr': 'Saisis le numéro de téléphone de ton compte élève. Nous t’envoyons un code par SMS ou WhatsApp.',
+    'ar': 'أدخل رقم هاتف حسابك كتلميذ. سنرسل لك رمزاً عبر SMS أو واتساب.',
+  },
+  'forgot.codeTitle': {'en': 'Enter the code', 'fr': 'Saisis le code', 'ar': 'أدخل الرمز'},
+  'forgot.codeSent': {
+    'en': 'If this number belongs to a NOVA Student account, a 6-digit code was sent to {phone} '
+        'by {channel}. It is valid for 5 minutes.',
+    'fr': 'Si ce numéro correspond à un compte élève NOVA, un code à 6 chiffres a été envoyé par '
+        '{channel} au {phone}. Il est valable 5 minutes.',
+    'ar': 'إذا كان هذا الرقم مرتبطاً بحساب تلميذ في NOVA، فقد أُرسل رمز من 6 أرقام عبر {channel} '
+        'إلى {phone}. صالح لمدة 5 دقائق.',
+  },
+  'forgot.passwordTitle': {'en': 'Choose a new password', 'fr': 'Choisis un nouveau mot de passe', 'ar': 'اختر كلمة مرور جديدة'},
+  'forgot.passwordSubtitle': {
+    'en': 'Your new password must have at least 8 characters. Every device will be signed out.',
+    'fr': 'Ton nouveau mot de passe doit contenir au moins 8 caractères. Tous tes appareils seront déconnectés.',
+    'ar': 'يجب أن تحتوي كلمة المرور الجديدة على 8 أحرف على الأقل. سيتم تسجيل الخروج من جميع الأجهزة.',
+  },
+  'forgot.newPassword': {'en': 'New password', 'fr': 'Nouveau mot de passe', 'ar': 'كلمة المرور الجديدة'},
+  'forgot.savePassword': {'en': 'Save the new password', 'fr': 'Enregistrer le mot de passe', 'ar': 'حفظ كلمة المرور الجديدة'},
+  'forgot.changeNumber': {'en': 'Change the number', 'fr': 'Changer de numéro', 'ar': 'تغيير الرقم'},
+  'forgot.backToLogin': {'en': 'Back to sign in', 'fr': 'Retour à la connexion', 'ar': 'العودة إلى تسجيل الدخول'},
+  'auth.passwordResetDone': {
+    'en': 'Your password was changed. Sign in with your new password.',
+    'fr': 'Ton mot de passe a été modifié. Connecte-toi avec ton nouveau mot de passe.',
+    'ar': 'تم تغيير كلمة المرور. سجّل الدخول بكلمة المرور الجديدة.',
+  },
+  'auth.phoneVerificationNeeded': {
+    'en': 'Verify your phone number with the code before creating your account.',
+    'fr': 'Vérifie ton numéro avec le code reçu avant de créer ton compte.',
+    'ar': 'تحقّق من رقم هاتفك بالرمز قبل إنشاء حسابك.',
+  },
+  'auth.verifyPhone': {'en': 'Verify your phone number', 'fr': 'Vérifie ton numéro de téléphone', 'ar': 'تحقّق من رقم هاتفك'},
+  'auth.verifyPhoneDesc': {
+    'en': 'We send a 6-digit code to {phone} by SMS or WhatsApp.',
+    'fr': 'Nous envoyons un code à 6 chiffres au {phone} par SMS ou WhatsApp.',
+    'ar': 'نرسل رمزاً من 6 أرقام إلى {phone} عبر SMS أو واتساب.',
+  },
+  'auth.verifyCodeSent': {
+    'en': 'A code was sent by {channel} to {phone}. It is valid for 5 minutes.',
+    'fr': 'Un code a été envoyé par {channel} au {phone}. Il est valable 5 minutes.',
+    'ar': 'تم إرسال رمز عبر {channel} إلى {phone}. صالح لمدة 5 دقائق.',
+  },
+  'auth.phoneVerified': {'en': 'Phone number verified.', 'fr': 'Numéro de téléphone vérifié.', 'ar': 'تم التحقق من رقم الهاتف.'},
+  'security.changeDesc': {
+    'en': 'To change your password, we send a code to your phone number by SMS or WhatsApp.',
+    'fr': 'Pour changer ton mot de passe, nous envoyons un code à ton numéro par SMS ou WhatsApp.',
+    'ar': 'لتغيير كلمة المرور، نرسل رمزاً إلى رقم هاتفك عبر SMS أو واتساب.',
+  },
+  'security.sendCode': {'en': 'Send me a code', 'fr': 'M’envoyer un code', 'ar': 'أرسل لي رمزاً'},
+  'security.codeSent': {
+    'en': 'A 6-digit code was sent by {channel} to {phone}. It is valid for 5 minutes.',
+    'fr': 'Un code à 6 chiffres a été envoyé par {channel} au {phone}. Il est valable 5 minutes.',
+    'ar': 'تم إرسال رمز من 6 أرقام عبر {channel} إلى {phone}. صالح لمدة 5 دقائق.',
+  },
+  'security.save': {'en': 'Change the password', 'fr': 'Changer le mot de passe', 'ar': 'تغيير كلمة المرور'},
+  'security.changed': {
+    'en': 'Your password was changed. Your other devices were signed out.',
+    'fr': 'Ton mot de passe a été modifié. Tes autres appareils ont été déconnectés.',
+    'ar': 'تم تغيير كلمة المرور. تم تسجيل الخروج من أجهزتك الأخرى.',
+  },
+  'security.unavailable': {
+    'en': 'The password could not be changed. Please retry.',
+    'fr': 'Le mot de passe n’a pas pu être modifié. Réessaie.',
+    'ar': 'تعذّر تغيير كلمة المرور. أعد المحاولة.',
+  },
+
+  // D-098: the school-year confirmation (website `onboarding.school_year_*`).
+  'schoolYear.title': {'en': 'Confirm your year and track', 'fr': 'Confirme ton année et ta filière', 'ar': 'أكّد سنتك وشعبتك'},
+  'schoolYear.subtitle': {
+    'en': 'A new school year has started. Keep or change your school level and track before continuing.',
+    'fr': 'Une nouvelle année scolaire a commencé. Garde ou modifie ton niveau et ta filière avant de continuer.',
+    'ar': 'بدأت سنة دراسية جديدة. احتفظ بمستواك وشعبتك أو غيّرهما قبل المتابعة.',
+  },
+  'schoolYear.confirm': {'en': 'Confirm', 'fr': 'Confirmer', 'ar': 'تأكيد'},
 
   // API wiring (D-067): shared words, auth steps, empty states, errors.
   'common.all': {'en': 'All', 'fr': 'Tout', 'ar': 'الكل'},
@@ -934,15 +1032,17 @@ const Map<String, Map<String, String>> K = {
     'en': 'An account already exists with this phone number. If it is yours, sign in with '
         'this number instead of creating a new account (if you never chose a password for '
         'it, your password is your phone number). If it belongs to a family member, '
-        'register with your own mobile number. Forgot your password? Contact the school.',
+        'register with your own mobile number. Forgot your password? Use “Forgot your '
+        'password?” on the sign-in screen to receive a code by SMS or WhatsApp.',
     'fr': 'Un compte existe déjà avec ce numéro de téléphone. S’il est à toi, connecte-toi '
         'avec ce numéro au lieu de créer un nouveau compte (si tu n’as jamais choisi de mot '
         'de passe, c’est ton numéro de téléphone). S’il appartient à un membre de ta '
-        'famille, inscris-toi avec ton propre numéro. Mot de passe oublié ? Contacte '
-        'l’établissement.',
+        'famille, inscris-toi avec ton propre numéro. Mot de passe oublié ? Utilise « Mot '
+        'de passe oublié ? » sur l’écran de connexion pour recevoir un code par SMS ou WhatsApp.',
     'ar': 'يوجد حساب مسجل بهذا الرقم. إذا كان حسابك، فسجّل الدخول بهذا الرقم بدلاً من إنشاء '
         'حساب جديد (إذا لم تختر كلمة مرور من قبل، فهي رقم هاتفك). وإذا كان لأحد أفراد '
-        'عائلتك، فسجّل برقمك أنت. نسيت كلمة المرور؟ تواصل مع إدارة المنصة.',
+        'عائلتك، فسجّل برقمك أنت. نسيت كلمة المرور؟ استعمل «نسيت كلمة المرور؟» في شاشة '
+        'تسجيل الدخول لتلقي رمز عبر SMS أو واتساب.',
   },
   // D-081: registration takes the number exactly as it is typed at sign-in.
   'auth.phoneStrict': {
@@ -1033,14 +1133,14 @@ const Map<String, Map<String, String>> K = {
     'en': 'This account was closed because you already have a NOVA account with your '
         'offers. Sign in to that account with your phone number ({phone}). If you never '
         'chose a password for it, your password is your phone number. Forgot your '
-        'password? Contact the school.',
+        'password? Use “Forgot your password?” to receive a code by SMS or WhatsApp.',
     'fr': 'Ce compte a été fermé car tu as déjà un compte NOVA avec tes offres. '
         'Connecte-toi à ce compte avec ton numéro de téléphone ({phone}). Si tu n’as '
         'jamais choisi de mot de passe pour ce compte, c’est ton numéro de téléphone. Mot '
-        'de passe oublié ? Contacte l’établissement.',
+        'de passe oublié ? Utilise « Mot de passe oublié ? » pour recevoir un code par SMS ou WhatsApp.',
     'ar': 'تم إغلاق هذا الحساب لأن لديك حساباً آخر على NOVA يحتوي على عروضك. سجّل الدخول '
         'إلى ذلك الحساب برقم هاتفك ({phone}). إذا لم تختر كلمة مرور لذلك الحساب من قبل، '
-        'فكلمة المرور هي رقم هاتفك. نسيت كلمة المرور؟ تواصل مع إدارة المنصة.',
+        'فكلمة المرور هي رقم هاتفك. نسيت كلمة المرور؟ استعمل «نسيت كلمة المرور؟» لتلقي رمز عبر SMS أو واتساب.',
   },
   'err.ownedOtherAccount': {
     'en': 'Another NOVA account with your phone number already has this. Sign in to that '
@@ -1336,7 +1436,7 @@ const Map<String, Map<String, String>> K = {
     'fr': 'Les leçons protégées ne sont pas encore lisibles sur iPhone. Utilise un téléphone Android ou un ordinateur.',
     'ar': 'لا يمكن تشغيل الدروس المحمية على آيفون بعد. استخدم هاتف أندرويد أو حاسوباً.',
   },
-  'learn.lockedRow': {'en': 'Locked · finish the previous lesson', 'fr': 'Verrouillée · termine la leçon précédente', 'ar': 'مقفل · أكمل الدرس السابق'},
+  'learn.lockedRow': {'en': 'Not available yet', 'fr': 'Pas encore disponible', 'ar': 'غير متاح بعد'},
   'learn.noLessons': {'en': 'No lessons yet', 'fr': 'Aucune leçon', 'ar': 'لا دروس بعد'},
   'learn.noLessonsMsg': {
     'en': 'Lessons appear here as soon as the teacher publishes them.',
@@ -1345,9 +1445,9 @@ const Map<String, Map<String, String>> K = {
   },
   'learn.watchedPill': {'en': '{n}% watched', 'fr': '{n} % vus', 'ar': 'شوهد {n}%'},
   'learn.passQuizToUnlock': {
-    'en': 'Pass the quiz to unlock the next lesson',
-    'fr': 'Réussis le quiz pour débloquer la suite',
-    'ar': 'انجح في الاختبار لفتح الدرس التالي',
+    'en': 'Pass the quiz to complete the lesson',
+    'fr': 'Réussis le quiz pour valider la leçon',
+    'ar': 'انجح في الاختبار لإتمام الدرس',
   },
   'learn.quizLocked': {'en': 'Locked', 'fr': 'Verrouillé', 'ar': 'مقفل'},
   'learn.watchToUnlockQuiz': {
@@ -1356,9 +1456,9 @@ const Map<String, Map<String, String>> K = {
     'ar': 'شاهد 90% من الدرس لفتحه · {n}% حتى الآن',
   },
   'learn.quizRequired': {
-    'en': 'Required to unlock the next lesson',
-    'fr': 'Obligatoire pour débloquer la suite',
-    'ar': 'إلزامي لفتح الدرس التالي',
+    'en': 'Required to complete the lesson',
+    'fr': 'Obligatoire pour valider la leçon',
+    'ar': 'إلزامي لإتمام الدرس',
   },
   'learn.quizLockedMsg': {
     'en': 'Watch at least 90% of the lesson before opening its quiz.',
@@ -1371,16 +1471,16 @@ const Map<String, Map<String, String>> K = {
   'learn.quizPassedTitle': {'en': 'Quiz passed', 'fr': 'Quiz réussi', 'ar': 'نجحت في الاختبار'},
   'learn.quizFailedTitle': {'en': 'Not passed this time', 'fr': 'Pas réussi cette fois', 'ar': 'لم تنجح هذه المرة'},
   'learn.quizPassedMsg': {
-    'en': 'You scored {n}%. The next lesson is unlocked.',
-    'fr': 'Tu as obtenu {n} %. La leçon suivante est débloquée.',
-    'ar': 'حصلت على {n}%. تم فتح الدرس التالي.',
+    'en': 'You scored {n}%. The lesson is complete.',
+    'fr': 'Tu as obtenu {n} %. La leçon est validée.',
+    'ar': 'حصلت على {n}%. تم إتمام الدرس.',
   },
   'learn.quizScoreLine': {'en': 'Score {n}% · {p}% to pass', 'fr': 'Score {n} % · {p} % pour réussir', 'ar': 'النتيجة {n}% · النجاح بـ {p}%'},
   'learn.bestScore': {'en': 'Best score', 'fr': 'Meilleur score', 'ar': 'أفضل نتيجة'},
   'learn.attemptsLeft': {'en': 'Attempts left', 'fr': 'Tentatives restantes', 'ar': 'المحاولات المتبقية'},
   'learn.retryFrom': {'en': 'Retry from', 'fr': 'Nouvel essai dès', 'ar': 'إعادة المحاولة من'},
   'learn.unlimited': {'en': 'Unlimited', 'fr': 'Illimitées', 'ar': 'غير محدودة'},
-  'learn.nextUnlocked': {'en': 'The next lesson is unlocked.', 'fr': 'La leçon suivante est débloquée.', 'ar': 'تم فتح الدرس التالي.'},
+  'learn.nextUnlocked': {'en': 'The lesson is complete.', 'fr': 'La leçon est validée.', 'ar': 'تم إتمام الدرس.'},
   'learn.reviewAndRetry': {
     'en': 'Review the lesson, then try again.',
     'fr': 'Revois la leçon, puis réessaie.',

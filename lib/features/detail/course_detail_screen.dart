@@ -19,6 +19,7 @@ import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/widgets/nova_toast.dart';
 import '../learning/open_course.dart';
+import 'pack_picker.dart';
 
 /// Course detail (and Offer detail via `.pack`): hero, description,
 /// curriculum accordion, purchase card with the add-to-cart / buy-now
@@ -49,11 +50,25 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   NovaScene get _scene => _isPack ? _pack!.scene : _course!.scene;
   IconData get _icon => _isPack ? _pack!.icon : _course!.icon;
   String? get _image => _isPack ? _pack!.image : _course!.image;
-  int get _price => _isPack ? _pack!.price : _course!.price;
-  int get _compareAt => _isPack ? _pack!.compareAtPrice : _course!.compareAtPrice;
+  int get _price => _isPack
+      ? _pack!.price
+      : _packOnly
+          ? (_course!.offerPriceFrom ?? 0)
+          : _course!.price;
+  int get _compareAt => _isPack
+      ? _pack!.compareAtPrice
+      : _packOnly
+          ? _price
+          : _course!.compareAtPrice;
   bool get _owned => !_isPack && _app.learning.owns(_course!.id);
   bool get _free => !_isPack && _course!.isFree;
-  bool get _purchasable => _isPack || _course!.individualPurchaseEnabled;
+
+  /// D-091: a paid Unit never sold on its own; Buy and Add put one of its
+  /// Packs in the cart (the Student picks one when there are several).
+  bool get _packOnly => !_isPack && _course!.packOnly;
+  List<CoursePack> get _coursePacks => _isPack ? const <CoursePack>[] : _course!.packs;
+  bool get _purchasable =>
+      _isPack || _course!.individualPurchaseEnabled || (_packOnly && _coursePacks.isNotEmpty);
 
   /// D-083: another level or filière than the signed-in Student's (said by
   /// the public detail). It stays visible and is never bought or joined;
@@ -65,7 +80,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   String get _kind => _isPack ? 'offer' : 'course';
   int get _productId => _isPack ? _pack!.id : _course!.id;
   String get _cartKey => '$_kind:$_productId';
-  bool get _added => _app.contains(_cartKey);
+  bool get _added => _packOnly
+      ? _coursePacks.any((CoursePack pack) => _app.contains('offer:${pack.id}'))
+      : _app.contains(_cartKey);
 
   @override
   void initState() {
@@ -100,13 +117,17 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     );
   }
 
-  Future<bool> _addToCart() async {
-    if (_added) return true;
+  Future<bool> _addToCart() => _addItem(_kind, _productId);
+
+  Future<void> _buyNow() => _buyItem(_kind, _productId);
+
+  Future<bool> _addItem(String kind, int id) async {
+    if (_app.contains('$kind:$id')) return true;
     setState(() => _busy = true);
     try {
-      await _app.commerce.add(kind: _kind, id: _productId);
+      await _app.commerce.add(kind: kind, id: id);
       if (mounted) {
-        _toast(_isPack
+        _toast(kind == 'offer'
             ? context.tr('detail.packAddedToast')
             : context.tr('detail.addedToast'));
       }
@@ -119,15 +140,31 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     }
   }
 
-  Future<void> _buyNow() async {
-    if (!await _addToCart() || !mounted) return;
+  Future<void> _buyItem(String kind, int id) async {
+    if (!await _addItem(kind, id) || !mounted) return;
     final CartItem? item = _app.items
-        .where((CartItem i) => i.id == _cartKey)
+        .where((CartItem i) => i.id == '$kind:$id')
         .firstOrNull;
     if (item == null) return;
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => CheckoutScreen(item: item)),
     );
+  }
+
+  /// D-091: one Pack is added or bought at once; with several the
+  /// Student picks one (cheapest first, as Laravel lists them).
+  Future<void> _choosePack({required bool buy}) async {
+    final List<CoursePack> packs = _coursePacks;
+    if (packs.isEmpty) return;
+    final CoursePack? pack = packs.length == 1
+        ? packs.single
+        : await showPackPicker(context, packs: packs, buy: buy);
+    if (pack == null || !mounted) return;
+    if (buy) {
+      await _buyItem('offer', pack.id);
+    } else {
+      await _addItem('offer', pack.id);
+    }
   }
 
   /// Free Courses are never sold (D-054): the Student joins them.
@@ -195,16 +232,18 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
             ),
           ),
           _BottomBar(
-            price: _price,
+            // Several Packs: the price is the one the Student picks.
+            price: _packOnly && _coursePacks.length != 1 ? 0 : _price,
             compareAt: _compareAt,
             owned: _owned,
             free: _free,
             busy: _busy,
             purchasable: _purchasable,
+            packOnly: _packOnly,
             outOfTrack: _outOfTrack,
             added: _added,
-            onAdd: _addToCart,
-            onBuy: _buyNow,
+            onAdd: _packOnly ? () => _choosePack(buy: false) : _addToCart,
+            onBuy: _packOnly ? () => _choosePack(buy: true) : _buyNow,
             onJoinFree: _joinFree,
             onOpen: _openCourse,
           ),
@@ -344,16 +383,26 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   }
 
   Widget _buildPurchaseCard(BuildContext context) {
+    final bool packPriceKnown = _packOnly && _course!.offerPriceFrom != null;
     return NovaCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (packPriceKnown)
+            Text(
+              context.tr('detail.packsFrom'),
+              style: NovaTypography.muted(NovaTypography.textTheme.labelMedium!),
+            ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                _free ? context.tr('common.free') : formatDaPrice(_price),
+                _free
+                    ? context.tr('common.free')
+                    : _packOnly && !packPriceKnown
+                        ? context.tr('detail.packsOnly')
+                        : formatDaPrice(_price),
                 style: NovaTypography.textTheme.displaySmall,
               ),
               if (!_free && _compareAt > _price) ...[
@@ -368,6 +417,26 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               ],
             ],
           ),
+          if (_packOnly && _coursePacks.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.layers_rounded, size: 16, color: NovaColors.accentDeep),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    _coursePacks.length == 1
+                        ? context.trf('detail.soldInPack', <String, String>{'title': _coursePacks.single.title})
+                        : context.trf('detail.soldInPacks', <String, String>{'count': '${_coursePacks.length}'}),
+                    style: NovaTypography.textTheme.bodySmall!.copyWith(
+                      color: NovaColors.accentDeep,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 10),
           ...[
             context.tr('detail.checklist1'),
@@ -707,6 +776,7 @@ class _BottomBar extends StatelessWidget {
     required this.free,
     required this.busy,
     required this.purchasable,
+    this.packOnly = false,
     required this.outOfTrack,
     required this.added,
     required this.onAdd,
@@ -728,6 +798,9 @@ class _BottomBar extends StatelessWidget {
   /// A cart or enrolment request is in flight.
   final bool busy;
   final bool purchasable;
+
+  /// D-091: Add puts a Pack in the cart.
+  final bool packOnly;
   final bool added;
   final VoidCallback onAdd;
   final VoidCallback onBuy;
@@ -874,9 +947,15 @@ class _BottomBar extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      added ? context.tr('detail.added') : context.tr('detail.addToCart'),
-                      style: NovaTypography.textTheme.labelLarge,
+                    Flexible(
+                      child: Text(
+                        added
+                            ? context.tr('detail.added')
+                            : context.tr(packOnly ? 'detail.addPack' : 'detail.addToCart'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: NovaTypography.textTheme.labelLarge,
+                      ),
                     ),
                   ],
                 ),
@@ -899,14 +978,29 @@ class _BottomBar extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(context.tr('detail.buyNow'), style: NovaTypography.textTheme.labelLarge!.copyWith(color: NovaColors.textOnDark)),
-                    const SizedBox(width: 8),
-                    Text(
-                      formatDaPrice(price),
-                      style: NovaTypography.textTheme.labelLarge!.copyWith(
-                        color: NovaColors.textMutedOnDark,
+                    Flexible(
+                      child: Text(
+                        context.tr('detail.buyNow'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: NovaTypography.textTheme.labelLarge!.copyWith(color: NovaColors.textOnDark),
                       ),
                     ),
+                    // Several Packs (D-091): the price is the one picked.
+                    if (!packOnly || price > 0) ...[
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          formatDaPrice(price),
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.fade,
+                          style: NovaTypography.textTheme.labelLarge!.copyWith(
+                            color: NovaColors.textMutedOnDark,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

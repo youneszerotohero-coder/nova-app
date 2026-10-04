@@ -28,17 +28,35 @@ IconData subjectIcon(String code) {
 
 /// Academic reference row (level, track, subject, wilaya, commune).
 class RefItem {
-  const RefItem({required this.id, required this.name, this.code = ''});
+  const RefItem({
+    required this.id,
+    required this.name,
+    this.code = '',
+    this.trackIds = const <int>[],
+  });
 
   factory RefItem.fromJson(Json json) => RefItem(
         id: json.integer('id'),
         code: json.str('code'),
         name: localName(json),
+        trackIds: json['track_ids'] is List
+            ? (json['track_ids'] as List<dynamic>).whereType<int>().toList()
+            : const <int>[],
       );
 
   final int id;
   final String code;
   final String name;
+
+  /// A level's filières (`/levels` `track_ids`, D-098): none for 4AM, the
+  /// troncs communs for 1AS, the BAC filières for 2AS and 3AS.
+  final List<int> trackIds;
+
+  bool get hasTracks => trackIds.isNotEmpty;
+
+  /// The filières of this level, in the order of the flat `/tracks` list.
+  List<RefItem> tracksFrom(List<RefItem> tracks) =>
+      tracks.where((RefItem track) => trackIds.contains(track.id)).toList();
 }
 
 class Lesson {
@@ -797,6 +815,8 @@ class Course {
     this.isFree = false,
     this.image,
     this.matchesStudentProfile,
+    this.offerPriceFrom,
+    this.packs = const <CoursePack>[],
   });
 
   /// `PublicCourseResource` (list or detail, with `lessons[]` on detail).
@@ -830,6 +850,8 @@ class Course {
       isFree: json.flag('is_free'),
       image: json.strOrNull('cover_url') ?? json.strOrNull('cover_original_url'),
       matchesStudentProfile: _profileMatch(json),
+      offerPriceFrom: json['offer_price_from'] == null ? null : dinars(json['offer_price_from']),
+      packs: json.list('offers').map(CoursePack.fromJson).toList(),
     );
   }
 
@@ -877,6 +899,22 @@ class Course {
   /// Public detail only (D-083): false when the signed-in Student's level
   /// or filière is not this Course's; null when not said.
   final bool? matchesStudentProfile;
+
+  /// D-091, sold through Packs only: the cheapest Pack price, null while
+  /// no Pack is on sale (or when the Unit is sold on its own).
+  final int? offerPriceFrom;
+
+  /// D-091, public detail of a Unit sold through Packs only: the Packs
+  /// the Student can buy, cheapest first.
+  final List<CoursePack> packs;
+
+  /// A paid Unit never sold on its own (D-091): Buy and Add act on one
+  /// of its Packs.
+  bool get packOnly => !isFree && !individualPurchaseEnabled;
+
+  /// The price the catalogue shows and filters on: the cheapest Pack for
+  /// a Unit sold through Packs only (null while none is on sale, D-091).
+  int? get cataloguePrice => packOnly ? offerPriceFrom : price;
 
   int get discountPercent => compareAtPrice > price
       ? (((compareAtPrice - price) / compareAtPrice) * 100).round()
@@ -929,7 +967,35 @@ class Course {
         isFree: isFree,
         image: image,
         matchesStudentProfile: matchesStudentProfile,
+        offerPriceFrom: offerPriceFrom,
+        packs: packs,
       );
+}
+
+/// A Pack containing a Unit sold through Packs only (`offers[]` of the
+/// public Course detail, D-091).
+class CoursePack {
+  const CoursePack({
+    required this.id,
+    required this.slug,
+    required this.title,
+    required this.type,
+    required this.price,
+  });
+
+  factory CoursePack.fromJson(Json json) => CoursePack(
+        id: json.integer('id'),
+        slug: json.str('slug'),
+        title: json.str('title'),
+        type: json.str('type'),
+        price: dinars(json['price']),
+      );
+
+  final int id;
+  final String slug;
+  final String title;
+  final String type;
+  final int price;
 }
 
 class Teacher {

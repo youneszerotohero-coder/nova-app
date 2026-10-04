@@ -4,6 +4,7 @@ import '../core/api/api_exception.dart';
 import '../core/api/nova_api.dart';
 import 'json.dart';
 import 'models.dart';
+import 'otp.dart';
 
 enum SessionStatus { booting, offline, signedOut, signedIn }
 
@@ -31,8 +32,8 @@ class SessionStore extends ChangeNotifier {
   StudentProfile? get profile => _profile;
   bool get signedIn => _status == SessionStatus.signedIn;
 
-  /// `password_change` | `onboarding` | null — the backend blocks every
-  /// other route until the step is done.
+  /// `password_change` | `phone` | `onboarding` | `school_year` | null —
+  /// the backend blocks every other route until the step is done.
   String? get nextRequiredStep {
     final String? step = _user?.strOrNull('next_required_step');
     return step;
@@ -91,10 +92,94 @@ class SessionStore extends ChangeNotifier {
   }
 
   /// Registration does not sign in (backend rule); the caller signs in
-  /// with the same phone and password afterwards.
+  /// with the same phone and password afterwards. While the Admin switch
+  /// is on, [fields] carry the `phone_verification_token` (D-093).
   Future<void> register(Map<String, Object?> fields) async {
     await _api!.post('/auth/register', fields);
   }
+
+  /// D-093/D-096: whether registration needs the phone code step (the
+  /// Admin switch, on by default).
+  Future<bool> registrationPhoneVerificationRequired() async {
+    final Json body = await _api!.get('/auth/registration-options');
+    return body.obj('data')?.flag('phone_verification_required') ?? false;
+  }
+
+  /// D-093: sends a registration code to [phone] by [channel], written
+  /// in [lang] (`ar` | `fr` | `en`).
+  Future<OtpChallenge> sendRegistrationCode(String phone, OtpChannel channel, String lang) async =>
+      _challenge(await _api!.post('/auth/register/otp', <String, String>{
+        'phone': phone.trim(),
+        'channel': channel.name,
+        'lang': lang,
+      }));
+
+  /// The verification token sent with the registration.
+  Future<String> verifyRegistrationCode(String challengeId, String code) async {
+    final Json body = await _api!.post('/auth/register/otp/verify', <String, String>{
+      'challenge_id': challengeId,
+      'code': code.trim(),
+    });
+    return body.obj('data')?.str('verification_token') ?? '';
+  }
+
+  /// D-093 forgotten password, step 1: the answer is the same whether or
+  /// not the number has an account.
+  Future<OtpChallenge> requestPasswordReset(String phone, OtpChannel channel, String lang) async =>
+      _challenge(await _api!.post('/auth/password/forgot', <String, String>{
+        'phone': phone.trim(),
+        'channel': channel.name,
+        'lang': lang,
+      }));
+
+  /// Step 2: the code becomes a short-lived reset token.
+  Future<String> verifyPasswordReset(String challengeId, String code) async {
+    final Json body = await _api!.post('/auth/password/forgot/verify', <String, String>{
+      'challenge_id': challengeId,
+      'code': code.trim(),
+    });
+    return body.obj('data')?.str('reset_token') ?? '';
+  }
+
+  /// Step 3: the new password. Does not sign in; the backend signs out
+  /// every session of the account.
+  Future<void> resetPassword(String resetToken, String password, String confirmation) async {
+    await _api!.post('/auth/password/forgot/reset', <String, String>{
+      'reset_token': resetToken,
+      'password': password,
+      'password_confirmation': confirmation,
+    });
+  }
+
+  /// D-093: a signed-in Student asks for a code on their own number
+  /// before changing their password.
+  Future<OtpChallenge> requestPasswordChangeCode(OtpChannel channel, String lang) async =>
+      _challenge(await _api!.post('/auth/password/otp', <String, String>{
+        'channel': channel.name,
+        'lang': lang,
+      }));
+
+  /// Changes the password with the code. This device stays signed in
+  /// with a renewed session; the other devices are signed out.
+  Future<void> changePasswordWithCode({
+    required String challengeId,
+    required String code,
+    required String password,
+    required String confirmation,
+  }) async {
+    _setUser(
+      (await _api!.put('/auth/password', <String, String>{
+        'challenge_id': challengeId,
+        'code': code.trim(),
+        'password': password,
+        'password_confirmation': confirmation,
+      }))
+          .obj('data'),
+    );
+  }
+
+  static OtpChallenge _challenge(Json body) =>
+      OtpChallenge.fromJson(body.obj('data') ?? <String, dynamic>{});
 
   /// D-079: an account without a valid mobile enters the Student's own
   /// number once; the answer is the updated user (next step moves on).
@@ -107,6 +192,29 @@ class SessionStore extends ChangeNotifier {
 
   Future<void> completeOnboarding(Map<String, Object?> fields) async {
     _setUser((await _api!.put('/onboarding', fields)).obj('data'));
+  }
+
+  /// The Student's current level and filière ids, null when unset.
+  (int?, int?) get schoolReferences {
+    final Json? student = _user?.obj('student');
+    int? reference(String key) {
+      final Object? id = student?.obj(key)?['id'];
+      return id is int ? id : null;
+    }
+
+    return (reference('level'), reference('track'));
+  }
+
+  /// D-098: at the start of a new school year the Student keeps or
+  /// changes their level and filière (`next_required_step: school_year`).
+  Future<void> confirmSchoolYear({required int levelId, int? trackId}) async {
+    _setUser(
+      (await _api!.put('/auth/school-year', <String, Object?>{
+        'level_id': levelId,
+        'track_id': trackId,
+      }))
+          .obj('data'),
+    );
   }
 
   /// D-073: entering a Live needs a first and last name
