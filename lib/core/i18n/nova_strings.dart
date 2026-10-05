@@ -38,7 +38,7 @@ const Map<String, Map<String, String>> K = {
   'points.type_purchase_spend': {'en': 'Used on a purchase', 'fr': 'Utilisés pour un achat', 'ar': 'استُعملت في عملية شراء'},
   'points.type_admin_adjustment': {'en': 'Adjusted by NOVA', 'fr': 'Ajustés par NOVA', 'ar': 'تعديل من نوفا'},
   'points.type_reversal': {'en': 'Correction', 'fr': 'Correction', 'ar': 'تصحيح'},
-  'kind.offer': {'en': 'Pack', 'fr': 'Pack', 'ar': 'باقة'},
+  'kind.offer': {'en': 'Offer', 'fr': 'Offre', 'ar': 'عرض'},
   'kind.course': {'en': 'Course', 'fr': 'Cours', 'ar': 'دورة'},
   'kind.individualCourse': {'en': 'Individual course', 'fr': 'Cours individuel', 'ar': 'دورة فردية'},
   'method.card': {'en': 'Card', 'fr': 'Carte', 'ar': 'بطاقة'},
@@ -95,17 +95,17 @@ const Map<String, Map<String, String>> K = {
   // Explore.
   'explore.title': {'en': 'Explore', 'fr': 'Explorer', 'ar': 'استكشاف'},
   'explore.searchHint': {
-    'en': 'Search courses, packs or teachers',
-    'fr': 'Rechercher cours, packs ou professeurs',
-    'ar': 'ابحث عن دورات أو باقات أو أساتذة',
+    'en': 'Search courses, offers or teachers',
+    'fr': 'Rechercher cours, offres ou professeurs',
+    'ar': 'ابحث عن دورات أو عروض أو أساتذة',
   },
   'seg.courses': {'en': 'Courses', 'fr': 'Cours', 'ar': 'دورات'},
-  'seg.packs': {'en': 'Packs', 'fr': 'Packs', 'ar': 'باقات'},
+  'seg.packs': {'en': 'Offers', 'fr': 'Offres', 'ar': 'عروض'},
   'seg.teachers': {'en': 'Teachers', 'fr': 'Professeurs', 'ar': 'الأساتذة'},
   'explore.kicker': {
-    'en': '{c} courses · {p} packs',
-    'fr': '{c} cours · {p} packs',
-    'ar': '{c} دورات · {p} باقات',
+    'en': '{c} courses · {p} offers',
+    'fr': '{c} cours · {p} offres',
+    'ar': '{c} دورات · {p} عروض',
   },
   'orders.kicker': {'en': '{n} orders', 'fr': '{n} commandes', 'ar': '{n} طلبات'},
   'explore.found': {
@@ -119,12 +119,12 @@ const Map<String, Map<String, String>> K = {
     'fr': 'Essaie une autre matière ou réinitialise les filtres.',
     'ar': 'جرّب مادة أخرى أو أعد ضبط عوامل التصفية.',
   },
-  'explore.noPackTitle': {'en': 'No pack matches', 'fr': 'Aucun pack trouvé', 'ar': 'لا توجد باقات مطابقة'},
+  'explore.noPackTitle': {'en': 'No offer matches', 'fr': 'Aucune offre trouvée', 'ar': 'لا توجد عروض مطابقة'},
   'explore.noPackMsg': {'en': 'Try another search term.', 'fr': 'Essaie un autre mot-clé.', 'ar': 'جرّب كلمة بحث أخرى.'},
   'explore.noSuggestion': {
-    'en': 'No course or pack matches this search.',
-    'fr': 'Aucun cours ni pack ne correspond.',
-    'ar': 'لا توجد دورة أو باقة مطابقة لهذا البحث.',
+    'en': 'No course or offer matches this search.',
+    'fr': 'Aucun cours ni offre ne correspond.',
+    'ar': 'لا توجد دورة أو عرض مطابق لهذا البحث.',
   },
   'explore.noTeacherTitle': {'en': 'No teacher matches', 'fr': 'Aucun professeur trouvé', 'ar': 'لا يوجد أستاذ مطابق'},
   'explore.noTeacherMsg': {'en': 'Try another name or subject.', 'fr': 'Essaie un autre nom ou une matière.', 'ar': 'جرّب اسماً أو مادة أخرى.'},
@@ -146,9 +146,9 @@ const Map<String, Map<String, String>> K = {
     'ar': 'دورات {name}',
   },
   'teacher.packsBy': {
-    'en': 'Packs with {name}',
-    'fr': 'Packs avec {name}',
-    'ar': 'باقات {name}',
+    'en': 'Offers with {name}',
+    'fr': 'Offres avec {name}',
+    'ar': 'عروض {name}',
   },
   'stat.lives': {'en': 'Lives', 'fr': 'Lives', 'ar': 'بث مباشر'},
 
@@ -163,7 +163,7 @@ const Map<String, Map<String, String>> K = {
   'detail.included': {
     'en': 'Everything included in your offer',
     'fr': 'Tout ce que comprend ton offre',
-    'ar': 'كل ما تتضمنه باقتك',
+    'ar': 'كل ما يتضمنه عرضك',
   },
   'detail.lessonsStat': {'en': '{n} lessons', 'fr': '{n} leçons', 'ar': '{n} دروس'},
   'detail.coursesStat': {'en': '{n} courses', 'fr': '{n} cours', 'ar': '{n} دورات'},
@@ -194,7 +194,7 @@ const Map<String, Map<String, String>> K = {
     'fr': 'Tu ne repayes jamais un cours actif — les cours déjà acquis '
         'sont crédités sur le prix de l’offre.',
     'ar': 'لن تدفع أبداً مقابل دورة تملكها — الدورات المُقتناة تُخصم من '
-        'سعر الباقة.',
+        'سعر العرض.',
   },
   'detail.checklist1': {
     'en': 'Ordered lessons with quiz checkpoints',
@@ -1067,7 +1067,7 @@ const Map<String, Map<String, String>> K = {
     'ar': 'اختر كلمة مرور مختلفة عن رقم هاتفك.',
   },
   'checkout.securePayment': {'en': 'Secure payment', 'fr': 'Paiement sécurisé', 'ar': 'دفع آمن'},
-  'checkout.offer': {'en': 'Offer', 'fr': 'Offre', 'ar': 'عرض باقة'},
+  'checkout.offer': {'en': 'Offer', 'fr': 'Offre', 'ar': 'عرض'},
   'checkout.course': {'en': 'Individual Course', 'fr': 'Cours individuel', 'ar': 'دورة فردية'},
   'checkout.accessYear': {
     'en': 'Access for the {y} academic year',
