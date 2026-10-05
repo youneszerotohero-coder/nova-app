@@ -392,7 +392,7 @@ void main() {
     expect(find.text(_englishCourse), findsOneWidget);
     expect(find.text(_philosophyCourse), findsNothing);
     expect(find.text(_philosophyPack), findsNothing);
-    expect(find.text('No pack matches'), findsOneWidget);
+    expect(find.text('No offer matches'), findsOneWidget);
   });
 
   Map<String, FakeResponse> searchCatalog() => <String, FakeResponse>{
@@ -460,11 +460,11 @@ void main() {
 
     await tester.enterText(find.byType(TextField), 'zzz');
     await tester.pumpAndSettle();
-    expect(find.text('No course or pack matches this search.'), findsOneWidget);
+    expect(find.text('No course or offer matches this search.'), findsOneWidget);
 
     await tester.tap(find.bySemanticsLabel('Clear search'));
     await tester.pumpAndSettle();
-    expect(find.text('No course or pack matches this search.'), findsNothing);
+    expect(find.text('No course or offer matches this search.'), findsNothing);
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, '');
   });
 
@@ -509,7 +509,7 @@ void main() {
     expect(offerQueries(backend), contains('teacher_ids[]=1&per_page=50&page=1'));
     expect(find.text('Courses by FARES PHILO'), findsOneWidget);
     expect(find.text(_philosophyCourse), findsOneWidget);
-    expect(find.text('Packs with FARES PHILO'), findsOneWidget);
+    expect(find.text('Offers with FARES PHILO'), findsOneWidget);
     expect(find.text(_philosophyPack), findsOneWidget);
     expect(find.text(_arabicPack), findsNothing);
   });
