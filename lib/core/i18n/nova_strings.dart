@@ -1449,12 +1449,6 @@ const Map<String, Map<String, String>> K = {
     'fr': 'Réussis le quiz pour valider la leçon',
     'ar': 'انجح في الاختبار لإتمام الدرس',
   },
-  'learn.quizLocked': {'en': 'Locked', 'fr': 'Verrouillé', 'ar': 'مقفل'},
-  'learn.watchToUnlockQuiz': {
-    'en': 'Watch 90% of the lesson to open it · {n}% so far',
-    'fr': 'Regarde 90 % de la leçon pour l’ouvrir · {n} % vus',
-    'ar': 'شاهد 90% من الدرس لفتحه · {n}% حتى الآن',
-  },
   'learn.quizRequired': {
     'en': 'Required to complete the lesson',
     'fr': 'Obligatoire pour valider la leçon',
@@ -1475,12 +1469,22 @@ const Map<String, Map<String, String>> K = {
     'fr': 'Tu as obtenu {n} %. La leçon est validée.',
     'ar': 'حصلت على {n}%. تم إتمام الدرس.',
   },
+  'learn.quizPassedWatchMsg': {
+    'en': 'You scored {n}%. Finish the video to complete the lesson.',
+    'fr': 'Tu as obtenu {n} %. Termine la vidéo pour valider la leçon.',
+    'ar': 'حصلت على {n}%. أكمل مشاهدة الفيديو لإتمام الدرس.',
+  },
   'learn.quizScoreLine': {'en': 'Score {n}% · {p}% to pass', 'fr': 'Score {n} % · {p} % pour réussir', 'ar': 'النتيجة {n}% · النجاح بـ {p}%'},
   'learn.bestScore': {'en': 'Best score', 'fr': 'Meilleur score', 'ar': 'أفضل نتيجة'},
   'learn.attemptsLeft': {'en': 'Attempts left', 'fr': 'Tentatives restantes', 'ar': 'المحاولات المتبقية'},
   'learn.retryFrom': {'en': 'Retry from', 'fr': 'Nouvel essai dès', 'ar': 'إعادة المحاولة من'},
   'learn.unlimited': {'en': 'Unlimited', 'fr': 'Illimitées', 'ar': 'غير محدودة'},
   'learn.nextUnlocked': {'en': 'The lesson is complete.', 'fr': 'La leçon est validée.', 'ar': 'تم إتمام الدرس.'},
+  'learn.finishVideoToComplete': {
+    'en': 'Finish the video to complete the lesson.',
+    'fr': 'Termine la vidéo pour valider la leçon.',
+    'ar': 'أكمل مشاهدة الفيديو لإتمام الدرس.',
+  },
   'learn.reviewAndRetry': {
     'en': 'Review the lesson, then try again.',
     'fr': 'Revois la leçon, puis réessaie.',

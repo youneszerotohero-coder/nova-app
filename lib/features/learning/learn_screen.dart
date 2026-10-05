@@ -209,7 +209,7 @@ class _LearnScreenState extends State<LearnScreen> {
       );
     }
     final Lesson lesson = _course.lessons[_activeLesson];
-    final bool awaitingQuiz = lesson.watched >= 90 && !lesson.completed && lesson.quizRequired;
+    final bool awaitingQuiz = !lesson.completed && lesson.quizRequired;
 
     return ListView(
       key: const ValueKey<int>(0),
@@ -226,7 +226,7 @@ class _LearnScreenState extends State<LearnScreen> {
               ),
             ),
             if (awaitingQuiz)
-              Icon(Icons.lock_clock_rounded, size: 19, color: NovaColors.textMuted),
+              Icon(Icons.quiz_outlined, size: 19, color: NovaColors.textMuted),
           ],
         ),
         const SizedBox(height: 4),
@@ -483,8 +483,8 @@ class _LessonRow extends StatelessWidget {
 }
 
 
-/// Quizzes tab: one card per lesson that has a Quiz. A Quiz opens once
-/// 90 % of its lesson is watched (backend `QUIZ_LOCKED` otherwise).
+/// Quizzes tab: one card per lesson that has a Quiz. Every Quiz opens at any
+/// time; watching the lesson is not a condition (D-114).
 class _QuizzesTab extends StatelessWidget {
   const _QuizzesTab({super.key, required this.course, required this.onPassed});
 
@@ -531,62 +531,52 @@ class _QuizCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool locked = lesson.watched < 90;
     final bool passed = lesson.completed;
 
     return PressableScale(
       onTap: onOpen,
       semanticLabel: 'Open quiz: ${lesson.title}',
-      child: Opacity(
-        opacity: locked ? 0.6 : 1,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: NovaColors.paperCard,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: NovaColors.borderOnLight),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(lesson.title, style: NovaTypography.textTheme.titleSmall),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: NovaColors.paperCard,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: NovaColors.borderOnLight),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(lesson.title, style: NovaTypography.textTheme.titleSmall),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: passed ? NovaColors.accentMist : NovaColors.veilOnDark,
+                    borderRadius: BorderRadius.circular(100),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: passed ? NovaColors.accentMist : NovaColors.veilOnDark,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Text(
-                      passed
-                          ? context.tr('learn.passed')
-                          : locked
-                              ? context.tr('learn.quizLocked')
-                              : context.tr('learn.checkpoint'),
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 10.5,
-                        color: passed ? NovaColors.accentDeep : NovaColors.textMuted,
-                      ),
+                  child: Text(
+                    passed ? context.tr('learn.passed') : context.tr('learn.checkpoint'),
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 10.5,
+                      color: passed ? NovaColors.accentDeep : NovaColors.textMuted,
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                locked
-                    ? context.trf('learn.watchToUnlockQuiz', {'n': lesson.watched.toString()})
-                    : lesson.quizRequired
-                        ? context.tr('learn.quizRequired')
-                        : context.tr('detail.quizOptional'),
-                style: NovaTypography.muted(NovaTypography.textTheme.bodySmall!),
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              lesson.quizRequired
+                  ? context.tr('learn.quizRequired')
+                  : context.tr('detail.quizOptional'),
+              style: NovaTypography.muted(NovaTypography.textTheme.bodySmall!),
+            ),
+          ],
         ),
       ),
     );
@@ -718,7 +708,10 @@ class _QuizRunnerSheetState extends State<QuizRunnerSheet> {
       showNovaCelebration(
         context,
         title: context.tr('learn.quizPassedTitle'),
-        message: context.trf('learn.quizPassedMsg', {'n': result.score.toString()}),
+        message: context.trf(
+          widget.lesson.watched >= 90 ? 'learn.quizPassedMsg' : 'learn.quizPassedWatchMsg',
+          {'n': result.score.toString()},
+        ),
         actionLabel: context.tr('learn.keepGoing'),
       );
     }
@@ -955,7 +948,11 @@ class _QuizRunnerSheetState extends State<QuizRunnerSheet> {
           ),
         ),
         _BottomAction(
-          hint: result.passed ? context.tr('learn.nextUnlocked') : context.tr('learn.reviewAndRetry'),
+          hint: !result.passed
+              ? context.tr('learn.reviewAndRetry')
+              : widget.lesson.watched >= 90
+                  ? context.tr('learn.nextUnlocked')
+                  : context.tr('learn.finishVideoToComplete'),
           label: context.tr('learn.done'),
           onTap: _close,
         ),
