@@ -8,6 +8,12 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>NOVA uses the microphone only when your teacher accepts your raised hand in a live class.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>NOVA never turns on your camera. Live classes share only your voice, and only when your teacher accepts your raised hand.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>NOVA lets you choose a photo of your payment receipt to attach to your order.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleDisplayName</key>
 	<string>Nova Mobile</string>
 	<key>CFBundleExecutable</key>
