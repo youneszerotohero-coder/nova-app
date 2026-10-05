@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
+import '../../core/i18n/labels.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../core/theme/nova_dimens.dart';
@@ -264,13 +265,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     image: course.image,
                     icon: course.icon,
                     // Free Courses are joined, never sold (D-054).
-                    price: course.isFree ? null : course.price,
+                    price: course.isFree || course.packOnly ? null : course.price,
                     compareAtPrice: course.compareAtPrice,
                     actionLabel: course.owned
                         ? context.tr('common.open')
                         : course.isFree
                             ? context.tr('common.free')
-                            : null,
+                            : course.packOnly
+                                ? packPriceText(context, course)
+                                : null,
                     badges: [
                       CardBadge(course.subject),
                       if (course.owned)

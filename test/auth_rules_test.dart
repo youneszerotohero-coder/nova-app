@@ -31,7 +31,8 @@ const String _phoneTaken =
     'An account already exists with this phone number. If it is yours, sign in with this '
     'number instead of creating a new account (if you never chose a password for it, your '
     'password is your phone number). If it belongs to a family member, register with your '
-    'own mobile number. Forgot your password? Contact the school.';
+    'own mobile number. Forgot your password? Use “Forgot your password?” on the sign-in '
+    'screen to receive a code by SMS or WhatsApp.';
 
 /// The backend's error envelope (`ApiExceptionRenderer`).
 FakeResponse _error(int status, String code, String message, [Object? details]) =>
@@ -178,7 +179,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text(_phoneStrict), findsWidgets);
-      expect(backend.requests, isEmpty);
+      expect(backend.requests.where((FakeRequest r) => r.method != 'GET'), isEmpty);
     });
 
     testWidgets('missing fields and a short password are flagged in Arabic without the server',
@@ -410,7 +411,7 @@ void main() {
           'This account was closed because you already have a NOVA account with your '
           'offers. Sign in to that account with your phone number (\u206605 •• •• •• 30\u2069). '
           'If you never chose a password for it, your password is your phone number. '
-          'Forgot your password? Contact the school.',
+          'Forgot your password? Use “Forgot your password?” to receive a code by SMS or WhatsApp.',
         ),
         findsOneWidget,
       );

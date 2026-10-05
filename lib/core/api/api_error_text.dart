@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../../data/otp.dart';
 import '../i18n/nova_strings.dart';
 import 'api_exception.dart';
 
@@ -14,6 +15,14 @@ String apiErrorText(BuildContext context, Object error) {
     return context.trf('auth.duplicateClosed', <String, String>{
       'phone': '\u2066${error.fieldErrors['phone'] ?? ''}\u2069',
     });
+  }
+  if (error.code == 'OTP_INVALID') {
+    // D-093: a wrong code says how many attempts are left.
+    final int? remaining = otpRemainingAttempts(error);
+    final String message = context.tr('otp.invalid');
+    return remaining == null
+        ? message
+        : '$message ${context.trf('otp.remainingAttempts', <String, String>{'count': '$remaining'})}';
   }
   final String key = switch (error.code) {
     ApiException.network => 'err.network',
@@ -30,6 +39,15 @@ String apiErrorText(BuildContext context, Object error) {
     'ALREADY_OWNED_ON_OTHER_ACCOUNT' => 'err.ownedOtherAccount',
     'PHONE_ALREADY_REGISTERED' => 'auth.phoneTaken',
     'PHONE_REQUIRED' => 'err.phoneRequired',
+    // D-093/D-096 one-time codes (SMS or WhatsApp).
+    'OTP_EXPIRED' => 'otp.expired',
+    'OTP_ATTEMPTS_EXCEEDED' => 'otp.attemptsExceeded',
+    'OTP_RESEND_TOO_SOON' => 'otp.resendTooSoon',
+    'OTP_TOO_MANY_REQUESTS' => 'otp.tooManyRequests',
+    'SMS_SERVICE_UNAVAILABLE' => 'otp.serviceUnavailable',
+    'RESET_TOKEN_INVALID' => 'otp.resetTokenInvalid',
+    'PHONE_VERIFICATION_REQUIRED' => 'otp.phoneVerificationRequired',
+    'PHONE_VERIFICATION_INVALID' => 'otp.phoneVerificationInvalid',
     'PRODUCT_OUT_OF_TRACK' => 'err.outOfTrack',
     'SCHOOL_PROFILE_LOCKED' => 'err.profileLocked',
     'OFFER_NOT_AVAILABLE' => 'err.unavailable',

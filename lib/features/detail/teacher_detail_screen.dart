@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
+import '../../core/i18n/labels.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../core/theme/nova_dimens.dart';
@@ -398,9 +399,13 @@ class TeacherCourseRow extends StatelessWidget {
         'detail.lessonsStat',
         {'n': course.lessons.length.toString()},
       ),
-      price: course.owned || course.isFree ? null : course.price,
+      price: course.owned || course.isFree || course.packOnly ? null : course.price,
       compareAtPrice: course.compareAtPrice,
-      actionLabel: course.owned ? context.tr('common.open') : null,
+      actionLabel: course.owned
+          ? context.tr('common.open')
+          : course.packOnly && !course.isFree
+              ? packPriceText(context, course)
+              : null,
       badges: [
         CardBadge('${course.subject} · ${course.level}'),
         if (course.owned)

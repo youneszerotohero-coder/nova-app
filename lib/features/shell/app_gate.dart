@@ -10,6 +10,7 @@ import '../auth/change_password_screen.dart';
 import '../auth/login_screen.dart';
 import '../auth/phone_step_screen.dart';
 import '../auth/register_screen.dart';
+import '../auth/school_year_screen.dart';
 import 'shell_screen.dart';
 
 /// Root route: shows what the session allows. Signing out, a replaced
@@ -49,6 +50,8 @@ class _AppGateState extends State<AppGate> {
               // D-079: an account without a valid mobile, before onboarding.
               'phone' => const PhoneStepScreen(),
               'onboarding' => const RegisterScreen(onboarding: true),
+              // D-098: a new school year, level and filière confirmed first.
+              'school_year' => const SchoolYearScreen(),
               _ => const ShellScreen(),
             },
         },

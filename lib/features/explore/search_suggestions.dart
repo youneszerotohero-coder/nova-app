@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/i18n/labels.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../core/theme/nova_dimens.dart';
@@ -56,7 +57,9 @@ class SearchSuggestions extends StatelessWidget {
               ? context.tr('common.owned')
               : course.isFree
                   ? context.tr('common.free')
-                  : formatDaPrice(course.price),
+                  : course.packOnly
+                      ? packPriceText(context, course)
+                      : formatDaPrice(course.price),
           scene: course.scene,
           image: course.image,
           icon: course.icon,

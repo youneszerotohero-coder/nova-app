@@ -60,7 +60,11 @@ List<Course> applyCourseQuery(List<Course> courses, CourseQuery query) {
   return courses
       .where(
         (Course course) =>
-            (course.isFree || course.price <= query.maxPrice) &&
+            // D-091: a course sold through Packs only is priced by its
+            // cheapest Pack; without one it drops out of a price ceiling.
+            (course.isFree ||
+                (course.cataloguePrice != null && course.cataloguePrice! <= query.maxPrice) ||
+                (course.cataloguePrice == null && query.maxPrice >= CourseQuery.maxPriceCeiling)) &&
             (query.teacherIds.isEmpty ||
                 query.teacherIds.contains(course.teacherId)) &&
             (query.subjectIds.isEmpty ||
