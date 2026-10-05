@@ -484,7 +484,7 @@ class _LessonRow extends StatelessWidget {
 
 
 /// Quizzes tab: one card per lesson that has a Quiz. Every Quiz opens at any
-/// time; watching the lesson is not a condition (D-114).
+/// time; watching the lesson is not a condition (D-115).
 class _QuizzesTab extends StatelessWidget {
   const _QuizzesTab({super.key, required this.course, required this.onPassed});
 
