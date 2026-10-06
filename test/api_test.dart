@@ -54,6 +54,8 @@ void main() {
       final FakeRequest login = backend.requests.last;
       expect(login.headers['X-XSRF-TOKEN'], 'eyJpdiI6IkFCQyJ9==');
       expect(login.headers['Accept'], 'application/json');
+      // D-121: the backend lets the apps (never the website) take the clear copy in mode A.
+      expect(login.headers['X-Nova-Client'], 'app-android');
     });
 
     test('the CSRF cookie is fetched once, not before every write (D-071)', () async {

@@ -442,7 +442,7 @@ const Map<String, Map<String, String>> K = {
     'ar': '{a}/{b} دروس · {n}% مكتمل',
   },
   'learn.quizzes': {'en': 'Quizzes', 'fr': 'Quiz', 'ar': 'الاختبارات'},
-  'learn.resources': {'en': 'Resources', 'fr': 'Ressources', 'ar': 'الموارد'},
+  'learn.resources': {'en': 'PDF', 'fr': 'PDF', 'ar': 'PDF'},
   'learn.progressTab': {'en': 'Progress', 'fr': 'Progression', 'ar': 'التقدم'},
   'learn.watched': {'en': '{n}% watched · 90% to complete', 'fr': '{n}% vus · 90% pour terminer', 'ar': 'شوهد {n}% · 90% للإكمال'},
   'learn.lessonOf': {'en': 'Lesson {i} of {n}', 'fr': 'Leçon {i} sur {n}', 'ar': 'الدرس {i} من {n}'},

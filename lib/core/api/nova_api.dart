@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../data/json.dart';
 import 'api_exception.dart';
@@ -29,12 +30,19 @@ class NovaApi {
       ..baseUrl = this.baseUrl
       ..connectTimeout = const Duration(seconds: 15)
       ..receiveTimeout = const Duration(seconds: 30)
-      ..headers = <String, Object>{'Accept': 'application/json'}
+      ..headers = <String, Object>{'Accept': 'application/json', clientHeader: clientName}
       // Every status reaches [_unwrap]; the backend's envelope, not
       // Dio, decides what counts as a failure.
       ..validateStatus = (_) => true;
     _dio.interceptors.add(CookieManager(this.cookieJar));
   }
+
+  /// D-121: tells the backend the request comes from the NOVA app, which
+  /// may take the clear copy of a video in mode A (the website may not).
+  static const String clientHeader = 'X-Nova-Client';
+
+  static String get clientName =>
+      defaultTargetPlatform == TargetPlatform.iOS ? 'app-ios' : 'app-android';
 
   /// Production API; `--dart-define=NOVA_API_URL=…` points a build at
   /// staging or a local backend instead.
