@@ -134,6 +134,10 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
   StreamSubscription<dynamic>? _events;
 
   void _attach(int viewId) {
+    // A new native view for this controller: the previous one must stop,
+    // or its sound goes on behind the new picture (iPhone keeps it alive).
+    _events?.cancel();
+    _methods?.invokeMethod<void>('release').catchError((Object _) {});
     _methods = MethodChannel('nova/protected_player_$viewId');
     _events = EventChannel('nova/protected_player_$viewId/events')
         .receiveBroadcastStream()

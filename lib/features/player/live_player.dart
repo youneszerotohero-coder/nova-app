@@ -676,6 +676,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     final ProtectedVideoController? video = _video;
     final bool fairPlay = _candidate?.drm == 'fairplay';
     final Widget box = ColoredBox(
+      key: _boxKey,
       color: Colors.black,
       child: Stack(
         fit: StackFit.expand,
@@ -731,6 +732,10 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     if (widget.fullscreen) return box;
     return AspectRatio(aspectRatio: 16 / 9, child: box);
   }
+
+  /// Keeps the picture (and its native player) when fullscreen moves it to
+  /// another place in the tree: without it a second player would start.
+  final GlobalKey _boxKey = GlobalKey();
 
   Widget _watermark(BuildContext context) {
     final StudentProfile? me = AppScope.of(context).profile;

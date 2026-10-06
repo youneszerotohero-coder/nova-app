@@ -81,6 +81,10 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
 
   /// iPhone: the protected stream is FairPlay HLS (D-118).
   bool _fairPlay = false;
+
+  /// Keeps the picture (and its native player) when fullscreen moves it to
+  /// another place in the tree: without it a second player would start.
+  final GlobalKey _boxKey = GlobalKey();
   Timer? _clearRetry;
 
   /// D-077: a protected picture that never starts goes clear in mode B.
@@ -526,6 +530,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
   @override
   Widget build(BuildContext context) {
     final Widget box = ColoredBox(
+      key: _boxKey,
       color: Colors.black,
       child: Stack(
         fit: StackFit.expand,

@@ -54,10 +54,12 @@ class CartScreen extends StatelessWidget {
       (int sum, CartItem item) => sum + item.price,
     );
 
+    // The tab bar floats above the home indicator (NovaBottomBar).
+    final double inset = MediaQuery.viewPaddingOf(context).bottom;
     return Stack(
       children: [
         ListView(
-          padding: const EdgeInsets.only(bottom: 208),
+          padding: EdgeInsets.only(bottom: 208 + inset),
           children: [
             NovaPageHeader(
               title: context.tr('cart.title'),
@@ -173,7 +175,7 @@ class _CheckoutBar extends StatelessWidget {
     return IgnorePointer(
       ignoring: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 26, 20, 104),
+        padding: EdgeInsets.fromLTRB(20, 26, 20, 104 + MediaQuery.viewPaddingOf(context).bottom),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,

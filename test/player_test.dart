@@ -268,6 +268,34 @@ void main() {
       }
     });
 
+    testWidgets('fullscreen keeps the one native player: no second sound on iPhone', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      try {
+        backend = FakeBackend(<String, FakeResponse>{
+          'POST /lessons/0/playback': FakeResponse(200, <String, Object?>{'data': _authorization(fairplay: true)}),
+        });
+        await pumpLearn(tester);
+        await tester.tap(find.text('Play'));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(players.created, hasLength(1));
+
+        await tester.tap(find.byIcon(Icons.fullscreen_rounded));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.byIcon(Icons.fullscreen_exit_rounded), findsOneWidget);
+        await tester.tap(find.byIcon(Icons.fullscreen_exit_rounded));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(players.created, hasLength(1));
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(seconds: 1));
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
     testWidgets('mode A: iPhone stays blocked while the server offers no FairPlay', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       try {
