@@ -143,6 +143,14 @@ class LivePolicy {
     }
     return null;
   }
+
+  /// The FairPlay candidate, offered first while FairPlay is enabled.
+  LiveDrmCandidate? get fairplay {
+    for (final LiveDrmCandidate c in candidates) {
+      if (c.drm == 'fairplay') return c;
+    }
+    return null;
+  }
 }
 
 class LiveDrmCandidate {
@@ -153,13 +161,17 @@ class LiveDrmCandidate {
   final String? robustness;
 }
 
-/// `POST /lives/{id}/join`: the protected DASH stream with its Widevine
-/// entitlement, or (`mode: cdn`) the clear adaptive HLS stream (D-070).
+/// `POST /lives/{id}/join`: the protected stream with its entitlement
+/// (DASH + Widevine, or HLS + FairPlay on iPhone, D-118), or (`mode: cdn`)
+/// the clear adaptive HLS stream (D-070).
 class LiveJoin {
   const LiveJoin({
     required this.dashUrl,
     required this.token,
     required this.licenseUrl,
+    this.hlsUrl = '',
+    this.fairplayLicenseUrl = '',
+    this.fairplayCertificateUrl = '',
     required this.maxHeight,
     required this.renewAfter,
     required this.signedUrls,
@@ -180,6 +192,9 @@ class LiveJoin {
       dashUrl: data.obj('manifests')?.str('dash') ?? '',
       token: drm.str('token'),
       licenseUrl: drm.obj('license_urls')?.str('widevine') ?? '',
+      hlsUrl: data.obj('manifests')?.str('hls') ?? '',
+      fairplayLicenseUrl: drm.obj('license_urls')?.str('fairplay') ?? '',
+      fairplayCertificateUrl: drm.str('fairplay_certificate_url'),
       maxHeight: protection['max_height'] is int ? protection['max_height'] as int : null,
       renewAfter: Duration(seconds: seconds),
       signedUrls: data.str('url_protection') == 'signed',
@@ -192,6 +207,9 @@ class LiveJoin {
   final String dashUrl;
   final String token;
   final String licenseUrl;
+  final String hlsUrl;
+  final String fairplayLicenseUrl;
+  final String fairplayCertificateUrl;
   final int? maxHeight;
   final Duration renewAfter;
 

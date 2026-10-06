@@ -62,7 +62,8 @@ class NovaApi {
   Future<Json> patch(String path, [Object? body]) =>
       _send('PATCH', path, body: body);
 
-  Future<Json> delete(String path) => _send('DELETE', path);
+  Future<Json> delete(String path, [Object? body]) =>
+      _send('DELETE', path, body: body);
 
   /// Multipart upload of one local file under [field] (CCP receipts).
   Future<Json> upload(String path, {required String field, required File file}) async {

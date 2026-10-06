@@ -9,11 +9,12 @@ import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../core/state/app_state.dart';
 import '../../data/models.dart';
+import 'delete_account_screen.dart';
 import 'password_change_form.dart';
 
 /// Settings: appearance controls (dark mode + language), the
 /// school-managed read-only identity, alerts, the password change by
-/// code (D-093) and sign out.
+/// code (D-093), sign out and account deletion (D-118).
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -159,7 +160,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 6),
+          Center(
+            child: TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const DeleteAccountScreen()),
+              ),
+              child: Text(
+                context.tr('deleteAccount.title'),
+                style: NovaTypography.textTheme.labelLarge!.copyWith(
+                  color: NovaColors.textMuted,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           Center(
             child: Text(
               'noova.elearning@gmail.com · © 2026 Nova Learning',

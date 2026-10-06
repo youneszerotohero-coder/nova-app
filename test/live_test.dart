@@ -58,7 +58,12 @@ Map<String, Object?> _detail(
 
 /// `POST /lives/{id}/playback-policy`: mode A (`clearDelivery: false`),
 /// mode B (`clearDelivery: true`) or mode C (`mode: 'clear'`).
-Map<String, Object?> _policy({bool strict = true, String mode = 'protected', bool clearDelivery = false}) =>
+Map<String, Object?> _policy({
+  bool strict = true,
+  String mode = 'protected',
+  bool clearDelivery = false,
+  bool fairplay = false,
+}) =>
     mode == 'clear'
         ? <String, Object?>{
             'data': <String, Object?>{
@@ -74,6 +79,7 @@ Map<String, Object?> _policy({bool strict = true, String mode = 'protected', boo
               'challenge': 'c' * 64,
               'expires_at': 1790000000,
               'candidates': <Object>[
+                if (fairplay) <String, Object?>{'drm': 'fairplay', 'key_system': 'com.apple.fps', 'robustness': null},
                 <String, Object>{
                   'drm': 'playready',
                   'key_system': strict ? 'com.microsoft.playready.recommendation.3000' : 'com.microsoft.playready.recommendation',
@@ -117,6 +123,26 @@ const FakeResponse _drmJoin = FakeResponse(200, <String, Object?>{
     'drm': <String, Object>{
       'token': 'ey.live',
       'license_urls': <String, String>{'widevine': 'https://drm.test/AcquireLicense'},
+    },
+    'protection': <String, Object?>{'max_height': null},
+    'expires_at': 1790000240,
+    'renew_after_seconds': 240,
+    'url_protection': 'none',
+  },
+});
+
+/// The protected join with FairPlay enabled (D-088): HLS + FairPlay URLs.
+const FakeResponse _fairPlayJoin = FakeResponse(200, <String, Object?>{
+  'data': <String, Object?>{
+    'mode': 'protected',
+    'manifests': <String, String>{'dash': 'https://live.test/301/manifest.mpd', 'hls': 'https://live.test/301/master.m3u8'},
+    'drm': <String, Object>{
+      'token': 'ey.live',
+      'license_urls': <String, String>{
+        'widevine': 'https://drm.test/AcquireLicense',
+        'fairplay': 'https://fps.test/AcquireLicense',
+      },
+      'fairplay_certificate_url': 'https://nova.test/drm/fairplay.cer',
     },
     'protection': <String, Object?>{'max_height': null},
     'expires_at': 1790000240,
@@ -580,7 +606,52 @@ void main() {
       await leave(tester);
     });
 
-    testWidgets('iPhone asks for the clear replay (D-070)', (tester) async {
+    testWidgets('mode A: iPhone joins the Live with FairPlay (D-118)', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      try {
+        final FakeBackend backend = await pumpRoom(tester, <String, FakeResponse>{
+          'GET /lives/301': FakeResponse(200, _detail('live', mediaState: 'ready')),
+          'POST /lives/301/playback-policy': FakeResponse(200, _policy(fairplay: true)),
+          'POST /lives/301/join': _fairPlayJoin,
+        });
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(joins(backend).single.data, <String, Object?>{
+          'challenge': 'c' * 64,
+          'key_system': 'com.apple.fps',
+          'robustness': null,
+        });
+        final Map<String, Object?> created = players.created.single;
+        expect(created['clear'], isFalse);
+        expect(created['manifest'], 'https://live.test/301/master.m3u8');
+        expect(created['license'], 'https://fps.test/AcquireLicense');
+        expect(created['certificate'], 'https://nova.test/drm/fairplay.cer');
+        expect(created['token'], 'ey.live');
+        await leave(tester);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('mode A: iPhone is refused when the server offers no FairPlay', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      try {
+        final FakeBackend backend = await pumpRoom(tester, <String, FakeResponse>{
+          'GET /lives/301': FakeResponse(200, _detail('live', mediaState: 'ready')),
+          'POST /lives/301/playback-policy': FakeResponse(200, _policy()),
+        });
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(find.textContaining('iPhone'), findsWidgets);
+        expect(joins(backend), isEmpty);
+        await leave(tester);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('mode C: iPhone plays the clear replay the server returns (D-070)', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       try {
         final FakeBackend backend = await pumpRoom(tester, <String, FakeResponse>{
@@ -603,7 +674,8 @@ void main() {
 
         final FakeRequest replay =
             backend.requests.firstWhere((FakeRequest r) => r.path == '/lives/301/replay/playback');
-        expect(replay.query, 'delivery=clear');
+        // FairPlay is tried first: no clear request from the app.
+        expect(replay.query, isNot(contains('delivery=clear')));
         expect(players.created.single['clear'], isTrue);
         expect(find.text('Personal copy · identity watermark'), findsOneWidget);
         await leave(tester);

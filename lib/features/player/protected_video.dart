@@ -19,9 +19,8 @@ enum DrmSupport {
   /// Android without Widevine.
   none,
 
-  /// iPhone/iPad: FairPlay is disabled until Apple setup (D-055); the
-  /// clear copy plays when the Admin allows it (D-070 mode B/C).
-  iosBlocked,
+  /// iPhone/iPad: FairPlay on AVPlayer (D-118), when the server offers it.
+  fairplay,
 
   /// Anything else (tests, desktop).
   unsupported,
@@ -31,7 +30,7 @@ Future<DrmSupport> detectDrmSupport() async {
   if (kIsWeb) return DrmSupport.unsupported;
   switch (defaultTargetPlatform) {
     case TargetPlatform.iOS:
-      return DrmSupport.iosBlocked;
+      return DrmSupport.fairplay;
     case TargetPlatform.android:
       try {
         final String? level =
@@ -204,14 +203,15 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
 
 /// The native player surface. Android: Media3 on a secure SurfaceView,
 /// embedded with hybrid composition (a Widevine L1 decoder can only render
-/// to a real SurfaceView), for both DRM and the clear copy. iPhone: the
-/// clear copy on AVPlayer (D-070) — protected playback waits for FairPlay.
+/// to a real SurfaceView), for both DRM and the clear copy. iPhone:
+/// AVPlayer, FairPlay HLS (D-118) or the clear copy.
 class ProtectedVideoView extends StatelessWidget {
   const ProtectedVideoView({
     super.key,
     required this.manifest,
     required this.controller,
     this.licenseUrl = '',
+    this.certificateUrl = '',
     this.token = '',
     this.clear = false,
     this.startSeconds = 0,
@@ -221,6 +221,9 @@ class ProtectedVideoView extends StatelessWidget {
 
   final String manifest;
   final String licenseUrl;
+
+  /// FairPlay application certificate (iPhone only).
+  final String certificateUrl;
   final String token;
 
   /// The D-070 clear HLS copy: no DRM, watermark only.
@@ -239,6 +242,7 @@ class ProtectedVideoView extends StatelessWidget {
       'manifest': manifest,
       'clear': clear,
       'license': licenseUrl,
+      'certificate': certificateUrl,
       'token': token,
       'startMs': startSeconds * 1000,
       'maxHeight': maxHeight,

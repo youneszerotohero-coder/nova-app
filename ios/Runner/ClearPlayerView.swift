@@ -2,14 +2,16 @@ import AVFoundation
 import Flutter
 import UIKit
 
-/// D-070: the clear adaptive HLS copy (Lives, Lessons, Replays) on iPhone,
-/// played by AVPlayer until FairPlay is enabled (D-055). It speaks the
-/// same channels and events as Android's `ProtectedPlayerView`: control on
-/// `nova/protected_player_<id>`, state on `nova/protected_player_<id>/events`.
+/// The iPhone player (Lives, Lessons, Replays) on AVPlayer: the FairPlay
+/// HLS stream with its Axinom licence (D-118), or the D-070 clear adaptive
+/// HLS copy. It speaks the same channels and events as Android's
+/// `ProtectedPlayerView`: control on `nova/protected_player_<id>`, state on
+/// `nova/protected_player_<id>/events`.
 ///
-/// Protection is the identity watermark Flutter draws above this view,
-/// plus `CaptureGuard` (recording/mirroring stops playback). AirPlay is
-/// disabled so the picture never leaves the watermarked screen.
+/// Protection is FairPlay when protected, the identity watermark Flutter
+/// draws above this view, and `CaptureGuard` (recording/mirroring stops
+/// playback). AirPlay is disabled so the picture never leaves the
+/// watermarked screen.
 final class ClearPlayerFactory: NSObject, FlutterPlatformViewFactory {
   private let messenger: FlutterBinaryMessenger
 
@@ -57,6 +59,9 @@ final class ClearPlayerView: NSObject, FlutterPlatformView, FlutterStreamHandler
   private let methods: FlutterMethodChannel
   private let events: FlutterEventChannel
   private let live: Bool
+  private var keys: FairPlayKeys?
+  /// A key failure was reported: the item failure that follows is its echo.
+  private var keyFailed = false
   private var sink: FlutterEventSink?
   private var observations: [NSKeyValueObservation] = []
   private var tokens: [NSObjectProtocol] = []
@@ -110,6 +115,30 @@ final class ClearPlayerView: NSObject, FlutterPlatformView, FlutterStreamHandler
       return
     }
     let asset = AVURLAsset(url: url)
+    if !(params["clear"] as? Bool ?? true) {
+      guard
+        let license = URL(string: params["license"] as? String ?? ""),
+        let certificate = URL(string: params["certificate"] as? String ?? ""),
+        license.scheme == "https", certificate.scheme == "https"
+      else {
+        emit(["event": "error", "category": "drm_init", "kind": "drm", "code": 0, "licenseStatus": 0])
+        return
+      }
+      let keys = FairPlayKeys(
+        license: license,
+        certificate: certificate,
+        token: params["token"] as? String ?? ""
+      ) { [weak self] category, code, status, message in
+        guard let self = self, !self.released, !self.keyFailed else { return }
+        self.keyFailed = true
+        self.emit([
+          "event": "error", "category": category, "kind": "drm",
+          "code": code, "licenseStatus": status, "message": message,
+        ])
+      }
+      keys.attach(asset)
+      self.keys = keys
+    }
     let item = AVPlayerItem(asset: asset)
     if live {
       item.configuredTimeOffsetFromLive = ClearPlayerView.liveOffset
@@ -238,6 +267,7 @@ final class ClearPlayerView: NSObject, FlutterPlatformView, FlutterStreamHandler
 
   /// Same categories as the Android player; a decoder failure is `decode`.
   private func fail(_ error: Error?) {
+    guard !keyFailed else { return }
     let ns = error as NSError?
     var category = "delivery"
     var kind = "other"
@@ -290,7 +320,8 @@ final class ClearPlayerView: NSObject, FlutterPlatformView, FlutterStreamHandler
     case "setQuality":
       setQuality((args["height"] as? NSNumber)?.intValue ?? 0)
     case "renewToken":
-      break // No licence: the clear copy has nothing to renew in the player.
+      // Later licence requests of this Live carry the renewed entitlement.
+      keys?.renew(token: args["token"] as? String ?? "")
     case "release":
       release()
     default:
@@ -330,6 +361,8 @@ final class ClearPlayerView: NSObject, FlutterPlatformView, FlutterStreamHandler
     tokens = []
     player.pause()
     player.replaceCurrentItem(with: nil)
+    keys?.close()
+    keys = nil
     methods.setMethodCallHandler(nil)
     events.setStreamHandler(nil)
     sink = nil
@@ -362,5 +395,159 @@ final class ClearPlayerView: NSObject, FlutterPlatformView, FlutterStreamHandler
 
   private static func size(forHeight height: Int) -> CGSize {
     CGSize(width: (CGFloat(height) * 16 / 9).rounded(.up), height: CGFloat(height))
+  }
+}
+
+/// D-118: FairPlay keys for one protected stream, as Axinom's FairPlay
+/// integration sample and the website (Shaka) do it: the content id is
+/// everything after `skd://` in the playlist's key URI, the SPC goes raw to
+/// the Axinom licence URL with the entitlement in `X-AxDRM-Message`, and the
+/// raw CKC comes back. Failures use the Android player's categories.
+final class FairPlayKeys: NSObject, AVContentKeySessionDelegate {
+  typealias Failure = (_ category: String, _ code: Int, _ licenseStatus: Int, _ message: String) -> Void
+
+  private static let timeout: TimeInterval = 12
+
+  private let session = AVContentKeySession(keySystem: .fairPlayStreaming)
+  private let queue = DispatchQueue(label: "nova.fairplay")
+  private let license: URL
+  private let certificateUrl: URL
+  private let onFailure: Failure
+  // Read and written on `queue` only.
+  private var token: String
+  private var certificate: Data?
+  private var closed = false
+
+  init(license: URL, certificate: URL, token: String, onFailure: @escaping Failure) {
+    self.license = license
+    certificateUrl = certificate
+    self.token = token
+    self.onFailure = onFailure
+    super.init()
+    session.setDelegate(self, queue: queue)
+  }
+
+  func attach(_ asset: AVURLAsset) {
+    session.addContentKeyRecipient(asset)
+  }
+
+  func renew(token: String) {
+    queue.async { self.token = token }
+  }
+
+  func close() {
+    queue.async { self.closed = true }
+  }
+
+  func contentKeySession(_ session: AVContentKeySession, didProvide keyRequest: AVContentKeyRequest) {
+    answer(keyRequest)
+  }
+
+  func contentKeySession(
+    _ session: AVContentKeySession,
+    didProvideRenewingContentKeyRequest keyRequest: AVContentKeyRequest
+  ) {
+    answer(keyRequest)
+  }
+
+  func contentKeySession(
+    _ session: AVContentKeySession,
+    contentKeyRequest keyRequest: AVContentKeyRequest,
+    didFailWithError err: Error
+  ) {
+    report("license", err, status: 0)
+  }
+
+  // Everything below runs on `queue`.
+
+  private func answer(_ request: AVContentKeyRequest) {
+    guard !closed else { return }
+    guard
+      let identifier = request.identifier as? String,
+      identifier.hasPrefix("skd://"),
+      let contentId = String(identifier.dropFirst("skd://".count)).data(using: .utf8)
+    else {
+      fail(request, "drm_init", FairPlayKeys.error("The key URI is not skd://"), status: 0)
+      return
+    }
+    withCertificate { certificate, status, error in
+      guard let certificate = certificate else {
+        self.fail(request, "drm_init", error ?? FairPlayKeys.error("No FairPlay certificate"), status: status)
+        return
+      }
+      request.makeStreamingContentKeyRequestData(
+        forApp: certificate,
+        contentIdentifier: contentId,
+        options: [AVContentKeyRequestProtocolVersionsKey: [1]]
+      ) { spc, error in
+        self.queue.async {
+          guard let spc = spc else {
+            self.fail(request, "drm_init", error ?? FairPlayKeys.error("No SPC"), status: 0)
+            return
+          }
+          self.fetchLicense(spc, for: request)
+        }
+      }
+    }
+  }
+
+  /// The application certificate, downloaded once per stream.
+  private func withCertificate(_ done: @escaping (Data?, Int, Error?) -> Void) {
+    if let certificate = certificate {
+      done(certificate, 200, nil)
+      return
+    }
+    let request = URLRequest(url: certificateUrl, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: FairPlayKeys.timeout)
+    URLSession.shared.dataTask(with: request) { data, response, error in
+      self.queue.async {
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard error == nil, status == 200, let data = data, !data.isEmpty else {
+          done(nil, status, error)
+          return
+        }
+        self.certificate = data
+        done(data, status, nil)
+      }
+    }.resume()
+  }
+
+  private func fetchLicense(_ spc: Data, for keyRequest: AVContentKeyRequest) {
+    guard !closed else { return }
+    var request = URLRequest(url: license, timeoutInterval: FairPlayKeys.timeout)
+    request.httpMethod = "POST"
+    request.setValue(token, forHTTPHeaderField: "X-AxDRM-Message")
+    request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+    request.httpBody = spc
+    URLSession.shared.dataTask(with: request) { data, response, error in
+      self.queue.async {
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard error == nil, status == 200, let ckc = data, !ckc.isEmpty else {
+          let timedOut = (error as NSError?)?.code == NSURLErrorTimedOut
+          self.fail(
+            keyRequest,
+            timedOut ? "timeout" : "license",
+            error ?? FairPlayKeys.error("Licence refused (HTTP \(status))"),
+            status: status
+          )
+          return
+        }
+        keyRequest.processContentKeyResponse(AVContentKeyResponse(fairPlayStreamingKeyResponseData: ckc))
+      }
+    }.resume()
+  }
+
+  private func fail(_ request: AVContentKeyRequest, _ category: String, _ error: Error, status: Int) {
+    request.processContentKeyResponseError(error)
+    report(category, error, status: status)
+  }
+
+  private func report(_ category: String, _ error: Error, status: Int) {
+    guard !closed else { return }
+    let ns = error as NSError
+    DispatchQueue.main.async { self.onFailure(category, ns.code, status, ns.localizedDescription) }
+  }
+
+  private static func error(_ message: String) -> NSError {
+    NSError(domain: "nova.fairplay", code: -1, userInfo: [NSLocalizedDescriptionKey: message])
   }
 }

@@ -1,9 +1,10 @@
 import 'json.dart';
 
 /// `POST /lessons/{id}/playback` (backend `PlaybackService::authorize`)
-/// and `GET /lives/{id}/replay/playback`: either the protected DASH
-/// stream with its Widevine entitlement, or (`mode: clear`, D-070) the
-/// signed clear HLS copy protected by the watermark only.
+/// and `GET /lives/{id}/replay/playback`: either the protected stream
+/// with its entitlement (DASH + Widevine, or HLS + FairPlay on iPhone,
+/// D-118), or (`mode: clear`, D-070) the signed clear HLS copy protected by
+/// the watermark only.
 class PlaybackAuthorization {
   const PlaybackAuthorization({
     this.mode = 'protected',
@@ -14,6 +15,8 @@ class PlaybackAuthorization {
     required this.hlsUrl,
     required this.drmToken,
     required this.widevineLicenseUrl,
+    this.fairplayLicenseUrl = '',
+    this.fairplayCertificateUrl = '',
     required this.strict,
     required this.softwareFallback,
     required this.maxHeight,
@@ -44,6 +47,8 @@ class PlaybackAuthorization {
       hlsUrl: manifests.str('hls'),
       drmToken: drm.str('token'),
       widevineLicenseUrl: licenses.str('widevine'),
+      fairplayLicenseUrl: licenses.str('fairplay'),
+      fairplayCertificateUrl: drm.str('fairplay_certificate_url'),
       strict: protection.str('mode', 'strict') == 'strict',
       softwareFallback: protection.flag('software_fallback'),
       maxHeight: protection['max_height'] is int ? protection['max_height'] as int : null,
@@ -76,6 +81,13 @@ class PlaybackAuthorization {
   final String hlsUrl;
   final String drmToken;
   final String widevineLicenseUrl;
+
+  /// Present only while FairPlay is enabled on the server (D-088).
+  final String fairplayLicenseUrl;
+  final String fairplayCertificateUrl;
+
+  bool get hasFairPlay =>
+      hlsUrl.isNotEmpty && fairplayLicenseUrl.isNotEmpty && fairplayCertificateUrl.isNotEmpty;
 
   /// `protection.mode == 'strict'`: hardware DRM only, never software.
   final bool strict;

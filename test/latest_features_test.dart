@@ -405,6 +405,48 @@ void main() {
     expect(session.signedIn, isTrue);
   });
 
+  testWidgets('Settings deletes the account after the password is confirmed (D-118)', (tester) async {
+    final Map<String, Object?> user = <String, Object?>{
+      'id': 9,
+      'role': 'student',
+      'phone': '0555123456',
+      'next_required_step': null,
+      'student': <String, Object?>{'first_name': 'Ines', 'last_name': 'Benali'},
+    };
+    final FakeBackend backend = FakeBackend(<String, FakeResponse>{}, sequences: <String, List<FakeResponse>>{
+      'DELETE /auth/account': <FakeResponse>[
+        _error(422, 'VALIDATION_FAILED', 'The password is incorrect.', <String, Object>{
+          'password': <String>['The password is incorrect.'],
+        }),
+        const FakeResponse(204),
+      ],
+    });
+    final SessionStore session = SessionStore.seeded(
+      StudentProfile.fromUser(user),
+      api: fakeApi(backend),
+      user: user,
+    );
+    await _pump(tester, _install(session), const SettingsScreen());
+
+    await _tap(tester, 'Delete my account');
+    expect(find.textContaining('This cannot be undone'), findsOneWidget);
+
+    await _tap(tester, 'Delete my account permanently');
+    expect(find.text('Type your password.'), findsOneWidget);
+    expect(backend.requests.where((FakeRequest r) => r.path == '/auth/account'), isEmpty);
+
+    await tester.enterText(find.byType(TextField).last, 'wrong-pass');
+    await _tap(tester, 'Delete my account permanently');
+    expect(find.text('Wrong password.'), findsOneWidget);
+    expect(session.signedIn, isTrue);
+
+    await tester.enterText(find.byType(TextField).last, 'NovaSecure9!');
+    await _tap(tester, 'Delete my account permanently');
+    expect(_body(_sent(backend, 'DELETE', '/auth/account')), <String, Object?>{'password': 'NovaSecure9!'});
+    expect(session.signedIn, isFalse);
+    expect(session.endedReason, SessionStore.accountDeleted);
+  });
+
   group('Units sold through Packs only (D-091)', () {
     Map<String, Object?> course(List<Object> offers) => <String, Object?>{
           'id': 40,

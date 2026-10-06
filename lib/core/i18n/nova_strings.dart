@@ -784,6 +784,59 @@ const Map<String, Map<String, String>> K = {
   },
   'settings.signOut': {'en': 'Sign out', 'fr': 'Se déconnecter', 'ar': 'تسجيل الخروج'},
 
+  // Account deletion (D-118).
+  'deleteAccount.title': {'en': 'Delete my account', 'fr': 'Supprimer mon compte', 'ar': 'حذف حسابي'},
+  'deleteAccount.whatHappens': {
+    'en': 'What deleting your account does',
+    'fr': 'Ce que fait la suppression du compte',
+    'ar': 'ماذا يحدث عند حذف حسابك',
+  },
+  'deleteAccount.erased': {
+    'en': 'Your name, phone number, school details and password are erased.',
+    'fr': 'Ton nom, ton numéro, tes informations scolaires et ton mot de passe sont effacés.',
+    'ar': 'يُمحى اسمك ورقم هاتفك ومعلوماتك المدرسية وكلمة المرور.',
+  },
+  'deleteAccount.access': {
+    'en': 'You lose access to every course you own, with your progress, quizzes and notifications.',
+    'fr': 'Tu perds l’accès à tous tes cours, avec ta progression, tes quiz et tes notifications.',
+    'ar': 'تفقد الوصول إلى كل دوراتك مع تقدّمك واختباراتك وإشعاراتك.',
+  },
+  'deleteAccount.payments': {
+    'en': 'Past payments are kept for accounting, without your name or number. Nothing is refunded.',
+    'fr': 'Les paiements passés restent en comptabilité, sans ton nom ni ton numéro. Rien n’est remboursé.',
+    'ar': 'تبقى المدفوعات السابقة في المحاسبة دون اسمك أو رقمك. لا يُسترجع أي مبلغ.',
+  },
+  'deleteAccount.final': {
+    'en': 'This cannot be undone. You can sign up again later with the same number, as a new account.',
+    'fr': 'C’est définitif. Tu pourras te réinscrire plus tard avec le même numéro, comme nouveau compte.',
+    'ar': 'لا يمكن التراجع عن ذلك. يمكنك التسجيل لاحقًا بنفس الرقم كحساب جديد.',
+  },
+  'deleteAccount.passwordLabel': {
+    'en': 'Type your password to confirm',
+    'fr': 'Saisis ton mot de passe pour confirmer',
+    'ar': 'اكتب كلمة المرور للتأكيد',
+  },
+  'deleteAccount.passwordRequired': {
+    'en': 'Type your password.',
+    'fr': 'Saisis ton mot de passe.',
+    'ar': 'اكتب كلمة المرور.',
+  },
+  'deleteAccount.wrongPassword': {
+    'en': 'Wrong password.',
+    'fr': 'Mot de passe incorrect.',
+    'ar': 'كلمة المرور غير صحيحة.',
+  },
+  'deleteAccount.confirm': {
+    'en': 'Delete my account permanently',
+    'fr': 'Supprimer mon compte définitivement',
+    'ar': 'حذف حسابي نهائيًا',
+  },
+  'deleteAccount.done': {
+    'en': 'Your account has been deleted.',
+    'fr': 'Ton compte a été supprimé.',
+    'ar': 'تم حذف حسابك.',
+  },
+
   // Auth.
   'auth.welcomeBack': {'en': 'Welcome back', 'fr': 'Bon retour', 'ar': 'مرحباً بعودتك'},
   'auth.signInSubtitle': {

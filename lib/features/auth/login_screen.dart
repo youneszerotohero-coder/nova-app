@@ -110,6 +110,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 if (AppScope.of(context).session.endedReason ==
                     ApiException.sessionReplaced)
                   _Banner(text: context.tr('err.sessionReplaced')),
+                if (AppScope.of(context).session.endedReason == SessionStore.accountDeleted)
+                  _Banner(text: context.tr('deleteAccount.done'), icon: Icons.check_circle_rounded),
                 if (_passwordReset)
                   _Banner(text: context.tr('auth.passwordResetDone'), icon: Icons.check_circle_rounded),
                 ...stagger(_fields()),

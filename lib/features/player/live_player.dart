@@ -206,6 +206,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
         candidate = switch (support) {
           DrmSupport.hardware || DrmSupport.software =>
             policy.widevineFor(hardware: support == DrmSupport.hardware),
+          DrmSupport.fairplay => policy.fairplay,
           _ => null,
         };
         if (candidate == null) {
@@ -215,7 +216,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
           });
           if (!policy.clearDeliveryAvailable) {
             return _fail(switch (support) {
-              DrmSupport.iosBlocked => 'ios_blocked',
+              DrmSupport.fairplay => 'ios_blocked',
               DrmSupport.software => 'security',
               _ => 'capability',
             });
@@ -261,8 +262,10 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
         'join_ms': joinClock.elapsedMilliseconds,
         'delivery_mode': clear ? 1 : 0,
         'fallback_reason': _fallbackReason,
-        if (!clear) 'drm_system': 1,
-        if (!clear) 'drm_hardware': candidate?.robustness == 'HW_SECURE_ALL' ? 1 : 0,
+        // Web codes: Widevine 1, FairPlay 3 (FairPlay is hardware-backed).
+        if (!clear) 'drm_system': candidate?.drm == 'fairplay' ? 3 : 1,
+        if (!clear)
+          'drm_hardware': candidate?.drm == 'fairplay' || candidate?.robustness == 'HW_SECURE_ALL' ? 1 : 0,
       });
     } on ApiException catch (error) {
       _loading = false;
@@ -671,6 +674,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     }
     final LiveJoin? join = _join;
     final ProtectedVideoController? video = _video;
+    final bool fairPlay = _candidate?.drm == 'fairplay';
     final Widget box = ColoredBox(
       color: Colors.black,
       child: Stack(
@@ -681,9 +685,14 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
               // One native view per controller: a reload with the same URL must
               // create a new player, not reuse the released one.
               key: ObjectKey(video),
-              manifest: join.clear ? join.manifestUrl : join.dashUrl,
+              manifest: join.clear
+                  ? join.manifestUrl
+                  : fairPlay
+                      ? join.hlsUrl
+                      : join.dashUrl,
               clear: join.clear,
-              licenseUrl: join.licenseUrl,
+              licenseUrl: fairPlay ? join.fairplayLicenseUrl : join.licenseUrl,
+              certificateUrl: fairPlay ? join.fairplayCertificateUrl : '',
               token: join.token,
               maxHeight: join.clear ? null : join.maxHeight ?? _policy?.maxHeight,
               live: true,

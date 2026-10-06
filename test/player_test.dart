@@ -20,8 +20,14 @@ import 'fixtures/fixture_data.dart';
 import 'nova_font_loader.dart';
 
 /// A playback authorization in the backend's exact shape
-/// (`PlaybackService::authorize`); [clearDelivery] is mode B (D-070).
-Map<String, Object?> _authorization({String mode = 'strict', bool fallback = false, bool clearDelivery = false}) =>
+/// (`PlaybackService::authorize`); [clearDelivery] is mode B (D-070),
+/// [fairplay] the server's FairPlay URLs (D-088).
+Map<String, Object?> _authorization({
+  String mode = 'strict',
+  bool fallback = false,
+  bool clearDelivery = false,
+  bool fairplay = false,
+}) =>
     <String, Object?>{
       'mode': 'protected',
       'clear_delivery_available': clearDelivery,
@@ -34,7 +40,9 @@ Map<String, Object?> _authorization({String mode = 'strict', bool fallback = fal
         'license_urls': <String, String>{
           'widevine': 'https://drm.test/AcquireLicense',
           'playready': 'https://drm.test/AcquireLicense',
+          if (fairplay) 'fairplay': 'https://fps.test/AcquireLicense',
         },
+        if (fairplay) 'fairplay_certificate_url': 'https://nova.test/drm/fairplay.cer',
       },
       'protection': <String, Object?>{
         'mode': mode,
@@ -232,11 +240,39 @@ void main() {
       expect(find.text('Try again'), findsOneWidget);
     });
 
-    testWidgets('mode A: iPhone stays blocked until FairPlay (D-055)', (tester) async {
+    testWidgets('mode A: iPhone plays the FairPlay HLS stream (D-118)', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       try {
         backend = FakeBackend(<String, FakeResponse>{
-          'POST /lessons/0/playback': _clearRefused,
+          'POST /lessons/0/playback': FakeResponse(200, <String, Object?>{'data': _authorization(fairplay: true)}),
+        });
+        await pumpLearn(tester);
+
+        await tester.tap(find.text('Play'));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 100));
+
+        // The protected stream is asked for, never the clear copy.
+        expect(backend.requests.where((FakeRequest r) => r.path.endsWith('/playback')).single.data, isNull);
+        final Map<String, Object?> created = players.created.single;
+        expect(created['clear'], isFalse);
+        expect(created['manifest'], 'https://cdn.test/v/master.m3u8?token=abc');
+        expect(created['license'], 'https://fps.test/AcquireLicense');
+        expect(created['certificate'], 'https://nova.test/drm/fairplay.cer');
+        expect(created['token'], 'ey.jwt');
+        expect(created['startMs'], 312000);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(seconds: 1));
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('mode A: iPhone stays blocked while the server offers no FairPlay', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      try {
+        backend = FakeBackend(<String, FakeResponse>{
+          'POST /lessons/0/playback': FakeResponse(200, <String, Object?>{'data': _authorization()}),
         });
         await pumpLearn(tester);
 
@@ -244,11 +280,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.textContaining('can’t play on iPhone yet'), findsOneWidget);
-        // The one request asked for the clear copy, which mode A refuses.
-        expect(
-          backend.requests.where((FakeRequest r) => r.path.endsWith('/playback')).single.data,
-          <String, String>{'delivery': 'clear'},
-        );
+        expect(players.created, isEmpty);
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }

@@ -78,6 +78,9 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
   /// The failure is shown with neutral wording (clear copy, or modes B/C):
   /// it never speaks of protected media (D-077).
   bool _failureClear = false;
+
+  /// iPhone: the protected stream is FairPlay HLS (D-118).
+  bool _fairPlay = false;
   Timer? _clearRetry;
 
   /// D-077: a protected picture that never starts goes clear in mode B.
@@ -209,11 +212,10 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
 
     final DrmSupport support = await detectDrmSupport();
     if (!mounted) return;
-    // A device with no usable DRM (iPhone until FairPlay, Android without
-    // Widevine) asks for the clear copy straight away; mode A refuses it
-    // and the device verdict stands.
+    // A device with no usable DRM (Android without Widevine) asks for the
+    // clear copy straight away; mode A refuses it and the device verdict
+    // stands.
     final String? noDrm = switch (support) {
-      DrmSupport.iosBlocked => 'ios_blocked',
       DrmSupport.none || DrmSupport.unsupported => 'capability',
       _ => null,
     };
@@ -261,7 +263,9 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
       // Strict mode licenses hardware Widevine only; software is allowed
       // only when the server says so — same rule as the web selection.
       setState(() => _phaseKey = auth.clearDeliveryAvailable ? 'player.clearChecking' : 'player.phaseDevice');
+      // iPhone: FairPlay only while the server offers it (D-118).
       final String? refusal = noDrm ??
+          (support == DrmSupport.fairplay && !auth.hasFairPlay ? 'ios_blocked' : null) ??
           (support == DrmSupport.software && (auth.strict || !auth.softwareFallback) ? 'security' : null);
       if (refusal != null) {
         if (!auth.clearDeliveryAvailable) return _fail(refusal, phase: 'capability');
@@ -289,6 +293,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
     final ProtectedVideoController video = ProtectedVideoController()..addListener(_onVideo);
     setState(() {
       _auth = auth;
+      _fairPlay = support == DrmSupport.fairplay;
       _start = start;
       _video = video;
       _reporter = ProgressReporter(initialSeconds: start);
@@ -529,9 +534,14 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
             ProtectedVideoView(
               // One native view per controller (see LivePlayer).
               key: ObjectKey(_video),
-              manifest: _auth!.clear ? _auth!.manifestUrl : _auth!.dashUrl,
+              manifest: _auth!.clear
+                  ? _auth!.manifestUrl
+                  : _fairPlay
+                      ? _auth!.hlsUrl
+                      : _auth!.dashUrl,
               clear: _auth!.clear,
-              licenseUrl: _auth!.widevineLicenseUrl,
+              licenseUrl: _fairPlay ? _auth!.fairplayLicenseUrl : _auth!.widevineLicenseUrl,
+              certificateUrl: _fairPlay ? _auth!.fairplayCertificateUrl : '',
               token: _auth!.drmToken,
               startSeconds: _start,
               maxHeight: _auth!.clear ? null : _auth!.maxHeight,

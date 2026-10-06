@@ -264,6 +264,17 @@ class SessionStore extends ChangeNotifier {
     );
   }
 
+  /// [endedReason] after the Student deleted their own account (D-118).
+  static const String accountDeleted = 'ACCOUNT_DELETED';
+
+  /// D-118: deletes this Student's account for good once the server
+  /// accepts the password; the session ends with it.
+  Future<void> deleteAccount(String password) async {
+    await _api!.delete('/auth/account', <String, String>{'password': password});
+    _endedReason = accountDeleted;
+    await _signedOut();
+  }
+
   Future<void> logout() async {
     try {
       await _api?.post('/auth/logout');
