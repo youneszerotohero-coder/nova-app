@@ -26,8 +26,14 @@ enum DrmSupport {
   unsupported,
 }
 
+/// Temporary build switch (owner request 2026-10-06, D-120):
+/// `--dart-define=NOVA_CLEAR_ONLY=true` reports no DRM, so the app asks for
+/// the clear copy; FLAG_SECURE, the capture guard and the watermark stay.
+/// The server still decides: the clear copy is refused in mode A.
+const bool clearOnlyBuild = bool.fromEnvironment('NOVA_CLEAR_ONLY');
+
 Future<DrmSupport> detectDrmSupport() async {
-  if (kIsWeb) return DrmSupport.unsupported;
+  if (kIsWeb || clearOnlyBuild) return DrmSupport.unsupported;
   switch (defaultTargetPlatform) {
     case TargetPlatform.iOS:
       return DrmSupport.fairplay;
