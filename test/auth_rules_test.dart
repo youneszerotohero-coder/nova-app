@@ -175,7 +175,7 @@ void main() {
 
       await tester.enterText(find.byType(TextField).at(2), '0455 12 34 56');
       expect(_fieldText(tester, 2), '0455123456');
-      await tester.tap(find.text('Create my space'));
+      await tester.tap(find.text('Next step'));
       await tester.pumpAndSettle();
 
       expect(find.text(_phoneStrict), findsWidgets);
@@ -194,12 +194,14 @@ void main() {
 
       await tester.enterText(find.byType(TextField).at(2), '0555 12 34 56');
       await tester.enterText(find.byType(TextField).at(3), 'short');
-      await tester.ensureVisible(find.text('أنشئ مساحتي'));
-      await tester.tap(find.text('أنشئ مساحتي'));
+      // Step 1 (D-122): the names are missing and the password is short.
+      await tester.ensureVisible(find.text('الخطوة التالية'));
+      await tester.tap(find.text('الخطوة التالية'));
       await tester.pumpAndSettle();
 
       expect(find.text('تحقق من الحقول المشار إليها.'), findsOneWidget);
-      expect(find.text('هذا الحقل مطلوب.'), findsNWidgets(5));
+      expect(find.text('هذا الحقل مطلوب.'), findsNWidgets(2));
+      expect(find.text('الخطوة التالية'), findsOneWidget);
       expect(backend.requests.where((FakeRequest r) => r.path == '/auth/register'), isEmpty);
     });
 
@@ -230,9 +232,13 @@ void main() {
       await tester.enterText(find.byType(TextField).at(2), '0555123456');
       await tester.enterText(find.byType(TextField).at(3), 'NovaSecure9!');
       await tester.enterText(find.byType(TextField).at(4), 'NovaSecure9!');
+      await tester.tap(find.text('Next step'));
+      await tester.pumpAndSettle();
       await _pick(tester, 0, '2AS');
       await _pick(tester, 2, 'Alger');
       await _pick(tester, 3, 'Bab Ezzouar');
+      await tester.tap(find.byType(Checkbox));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Create my space'));
       await tester.pumpAndSettle();
 

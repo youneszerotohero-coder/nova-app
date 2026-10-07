@@ -8,33 +8,29 @@ import '../../core/widgets/nova_course_card.dart';
 import '../../data/models.dart';
 import 'course_detail_screen.dart';
 
-/// One pack as a wide cover card, opening the pack page — Explore and
-/// the teacher page list packs with it.
+/// One Offer card (website `PackCard`), opening the Offer page — the home
+/// rail, Explore and the teacher page list Offers with it.
 class PackCard extends StatelessWidget {
-  const PackCard({super.key, required this.pack});
+  const PackCard({super.key, required this.pack, this.width});
 
   final Pack pack;
+
+  /// Fixed width in a horizontal rail.
+  final double? width;
 
   @override
   Widget build(BuildContext context) {
     return NovaCourseCard(
-      aspectRatio: 16 / 10,
+      width: width,
       heroTag: 'cover-${pack.name}',
       title: pack.name,
       scene: pack.scene,
       image: pack.image,
       icon: pack.icon,
-      meta: context.tr('explore.yearAccess'),
+      meta: '${offerTypeText(context, pack)} · ${context.trf('detail.coursesStat', {'n': pack.courseCount.toString()})}',
       price: pack.price,
       compareAtPrice: pack.compareAtPrice,
       badges: [
-        CardBadge(offerTypeText(context, pack), icon: Icons.layers_rounded),
-        CardBadge(
-          context.trf(
-            'detail.coursesStat',
-            {'n': pack.courseCount.toString()},
-          ),
-        ),
         if (pack.discountPercent > 0)
           CardBadge(
             formatDiscount(pack.discountPercent),

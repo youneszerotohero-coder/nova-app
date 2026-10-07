@@ -6,12 +6,15 @@ import 'package:nova_mobile/core/state/app_state.dart';
 import 'package:nova_mobile/core/theme/nova_theme.dart';
 import 'package:nova_mobile/core/utils/format_price.dart';
 import 'package:nova_mobile/core/utils/search_text.dart';
+import 'package:nova_mobile/core/widgets/nova_course_card.dart';
 import 'package:nova_mobile/core/widgets/pressable_scale.dart';
 import 'package:nova_mobile/core/widgets/subject_chip.dart';
 import 'package:nova_mobile/data/catalog_store.dart';
 import 'package:nova_mobile/data/models.dart';
 import 'package:nova_mobile/features/detail/course_detail_screen.dart';
+import 'package:nova_mobile/features/detail/pack_card.dart';
 import 'package:nova_mobile/features/detail/teacher_detail_screen.dart';
+import 'package:nova_mobile/features/detail/unit_card.dart';
 import 'package:nova_mobile/features/explore/explore_screen.dart';
 import 'package:nova_mobile/features/home/home_screen.dart';
 import 'package:nova_mobile/features/learning/learn_screen.dart';
@@ -134,76 +137,13 @@ void main() {
     expect(find.text('Our teachers'), findsOneWidget);
   });
 
-  testWidgets('pack banner carousel advances with next and prev', (
-    tester,
-  ) async {
+  testWidgets('home lists the Offers with the website card (D-111)', (tester) async {
     await pumpApp(tester);
 
-    Rect slideRect(String packName) => tester.getRect(
-          find.byWidgetPredicate(
-            (widget) =>
-                widget is PressableScale &&
-                widget.semanticLabel == 'Open pack $packName',
-          ),
-        );
-
-    // The second banner only peeks from the right edge.
-    expect(
-      slideRect('Maths + Physics Power Pack').left,
-      greaterThan(300),
-    );
-
-    await tester.tap(find.bySemanticsLabel('Next pack'));
-    await tester.pumpAndSettle();
-
-    // Now the second banner is the active page and the first is gone.
-    expect(slideRect('Maths + Physics Power Pack').left, lessThan(100));
-    expect(slideRect('Science Track — Complete Year').left, lessThan(-100));
-
-    await tester.tap(find.bySemanticsLabel('Previous pack'));
-    await tester.pumpAndSettle();
-
-    expect(
-      slideRect('Science Track — Complete Year').left,
-      lessThan(50),
-    );
-  });
-
-  testWidgets('pack banner arrows mirror in Arabic', (tester) async {
-    final AppState state = AppState.instance;
-    state.setLang(NovaLang.ar);
-    addTearDown(() => state.setLang(NovaLang.en));
-    await pumpApp(tester);
-
-    final double screenWidth =
-        tester.view.physicalSize.width / tester.view.devicePixelRatio;
-    Rect slideRect(String packName) => tester.getRect(
-          find.byWidgetPredicate(
-            (widget) =>
-                widget is PressableScale &&
-                widget.semanticLabel == 'Open pack $packName',
-          ),
-        );
-    Rect arrowRect(String label) =>
-        tester.getRect(find.bySemanticsLabel(label));
-
-    // Right to left: "previous" on the right edge, "next" on the left,
-    // matching the second banner peeking from the left.
-    expect(arrowRect('Previous pack').left, greaterThan(screenWidth / 2));
-    expect(arrowRect('Next pack').right, lessThan(screenWidth / 2));
-    expect(slideRect('Maths + Physics Power Pack').right, lessThan(100));
-
-    await tester.tap(find.bySemanticsLabel('Next pack'));
-    await tester.pumpAndSettle();
-
-    expect(
-      slideRect('Maths + Physics Power Pack').right,
-      greaterThan(screenWidth - 100),
-    );
-    expect(
-      slideRect('Science Track — Complete Year').right,
-      greaterThan(screenWidth + 100),
-    );
+    expect(find.text('Offers'), findsWidgets);
+    expect(find.byType(PackCard), findsWidgets);
+    expect(find.byType(UnitCard), findsWidgets);
+    expect(find.byType(NovaCourseCard), findsWidgets);
   });
 
   testWidgets('menu opens and switches tabs', (tester) async {

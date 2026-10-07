@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
-import '../../core/i18n/labels.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../core/theme/nova_dimens.dart';
 import '../../core/theme/nova_typography.dart';
-import '../../core/utils/format_price.dart';
 import '../../core/utils/search_text.dart';
 import '../../core/widgets/motion.dart';
 import '../../core/widgets/nova_course_card.dart';
@@ -19,6 +17,7 @@ import '../../core/widgets/section_header.dart';
 import '../../core/widgets/subject_chip.dart';
 import '../detail/course_detail_screen.dart';
 import '../detail/pack_card.dart';
+import '../detail/unit_card.dart';
 import '../detail/teacher_detail_screen.dart';
 import '../home/course_query.dart';
 import '../../data/catalog_store.dart';
@@ -250,52 +249,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
             message: context.tr('explore.noMatchMsg'),
           )
         else
-          // One poster per row, tall enough for the photo to carry the
-          // course — the card itself only adds the title and the price.
-          ...stagger(
-            [
-              for (final Course course in results)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                  child: NovaCourseCard(
-                    aspectRatio: 1,
-                    heroTag: 'cover-${course.title}',
-                    title: course.title,
-                    scene: course.scene,
-                    image: course.image,
-                    icon: course.icon,
-                    // Free Courses are joined, never sold (D-054).
-                    price: course.isFree || course.packOnly ? null : course.price,
-                    compareAtPrice: course.compareAtPrice,
-                    actionLabel: course.owned
-                        ? context.tr('common.open')
-                        : course.isFree
-                            ? context.tr('common.free')
-                            : course.packOnly
-                                ? packPriceText(context, course)
-                                : null,
-                    badges: [
-                      CardBadge(course.subject),
-                      if (course.owned)
-                        CardBadge(
-                          context.tr('common.owned'),
-                          icon: Icons.check_rounded,
-                          tone: NovaColors.onlineGreen,
-                        )
-                      else if (course.discountPercent > 0)
-                        CardBadge(
-                          formatDiscount(course.discountPercent),
-                          tone: NovaColors.heartRed,
-                        ),
-                    ],
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => CourseDetailScreen(course: course),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+          // Two per row, as the website grid (D-111).
+          NovaCardGrid(
+            children: stagger(<Widget>[for (final Course course in results) UnitCard(course: course)]),
           ),
         const SizedBox(height: NovaDimens.sectionGap),
         SectionHeader(title: context.tr('seg.packs')),
@@ -430,17 +386,8 @@ class _PacksSegment extends StatelessWidget {
       );
     }
 
-    return Column(
-      children: stagger(
-        packs
-            .map(
-              (Pack pack) => Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
-                child: PackCard(pack: pack),
-              ),
-            )
-            .toList(),
-      ),
+    return NovaCardGrid(
+      children: stagger(<Widget>[for (final Pack pack in packs) PackCard(pack: pack)]),
     );
   }
 }

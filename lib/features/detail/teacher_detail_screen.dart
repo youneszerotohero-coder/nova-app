@@ -143,15 +143,10 @@ class TeacherDetailScreen extends StatelessWidget {
               context.trf('teacher.coursesBy', {'name': teacher.name}),
             ),
             const SizedBox(height: 14),
-            ...stagger(
-              courses
-                  .map(
-                    (Course course) => Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                      child: TeacherCourseRow(course: course),
-                    ),
-                  )
-                  .toList(),
+            NovaCardGrid(
+              children: stagger(<Widget>[
+                for (final Course course in courses) TeacherCourseRow(course: course),
+              ]),
             ),
           ],
           ..._packSection(context, packs, app.catalog),
@@ -190,15 +185,8 @@ class TeacherDetailScreen extends StatelessWidget {
           child: Center(child: CircularProgressIndicator(strokeWidth: 2.4)),
         )
       else
-        ...stagger(
-          found
-              .map(
-                (Pack pack) => Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
-                  child: PackCard(pack: pack),
-                ),
-              )
-              .toList(),
+        NovaCardGrid(
+          children: stagger(<Widget>[for (final Pack pack in found) PackCard(pack: pack)]),
         ),
     ];
   }
@@ -380,8 +368,7 @@ class _Stat extends StatelessWidget {
   }
 }
 
-/// One course on a teacher's page — the same cover card the catalog
-/// uses, in its wide form.
+/// One Unit on a teacher's page — the same card the catalogue uses.
 class TeacherCourseRow extends StatelessWidget {
   const TeacherCourseRow({super.key, required this.course});
 
@@ -390,7 +377,6 @@ class TeacherCourseRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return NovaCourseCard(
-      aspectRatio: 16 / 9.4,
       title: course.title,
       scene: course.scene,
       image: course.image,
@@ -407,7 +393,6 @@ class TeacherCourseRow extends StatelessWidget {
               ? packPriceText(context, course)
               : null,
       badges: [
-        CardBadge('${course.subject} · ${course.level}'),
         if (course.owned)
           CardBadge(
             context.tr('common.owned'),

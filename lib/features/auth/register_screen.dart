@@ -1,8 +1,11 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
+import '../../core/api/nova_api.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
@@ -21,6 +24,10 @@ import 'otp_widgets.dart';
 /// rules — exactly the conception's required fields, validated by the
 /// backend. While the Admin switch is on (D-093/D-096) the phone is
 /// verified by a code before the account is created.
+///
+/// Two steps, as on the website: the account (names, phone, password),
+/// then the school details, the phone code and the acceptance of the
+/// terms and the privacy policy (D-122).
 ///
 /// With [onboarding] the same form completes an imported Student's
 /// academic identity (`PUT /onboarding`): no phone or password.
@@ -75,6 +82,24 @@ class _RegisterScreenState extends State<RegisterScreen>
   bool get _phoneVerified =>
       _verificationToken.isNotEmpty && _verifiedPhone == _phone.text.trim();
 
+  /// 0: account, 1: school details (registration only).
+  int _step = 0;
+
+  /// D-122: the terms and the privacy policy are accepted before the
+  /// account is created.
+  bool _acceptedTerms = false;
+  late final TapGestureRecognizer _termsTap = TapGestureRecognizer()..onTap = () => _openLegal('/terms');
+  late final TapGestureRecognizer _privacyTap = TapGestureRecognizer()..onTap = () => _openLegal('/privacy');
+
+  /// Fields of the account step; an error on any of them shows that step.
+  static const Set<String> _accountFields = <String>{
+    'first_name',
+    'last_name',
+    'phone',
+    'password',
+    'password_confirmation',
+  };
+
   /// Backend rule (D-098): a level with filières requires one of its own,
   /// a level without filière takes none.
   bool get _trackEnabled => _level?.hasTracks ?? false;
@@ -113,8 +138,16 @@ class _RegisterScreenState extends State<RegisterScreen>
     }
   }
 
+  /// The website's legal pages, in the browser.
+  Future<void> _openLegal(String path) async {
+    final Uri site = Uri.parse(NovaApi.defaultBaseUrl);
+    await launchUrl(site.replace(path: path, query: null), mode: LaunchMode.externalApplication);
+  }
+
   @override
   void dispose() {
+    _termsTap.dispose();
+    _privacyTap.dispose();
     _phone.removeListener(_onPhoneChanged);
     for (final TextEditingController c in <TextEditingController>[
       _first,
@@ -214,6 +247,7 @@ class _RegisterScreenState extends State<RegisterScreen>
       setState(() {
         if (error.code == 'PHONE_ALREADY_REGISTERED') {
           _phoneTaken = true;
+          _step = 0;
         } else if (error.code == 'PHONE_VERIFICATION_DISABLED') {
           // The Admin switched it off meanwhile: no code is needed.
           _verificationRequired = false;
@@ -256,17 +290,20 @@ class _RegisterScreenState extends State<RegisterScreen>
   /// Missing fields and the password rules (D-078), in the app language
   /// before asking the server, which stays authoritative and answers in
   /// English.
-  Map<String, String> _localErrors() {
+  Map<String, String> _localErrors() => <String, String>{
+        ..._accountErrors(),
+        ..._schoolErrors(),
+      };
+
+  /// The account step: names, then (registration) phone and password.
+  Map<String, String> _accountErrors() {
     final String required = context.tr('auth.fieldRequired');
     final Map<String, String> errors = <String, String>{
       if (_first.text.trim().isEmpty) 'first_name': required,
       if (_last.text.trim().isEmpty) 'last_name': required,
-      if (_level == null) 'level_id': required,
-      if (_trackEnabled && _track == null) 'track_id': required,
-      if (_wilaya == null) 'wilaya_id': required,
-      if (_commune == null) 'commune_id': required,
     };
     if (!widget.onboarding) {
+      if (!_strictMobile.hasMatch(_phone.text.trim())) errors['phone'] = context.tr('auth.phoneStrict');
       final String password = _password.text;
       if (password.length < 8) {
         errors['password'] = context.tr('pwd.short');
@@ -277,6 +314,33 @@ class _RegisterScreenState extends State<RegisterScreen>
       }
     }
     return errors;
+  }
+
+  /// The school step: level, filière, wilaya and commune.
+  Map<String, String> _schoolErrors() {
+    final String required = context.tr('auth.fieldRequired');
+    return <String, String>{
+      if (_level == null) 'level_id': required,
+      if (_trackEnabled && _track == null) 'track_id': required,
+      if (_wilaya == null) 'wilaya_id': required,
+      if (_commune == null) 'commune_id': required,
+    };
+  }
+
+  /// Step 1 → 2, checked here only: the account is created at the end.
+  void _next() {
+    final Map<String, String> errors = _accountErrors();
+    setState(() {
+      _phoneTaken = false;
+      _fieldErrors = errors;
+      _error = errors.isEmpty ? null : context.tr('auth.checkFields');
+      if (errors.isEmpty) _step = 1;
+    });
+  }
+
+  /// Shows the step holding a server field error.
+  void _showStepOf(Map<String, String> errors) {
+    if (!widget.onboarding && errors.keys.any(_accountFields.contains)) _step = 0;
   }
 
   Future<void> _submit() async {
@@ -298,7 +362,12 @@ class _RegisterScreenState extends State<RegisterScreen>
         _phoneTaken = false;
         _error = context.tr('auth.checkFields');
         _fieldErrors = local;
+        _showStepOf(local);
       });
+      return;
+    }
+    if (!widget.onboarding && !_acceptedTerms) {
+      setState(() => _error = context.tr('auth.termsRequired'));
       return;
     }
     if (!widget.onboarding && _verificationRequired && !_phoneVerified) {
@@ -333,7 +402,10 @@ class _RegisterScreenState extends State<RegisterScreen>
     } on ApiException catch (error) {
       if (!mounted) return;
       if (error.code == 'PHONE_ALREADY_REGISTERED') {
-        setState(() => _phoneTaken = true);
+        setState(() {
+          _phoneTaken = true;
+          _step = 0;
+        });
         return;
       }
       if (error.code == 'PHONE_VERIFICATION_REQUIRED' ||
@@ -352,6 +424,7 @@ class _RegisterScreenState extends State<RegisterScreen>
       setState(() {
         _fieldErrors = error.fieldErrors;
         _error = apiErrorText(context, error);
+        _showStepOf(error.fieldErrors);
       });
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -384,7 +457,11 @@ class _RegisterScreenState extends State<RegisterScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ...stagger(_form(), step: const Duration(milliseconds: 45)),
+                if (!widget.onboarding) _steps(),
+                ...stagger(
+                  _form(),
+                  step: const Duration(milliseconds: 45),
+                ),
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 14),
@@ -398,43 +475,28 @@ class _RegisterScreenState extends State<RegisterScreen>
                   ),
                 if (_phoneTaken) _phoneTakenNotice(),
                 const SizedBox(height: 10),
-                PressableScale(
-                  onTap: _busy ? null : _submit,
-                  pressedScale: 0.97,
-                  semanticLabel: widget.onboarding
-                      ? 'Save my details'
-                      : 'Create account',
-                  child: Container(
-                    height: 58,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: NovaColors.ink950,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: _busy
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.6,
-                              color: NovaColors.textOnDark,
-                            ),
-                          )
-                        : Text(
-                            context.tr(
-                              widget.onboarding
-                                  ? 'auth.saveDetails'
-                                  : 'auth.createSpace',
-                            ),
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15.5,
-                              color: NovaColors.textOnDark,
-                            ),
-                          ),
+                if (!widget.onboarding && _step == 0)
+                  _primaryButton(label: context.tr('auth.nextStep'), onTap: _next, semantic: 'Next step')
+                else
+                  Row(
+                    children: [
+                      if (!widget.onboarding) ...[
+                        _secondaryButton(
+                          label: context.tr('auth.previous'),
+                          onTap: _busy ? null : () => setState(() => _step = 0),
+                        ),
+                        const SizedBox(width: 10),
+                      ],
+                      Expanded(
+                        child: _primaryButton(
+                          label: context.tr(widget.onboarding ? 'auth.saveDetails' : 'auth.createSpace'),
+                          onTap: _busy ? null : _submit,
+                          busy: _busy,
+                          semantic: widget.onboarding ? 'Save my details' : 'Create account',
+                        ),
+                      ),
+                    ],
                   ),
-                ),
                 if (widget.onboarding) ...[
                   const SizedBox(height: 14),
                   Center(
@@ -452,18 +514,209 @@ class _RegisterScreenState extends State<RegisterScreen>
                       ),
                     ),
                   ),
-                ] else ...[
-                  const SizedBox(height: 14),
-                  Center(
-                    child: Text(
-                      context.tr('auth.termsNote'),
-                      style: NovaTypography.muted(
-                        NovaTypography.textTheme.labelSmall!,
-                      ),
-                    ),
-                  ),
                 ],
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// "1 Account — 2 School details", the step done shows a check.
+  Widget _steps() {
+    Widget step(int index, String key) {
+      final bool active = _step == index;
+      final bool done = _step > index;
+      final Color color = active || done ? NovaColors.accentDeep : NovaColors.textMuted;
+      return Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 4,
+              decoration: BoxDecoration(
+                color: active || done ? NovaColors.accent : NovaColors.accentMist,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                done
+                    ? Icon(Icons.check_circle_rounded, size: 16, color: color)
+                    : Text(
+                        '${index + 1}',
+                        style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 13, color: color),
+                      ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    context.tr(key),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 12.5, color: color),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Row(
+        children: [
+          step(0, 'auth.stepAccount'),
+          const SizedBox(width: 12),
+          step(1, 'auth.stepSchool'),
+        ],
+      ),
+    );
+  }
+
+  Widget _primaryButton({
+    required String label,
+    required VoidCallback? onTap,
+    required String semantic,
+    bool busy = false,
+  }) {
+    return PressableScale(
+      onTap: onTap,
+      pressedScale: 0.97,
+      semanticLabel: semantic,
+      child: Container(
+        height: 58,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: NovaColors.ink950,
+          borderRadius: BorderRadius.circular(100),
+        ),
+        child: busy
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.6, color: NovaColors.textOnDark),
+              )
+            : Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15.5,
+                  color: NovaColors.textOnDark,
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _secondaryButton({required String label, required VoidCallback? onTap}) {
+    return PressableScale(
+      onTap: onTap,
+      pressedScale: 0.97,
+      semanticLabel: label,
+      child: Container(
+        height: 58,
+        padding: const EdgeInsets.symmetric(horizontal: 22),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(color: NovaColors.ink950.withValues(alpha: 0.18)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w700,
+            fontSize: 14.5,
+            color: NovaColors.ink950,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// A pill of the phone verification: filled for the main action.
+  Widget _codeButton({required String label, required VoidCallback? onTap, bool filled = false}) {
+    final bool enabled = onTap != null;
+    return PressableScale(
+      onTap: onTap,
+      pressedScale: 0.97,
+      semanticLabel: label,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 150),
+        opacity: enabled ? 1 : 0.5,
+        child: Container(
+          height: 46,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: filled ? NovaColors.accent : Colors.white,
+            borderRadius: BorderRadius.circular(100),
+            border: filled ? null : Border.all(color: NovaColors.accent.withValues(alpha: 0.45)),
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontWeight: FontWeight.w700,
+              fontSize: 13.5,
+              color: filled ? Colors.white : NovaColors.accentDeep,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// D-122: the checkbox, with the terms and the privacy policy opening
+  /// the website's pages.
+  Widget _termsAcceptance() {
+    final TextStyle base = NovaTypography.textTheme.bodySmall!.copyWith(color: NovaColors.textStrong, height: 1.4);
+    final TextStyle link = base.copyWith(
+      color: NovaColors.accentDeep,
+      fontWeight: FontWeight.w700,
+      decoration: TextDecoration.underline,
+      decorationColor: NovaColors.accentDeep,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 32,
+            height: 32,
+            child: Checkbox(
+              value: _acceptedTerms,
+              activeColor: NovaColors.accent,
+              onChanged: (bool? value) => setState(() {
+                _acceptedTerms = value ?? false;
+                if (_acceptedTerms && _error == context.tr('auth.termsRequired')) _error = null;
+              }),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text.rich(
+                TextSpan(
+                  style: base,
+                  children: [
+                    TextSpan(text: '${context.tr('auth.termsAccept')} '),
+                    TextSpan(text: context.tr('auth.termsLink'), style: link, recognizer: _termsTap),
+                    TextSpan(text: ' ${context.tr('auth.termsAnd')} '),
+                    TextSpan(text: context.tr('auth.privacyLink'), style: link, recognizer: _privacyTap),
+                    const TextSpan(text: '.'),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
@@ -565,32 +818,43 @@ class _RegisterScreenState extends State<RegisterScreen>
               onChanged: (OtpChannel channel) => setState(() => _channel = channel),
             ),
           if (_codeError != null) AuthMessage(_codeError!),
-          Wrap(
-            spacing: 18,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          const SizedBox(height: 4),
+          Row(
             children: [
-              if (codeSent)
-                AuthTextAction(
-                  label: context.tr('otp.verify'),
-                  onTap: _codeBusy ? null : _verifyCode,
+              Expanded(
+                child: _codeButton(
+                  label: resendLabel(
+                    context,
+                    resendIn,
+                    idleKey: codeSent ? 'otp.resend' : 'otp.sendCode',
+                  ),
+                  filled: !codeSent,
+                  onTap: _codeBusy || resendIn > 0 ? null : _sendCode,
                 ),
-              AuthTextAction(
-                label: resendLabel(
-                  context,
-                  resendIn,
-                  idleKey: codeSent ? 'otp.resend' : 'otp.sendCode',
-                ),
-                onTap: _codeBusy || resendIn > 0 ? null : _sendCode,
               ),
-              if (_codeBusy)
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: NovaColors.accentDeep),
+              if (codeSent) ...[
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _codeButton(
+                    label: context.tr('otp.verify'),
+                    filled: true,
+                    onTap: _codeBusy ? null : _verifyCode,
+                  ),
                 ),
+              ],
             ],
           ),
+          if (_codeBusy)
+            const Padding(
+              padding: EdgeInsets.only(top: 10),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: NovaColors.accentDeep),
+                ),
+              ),
+            ),
         ],
       );
     }
@@ -606,6 +870,16 @@ class _RegisterScreenState extends State<RegisterScreen>
   }
 
   List<Widget> _form() {
+    if (widget.onboarding) return <Widget>[..._nameFields(), ..._schoolFields()];
+    if (_step == 0) return <Widget>[..._nameFields(), ..._phoneAndPassword()];
+    return <Widget>[
+      ..._schoolFields(),
+      if (_verificationRequired) _phoneVerification(),
+      _termsAcceptance(),
+    ];
+  }
+
+  List<Widget> _nameFields() {
     return [
       _Field(
         controller: _first,
@@ -619,7 +893,12 @@ class _RegisterScreenState extends State<RegisterScreen>
         hint: 'Benali',
         error: _fieldErrors['last_name'],
       ),
-      if (!widget.onboarding)
+    ];
+  }
+
+  /// Registration step 1 after the names: phone and password.
+  List<Widget> _phoneAndPassword() {
+    return [
         _Field(
           controller: _phone,
           label: context.tr('settings.phone'),
@@ -633,7 +912,12 @@ class _RegisterScreenState extends State<RegisterScreen>
           icon: Icons.phone_rounded,
           error: _fieldErrors['phone'],
         ),
-      if (!widget.onboarding && _verificationRequired) _phoneVerification(),
+        ..._passwordFields(),
+    ];
+  }
+
+  List<Widget> _schoolFields() {
+    return [
       RefPickerField(
         label: context.tr('auth.level'),
         value: _level,
@@ -674,7 +958,11 @@ class _RegisterScreenState extends State<RegisterScreen>
         error: _fieldErrors['commune_id'],
         onChanged: (RefItem? value) => setState(() => _commune = value),
       ),
-      if (!widget.onboarding) ...[
+    ];
+  }
+
+  List<Widget> _passwordFields() {
+    return [
         _Field(
           controller: _password,
           label: context.tr('auth.password'),
@@ -725,7 +1013,6 @@ class _RegisterScreenState extends State<RegisterScreen>
             ],
           ),
         ),
-      ],
     ];
   }
 }

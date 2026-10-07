@@ -252,18 +252,58 @@ void main() {
       return backend;
     }
 
-    Future<void> fillForm(WidgetTester tester) async {
+    /// Step 1 (account), then "Next step" (D-122).
+    Future<void> fillAccount(WidgetTester tester) async {
       await tester.enterText(find.byType(TextField).at(0), 'Ines');
       await tester.enterText(find.byType(TextField).at(1), 'Benali');
       await tester.enterText(find.byType(TextField).at(2), '0555123456');
+      await tester.enterText(find.byType(TextField).at(3), 'NovaSecure9!');
+      await tester.enterText(find.byType(TextField).at(4), 'NovaSecure9!');
+      await _tap(tester, 'Next step');
+    }
+
+    Future<void> fillForm(WidgetTester tester) async {
+      await fillAccount(tester);
       await _pick(tester, 0, '3AS');
       await _pick(tester, 1, 'Sciences expérimentales');
       await _pick(tester, 2, 'Alger');
       await _pick(tester, 3, 'Bab Ezzouar');
-      final int passwords = find.byType(TextField).evaluate().length;
-      await tester.enterText(find.byType(TextField).at(passwords - 2), 'NovaSecure9!');
-      await tester.enterText(find.byType(TextField).at(passwords - 1), 'NovaSecure9!');
+      await tester.ensureVisible(find.byType(Checkbox));
+      await tester.tap(find.byType(Checkbox));
+      await tester.pumpAndSettle();
     }
+
+    testWidgets('two steps as on the website; the terms are accepted before the account is created',
+        (tester) async {
+      final FakeBackend backend = await pumpRegister(tester, verification: false);
+
+      // Step 1 is checked before going on.
+      await tester.enterText(find.byType(TextField).at(2), '0612');
+      await _tap(tester, 'Next step');
+      expect(find.text('Next step'), findsOneWidget);
+      expect(find.byType(Checkbox), findsNothing);
+
+      await fillAccount(tester);
+      expect(find.byType(Checkbox), findsOneWidget);
+      expect(find.textContaining('Privacy Policy', findRichText: true), findsOneWidget);
+      await _pick(tester, 0, '3AS');
+      await _pick(tester, 1, 'Sciences expérimentales');
+      await _pick(tester, 2, 'Alger');
+      await _pick(tester, 3, 'Bab Ezzouar');
+
+      await _tap(tester, 'Create my space');
+      expect(find.text('Accept the terms of use and the privacy policy to create your account.'), findsOneWidget);
+      expect(backend.requests.where((FakeRequest r) => r.path == '/auth/register'), isEmpty);
+
+      // Previous keeps what was typed.
+      await _tap(tester, 'Previous');
+      expect(tester.widget<TextField>(find.byType(TextField).at(0)).controller!.text, 'Ines');
+      await _tap(tester, 'Next step');
+      await tester.tap(find.byType(Checkbox));
+      await tester.pumpAndSettle();
+      await _tap(tester, 'Create my space');
+      expect(_body(_sent(backend, 'POST', '/auth/register'))['phone'], '0555123456');
+    });
 
     testWidgets('the phone is verified by a code before the account is created', (tester) async {
       final FakeBackend backend = await pumpRegister(tester, verification: true);
@@ -282,8 +322,8 @@ void main() {
       });
       expect(find.text('A code was sent by SMS to \u20660555123456\u2069. It is valid for 5 minutes.'), findsOneWidget);
 
-      // The code field sits right under the phone.
-      await tester.enterText(find.byType(TextField).at(3), '654321');
+      // The code is the only field of the school step.
+      await tester.enterText(find.byType(TextField).at(0), '654321');
       await _tap(tester, 'Verify');
       expect(find.text('Phone number verified.'), findsOneWidget);
 
@@ -308,6 +348,7 @@ void main() {
     testWidgets('each level offers its own filières; a level without filière takes none',
         (tester) async {
       await pumpRegister(tester, verification: false);
+      await fillAccount(tester);
 
       await _pick(tester, 0, '1AS');
       await tester.tap(find.byType(DropdownButton<int>).at(1));
@@ -507,7 +548,7 @@ void main() {
     testWidgets('with several Packs the Student picks the one added to the cart', (tester) async {
       final FakeBackend backend = await pumpDetail(tester, <Object>[annual, term]);
 
-      expect(find.text('In Packs from'), findsOneWidget);
+      expect(find.text('In Offers from'), findsOneWidget);
       expect(find.text('Sold within 2 Packs'), findsOneWidget);
 
       await _tap(tester, 'Add the Pack');

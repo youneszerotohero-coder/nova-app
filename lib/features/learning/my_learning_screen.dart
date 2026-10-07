@@ -122,16 +122,10 @@ class _Courses extends StatelessWidget {
       );
     }
 
-    return Column(
-      children: stagger(
-        [
-          for (int i = 0; i < courses.length; i++)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
-              child: _EnrolledCard(course: courses[i]),
-            ),
-        ],
-      ),
+    return NovaCardGrid(
+      children: stagger(<Widget>[
+        for (final Course course in courses) _EnrolledCard(course: course),
+      ]),
     );
   }
 }
@@ -148,7 +142,6 @@ class _EnrolledCard extends StatelessWidget {
     final bool complete = course.progressPercent >= 100;
 
     return NovaCourseCard(
-      aspectRatio: 16 / 10.8,
       heroTag: 'cover-${course.title}',
       title: course.title,
       scene: course.scene,
@@ -164,7 +157,6 @@ class _EnrolledCard extends StatelessWidget {
           : context.tr('learning.resume'),
       progressPercent: course.progressPercent,
       badges: [
-        CardBadge(course.subject),
         if (complete)
           CardBadge(
             context.tr('common.owned'),

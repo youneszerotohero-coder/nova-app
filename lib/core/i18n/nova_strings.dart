@@ -225,9 +225,9 @@ const Map<String, Map<String, String>> K = {
     'fr': 'Accès vérifié · année scolaire',
     'ar': 'وصول موثّق · السنة الدراسية',
   },
-  // D-091: a course sold through Packs only (the website's wording).
-  'detail.packsFrom': {'en': 'In Packs from', 'fr': 'En pack dès', 'ar': 'ضمن الباقات ابتداءً من'},
-  'detail.packsOnly': {'en': 'In Packs only', 'fr': 'En pack uniquement', 'ar': 'ضمن الباقات فقط'},
+  // D-091: a Unit sold through Offers only (the website's wording, D-109).
+  'detail.packsFrom': {'en': 'In Offers from', 'fr': 'En offre dès', 'ar': 'ضمن العروض ابتداءً من'},
+  'detail.packsOnly': {'en': 'In Offers only', 'fr': 'En offre uniquement', 'ar': 'ضمن العروض فقط'},
   'detail.addPack': {'en': 'Add the Pack', 'fr': 'Ajouter le pack', 'ar': 'أضف الباقة'},
   'detail.soldInPack': {'en': 'Sold within the Pack {title}', 'fr': 'Vendu dans le pack {title}', 'ar': 'يُباع ضمن الباقة {title}'},
   'detail.soldInPacks': {'en': 'Sold within {count} Packs', 'fr': 'Vendu dans {count} packs', 'ar': 'يُباع ضمن {count} باقات'},
@@ -882,10 +882,19 @@ const Map<String, Map<String, String>> K = {
   },
   'auth.pickWilaya': {'en': 'Pick a wilaya first', 'fr': 'Choisis d’abord une wilaya', 'ar': 'اختر ولاية أولاً'},
   'auth.createSpace': {'en': 'Create my space', 'fr': 'Créer mon espace', 'ar': 'أنشئ مساحتي'},
-  'auth.termsNote': {
-    'en': 'By continuing you accept the terms of service.',
-    'fr': 'En continuant, tu acceptes les conditions d’utilisation.',
-    'ar': 'بالمتابعة أنت تقبل شروط الاستخدام.',
+  // Two-step registration and the terms checkbox (D-122), website wording.
+  'auth.stepAccount': {'en': 'Account', 'fr': 'Compte', 'ar': 'الحساب'},
+  'auth.stepSchool': {'en': 'School details', 'fr': 'Parcours scolaire', 'ar': 'المعلومات الدراسية'},
+  'auth.nextStep': {'en': 'Next step', 'fr': 'Étape suivante', 'ar': 'الخطوة التالية'},
+  'auth.previous': {'en': 'Previous', 'fr': 'Précédent', 'ar': 'السابق'},
+  'auth.termsAccept': {'en': 'I have read and accept the', 'fr': 'J’ai lu et j’accepte les', 'ar': 'قرأت وأوافق على'},
+  'auth.termsLink': {'en': 'Terms of use', 'fr': 'Conditions d’utilisation', 'ar': 'شروط الاستخدام'},
+  'auth.termsAnd': {'en': 'and the', 'fr': 'et la', 'ar': 'و'},
+  'auth.privacyLink': {'en': 'Privacy Policy', 'fr': 'Politique de confidentialité', 'ar': 'سياسة الخصوصية'},
+  'auth.termsRequired': {
+    'en': 'Accept the terms of use and the privacy policy to create your account.',
+    'fr': 'Acceptez les conditions d’utilisation et la politique de confidentialité pour créer votre compte.',
+    'ar': 'وافق على شروط الاستخدام وسياسة الخصوصية لإنشاء حسابك.',
   },
   'auth.oneSession': {
     'en': 'One active session at a time — a new login invalidates the '

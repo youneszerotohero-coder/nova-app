@@ -8,20 +8,20 @@ import '../../core/widgets/badge_icon_button.dart';
 import '../../core/widgets/circle_icon_button.dart';
 import '../../core/widgets/hue_card.dart';
 import '../../core/widgets/motion.dart';
+import '../../core/widgets/nova_course_card.dart';
 import '../../core/widgets/section_header.dart';
 import '../account/notifications_screen.dart';
 import '../account/profile_screen.dart';
-import '../detail/course_detail_screen.dart';
+import '../detail/pack_card.dart';
 import '../detail/teacher_detail_screen.dart';
+import '../detail/unit_card.dart';
 import '../../core/state/app_state.dart';
 import '../../data/models.dart';
-import 'widgets/course_card.dart';
 import 'widgets/greeting_header.dart';
-import 'widgets/pack_banner_carousel.dart';
 import 'widgets/teacher_card.dart';
 
-/// Promotional home: greeting, the pack hero slider, the two headline
-/// numbers, then the courses and teachers rails. Search and filtering
+/// Promotional home: greeting, the Offers rail, the two headline numbers,
+/// then the Units and teachers rails (website cards, D-111). Search and filtering
 /// live on Explore.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
@@ -73,16 +73,19 @@ class HomeScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 22),
-        if (packs.isNotEmpty)
-        PackBannerCarousel(
-          packs: packs,
-          onPackTap: (Pack pack) => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => CourseDetailScreen.pack(pack: pack),
-            ),
+        // The Offers first, as on the website home (D-111, D-113).
+        if (packs.isNotEmpty) ...[
+          SectionHeader(
+            title: context.tr('seg.packs'),
+            actionLabel: context.tr('common.seeAll'),
+            onAction: onExplore,
           ),
-        ),
-        const SizedBox(height: 26),
+          _Rail(
+            itemCount: packs.length,
+            itemBuilder: (int index) => PackCard(pack: packs[index], width: _Rail.cardWidth),
+          ),
+          const SizedBox(height: 12),
+        ],
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Row(
@@ -115,28 +118,9 @@ class HomeScreen extends StatelessWidget {
           actionLabel: context.tr('common.seeAll'),
           onAction: onExplore,
         ),
-        SizedBox(
-          // Extra room under the cards so their shadow is not clipped.
-          height: CourseCard.height + 18,
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-            scrollDirection: Axis.horizontal,
-            itemCount: courses.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 14),
-            itemBuilder: (_, int index) => Entrance(
-              delay: Duration(milliseconds: 60 * index),
-              child: CourseCard(
-                course: courses[index],
-                index: index,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        CourseDetailScreen(course: courses[index]),
-                  ),
-                ),
-              ),
-            ),
-          ),
+        _Rail(
+          itemCount: courses.length,
+          itemBuilder: (int index) => UnitCard(course: courses[index], width: _Rail.cardWidth),
         ),
         const SizedBox(height: 12),
         SectionHeader(
@@ -228,6 +212,34 @@ class _Wordmark extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A horizontal rail of catalogue cards at one fixed width.
+class _Rail extends StatelessWidget {
+  const _Rail({required this.itemCount, required this.itemBuilder});
+
+  static const double cardWidth = 196;
+
+  final int itemCount;
+  final Widget Function(int index) itemBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      // Room under the cards for the press animation.
+      height: NovaCourseCard.heightFor(cardWidth) + 8,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+        scrollDirection: Axis.horizontal,
+        itemCount: itemCount,
+        separatorBuilder: (_, _) => const SizedBox(width: 12),
+        itemBuilder: (_, int index) => Entrance(
+          delay: Duration(milliseconds: 60 * index),
+          child: itemBuilder(index),
+        ),
+      ),
     );
   }
 }
