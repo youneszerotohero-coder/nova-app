@@ -34,6 +34,7 @@ class NovaSceneImage extends StatelessWidget {
     this.icon,
     this.alignment = Alignment.bottomLeft,
     this.iconScale = 1.0,
+    this.fit = BoxFit.cover,
   });
 
   final NovaScene scene;
@@ -46,6 +47,10 @@ class NovaSceneImage extends StatelessWidget {
   final IconData? icon;
   final Alignment alignment;
   final double iconScale;
+
+  /// `contain` shows a poster whole, over whatever is behind this widget
+  /// (no painted scene then).
+  final BoxFit fit;
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +85,7 @@ class NovaSceneImage extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        painted,
+        if (fit == BoxFit.cover) painted,
         LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
             return Image(
@@ -88,7 +93,7 @@ class NovaSceneImage extends StatelessWidget {
                 image!,
                 cacheWidth: _decodeWidth(context, constraints),
               ),
-              fit: BoxFit.cover,
+              fit: fit,
               gaplessPlayback: true,
               frameBuilder: (
                 BuildContext context,

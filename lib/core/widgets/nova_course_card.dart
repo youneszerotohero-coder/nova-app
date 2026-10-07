@@ -1,30 +1,30 @@
 import 'package:flutter/material.dart';
 
+import '../theme/nova_colors.dart';
+import '../theme/nova_dimens.dart';
 import '../utils/format_price.dart';
+import 'nova_decor.dart';
 import 'nova_scene_image.dart';
 import 'pressable_scale.dart';
 import 'progress_ring.dart';
 
-/// A small label on the poster: subject, "Owned", a discount…
+/// A glass pill over the cover: subject, format, lives, "Owned"…
 class CardBadge {
   const CardBadge(this.label, {this.icon, this.tone});
 
   final String label;
   final IconData? icon;
 
-  /// Solid fill instead of the light tag — reserved for state (discount,
-  /// owned).
+  /// Solid fill instead of glass — reserved for state (discount, owned).
   final Color? tone;
 }
 
-/// The app's one Unit/Offer card, as on the website catalogue (D-111,
-/// `product-card.tsx`): a dark frame, the poster in a light 25:23 panel
-/// (the recommended upload ratio, so the poster shows whole), then the
-/// title, one line of context and the price with its action under a
-/// hairline. Nothing is printed over the poster but small tags.
+/// The app's one course/offer card, matching the web catalog: the cover
+/// runs the whole card, a scrim lifts the text off it, glass badges sit
+/// on top, and the title, teacher and price sit at the bottom.
 ///
-/// Used by the home rails (fixed [width], see [heightFor]), the two-up
-/// grids ([NovaCardGrid]) of Explore, the teacher page and My learning.
+/// Used by the home rail (fixed [width]), the Explore grid (expands to
+/// its cell) and the teacher page. The cart keeps its own row layout.
 class NovaCourseCard extends StatelessWidget {
   const NovaCourseCard({
     super.key,
@@ -38,11 +38,14 @@ class NovaCourseCard extends StatelessWidget {
     this.price,
     this.compareAtPrice,
     this.actionLabel,
+    this.footer,
     this.width,
+    this.aspectRatio = 1 / 1.08,
+    this.fill = false,
     this.heroTag,
     this.progressPercent,
     this.onTap,
-    this.compact = true,
+    this.compact = false,
   });
 
   final String title;
@@ -51,250 +54,268 @@ class NovaCourseCard extends StatelessWidget {
   /// Poster photo; [scene] is painted when absent or loading.
   final String? image;
 
-  /// Large watermark glyph on a painted scene.
+  /// Large watermark glyph on the cover.
   final IconData? icon;
   final List<CardBadge> badges;
 
-  /// Shown under the title when there is no [meta].
+  /// Shown with a monogram dot under the title.
   final String? teacher;
 
-  /// One line of context under the title (year access, lessons…).
+  /// Replaces the price row when the card is not commercial.
   final String? meta;
   final int? price;
   final int? compareAtPrice;
 
-  /// Replaces the price ("Open", "Resume", "In Offers from…").
+  /// Overrides the price pill's text ("Open", "Resume"…).
   final String? actionLabel;
+
+  /// Sits between the subline and the action row — an avatar stack of
+  /// classmates, for instance.
+  final Widget? footer;
 
   /// Fixed width for horizontal rails; null expands to the parent.
   final double? width;
+  final double aspectRatio;
+
+  /// Takes the size its parent gives it (a grid cell) instead of
+  /// imposing [aspectRatio].
+  final bool fill;
   final Object? heroTag;
 
-  /// Draws completion around the arrow (enrolled Units).
+  /// Draws completion around the arrow button (enrolled courses).
   final int? progressPercent;
   final VoidCallback? onTap;
 
-  /// Two-up grids and rails; false for a full-width card.
+  /// Tighter type and spacing, for two-up grids.
   final bool compact;
-
-  static const Color _frame = Color(0xFF232325);
-  static const Color _panel = Color(0xFFF4F3EF);
-  static const Color _mute = Color(0xFF8F8E88);
-  static const Color _action = Color(0xFF4FACF0);
-
-  static double _pad(bool compact) => compact ? 8 : 10;
-  static double _titleSize(bool compact) => compact ? 13.5 : 15;
-  static double _titleBox(bool compact) => compact ? 36 : 41;
-  static double _rowHeight(bool compact) => compact ? 32 : 36;
-  static const double _metaBox = 16;
-
-  /// The card's height at [width], so a rail can size itself.
-  static double heightFor(double width, {bool compact = true}) {
-    final double pad = _pad(compact);
-    return pad * 2 +
-        (width - pad * 2) * 23 / 25 +
-        10 +
-        _titleBox(compact) +
-        4 +
-        _metaBox +
-        10 +
-        1 +
-        10 +
-        _rowHeight(compact) +
-        2;
-  }
 
   @override
   Widget build(BuildContext context) {
-    final double pad = _pad(compact);
     final Widget card = PressableScale(
       onTap: onTap,
       pressedScale: onTap == null ? 1 : 0.97,
       semanticLabel: 'Open $title',
-      child: Container(
-        padding: EdgeInsets.all(pad),
-        decoration: BoxDecoration(
-          color: _frame,
-          borderRadius: BorderRadius.circular(compact ? 20 : 24),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AspectRatio(aspectRatio: 25 / 23, child: _media()),
-            Padding(
-              padding: EdgeInsets.fromLTRB(compact ? 4 : 6, 10, compact ? 4 : 6, 2),
-              child: _body(),
-            ),
-          ],
+      child: _ratio(
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(NovaDimens.radiusCard),
+            boxShadow: NovaDimens.shadowCard,
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _cover(),
+              // Stickers dress painted scenes; a real poster needs none.
+              if (image == null)
+                const Positioned.fill(
+                  child:
+                      NovaDecor(color: Colors.white, opacity: 0.16, seed: 4),
+                ),
+              // Scrim: transparent at the top, near-solid ink at the
+              // bottom so the title always wins over the artwork.
+              const Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      stops: [0.0, 0.34, 0.62, 1.0],
+                      colors: [
+                        Color(0x14090E16),
+                        Color(0x40090E16),
+                        Color(0xC2090E16),
+                        Color(0xF2090E16),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (badges.isNotEmpty)
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  top: 12,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final CardBadge badge in badges)
+                        _GlassBadge(badge: badge),
+                    ],
+                  ),
+                ),
+              Positioned(
+                left: 14,
+                right: 14,
+                bottom: 14,
+                child: _bottom(context),
+              ),
+            ],
+          ),
         ),
       ),
     );
+
     return width == null ? card : SizedBox(width: width, child: card);
   }
 
-  Widget _media() {
-    final Widget cover = NovaSceneImage(
-      scene: scene,
+  Widget _ratio({required Widget child}) =>
+      fill ? child : AspectRatio(aspectRatio: aspectRatio, child: child);
+
+  Widget _cover() {
+    final Widget scene = NovaSceneImage(
+      scene: this.scene,
       image: image,
       icon: icon,
       iconScale: compact ? 0.9 : 1.15,
-      alignment: Alignment.center,
+      alignment: Alignment.topRight,
     );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(compact ? 13 : 16),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          const ColoredBox(color: _panel),
-          if (heroTag == null) cover else Hero(tag: heroTag!, child: cover),
-          if (badges.isNotEmpty)
-            PositionedDirectional(
-              start: 8,
-              end: 8,
-              top: 8,
-              child: Wrap(
-                spacing: 5,
-                runSpacing: 5,
-                children: [for (final CardBadge badge in badges) _Tag(badge: badge)],
-              ),
-            ),
-        ],
-      ),
-    );
+    return heroTag == null ? scene : Hero(tag: heroTag!, child: scene);
   }
 
-  Widget _body() {
-    final double titleSize = _titleSize(compact);
-    final String? line = meta ?? teacher;
+  Widget _bottom(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(
-          height: _titleBox(compact),
-          child: Text(
-            title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w600,
-              fontSize: titleSize,
-              height: 1.3,
-              color: Colors.white,
-            ),
+        Text(
+          title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontFamily: 'InterDisplay',
+            fontWeight: FontWeight.w700,
+            fontSize: compact ? 15.5 : 18,
+            height: 1.18,
+            letterSpacing: -0.4,
+            color: Colors.white,
           ),
         ),
-        const SizedBox(height: 4),
-        SizedBox(
-          height: _metaBox,
-          child: Text(
-            line ?? '',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w500,
-              fontSize: compact ? 11 : 12,
-              color: _mute,
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Container(height: 1, color: Colors.white.withValues(alpha: 0.1)),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: _rowHeight(compact),
-          child: Row(
+        if (teacher != null || meta != null) ...[
+          const SizedBox(height: 7),
+          Row(
             children: [
-              Expanded(child: _priceOrAction()),
-              const SizedBox(width: 8),
-              _arrow(),
+              if (teacher != null) ...[
+                Icon(
+                  Icons.verified_user_rounded,
+                  size: compact ? 12 : 13,
+                  color: Colors.white.withValues(alpha: 0.75),
+                ),
+                const SizedBox(width: 5),
+              ],
+              Expanded(
+                child: Text(
+                  meta ?? teacher!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontWeight: FontWeight.w600,
+                    fontSize: compact ? 11 : 12,
+                    color: Colors.white.withValues(alpha: 0.78),
+                  ),
+                ),
+              ),
             ],
           ),
+        ],
+        if (footer != null) ...[
+          const SizedBox(height: 10),
+          footer!,
+        ],
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: _priceOrAction(context)),
+            const SizedBox(width: 8),
+            _arrow(),
+          ],
         ),
       ],
     );
   }
 
-  Widget _priceOrAction() {
+  Widget _priceOrAction(BuildContext context) {
     if (actionLabel != null) {
       return Text(
         actionLabel!,
-        maxLines: 2,
+        maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontFamily: 'Inter',
-          fontWeight: FontWeight.w700,
-          fontSize: compact ? 11.5 : 13,
-          height: 1.2,
-          color: _action,
+          fontWeight: FontWeight.w800,
+          fontSize: compact ? 13 : 14.5,
+          color: NovaColors.accentLight,
         ),
       );
     }
     if (price == null) return const SizedBox.shrink();
-    final bool showOld = compareAtPrice != null && compareAtPrice! > price!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.center,
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
       children: [
-        if (showOld)
+        Flexible(
+          child: Text(
+            formatDaPrice(price!),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'InterDisplay',
+              fontWeight: FontWeight.w700,
+              fontSize: compact ? 15 : 17,
+              letterSpacing: -0.4,
+              color: Colors.white,
+            ),
+          ),
+        ),
+        if (compareAtPrice != null && compareAtPrice! > price! && !compact) ...[
+          const SizedBox(width: 6),
           Text(
             formatDaPrice(compareAtPrice!),
-            maxLines: 1,
             style: TextStyle(
               fontFamily: 'Inter',
               fontWeight: FontWeight.w500,
-              fontSize: 10.5,
-              height: 1.1,
-              color: _mute,
+              fontSize: 11.5,
+              color: Colors.white.withValues(alpha: 0.6),
               decoration: TextDecoration.lineThrough,
-              decorationColor: _mute,
+              decorationColor: Colors.white.withValues(alpha: 0.6),
             ),
           ),
-        Text(
-          formatDaPrice(price!),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontFamily: 'InterDisplay',
-            fontWeight: FontWeight.w700,
-            fontSize: compact ? 14 : 15.5,
-            height: 1.15,
-            color: Colors.white,
-          ),
-        ),
+        ],
       ],
     );
   }
 
   Widget _arrow() {
-    final double size = compact ? 30 : 34;
+    final double size = compact ? 34 : 40;
     final Widget button = Container(
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: const BoxDecoration(color: _action, shape: BoxShape.circle),
+      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
       child: Icon(
-        Icons.arrow_forward_rounded, // mirrors itself in Arabic
-        size: size * 0.5,
-        color: const Color(0xFF0B1A2A),
+        Icons.arrow_forward_rounded,
+        size: size * 0.45,
+        color: NovaColors.ink950,
       ),
     );
+
     if (progressPercent == null) return button;
     return SizedBox(
-      width: size + 8,
-      height: size + 8,
+      width: size + 12,
+      height: size + 12,
       child: Stack(
         alignment: Alignment.center,
         children: [
           ProgressRing(
             percent: progressPercent!,
-            size: size + 8,
-            strokeWidth: 2.5,
-            color: _action,
-            trackColor: Colors.white.withValues(alpha: 0.18),
+            size: size + 12,
+            strokeWidth: 3,
+            color: NovaColors.accentLight,
+            trackColor: Colors.white.withValues(alpha: 0.24),
           ),
           button,
         ],
@@ -303,77 +324,40 @@ class NovaCourseCard extends StatelessWidget {
   }
 }
 
-class _Tag extends StatelessWidget {
-  const _Tag({required this.badge});
+class _GlassBadge extends StatelessWidget {
+  const _GlassBadge({required this.badge});
 
   final CardBadge badge;
 
   @override
   Widget build(BuildContext context) {
     final bool solid = badge.tone != null;
-    final Color text = solid ? Colors.white : const Color(0xFF3A3A3C);
     return Container(
-      height: 22,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: solid ? badge.tone : Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(7),
+        color: solid ? badge.tone : Colors.white.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(100),
+        border: solid
+            ? null
+            : Border.all(color: Colors.white.withValues(alpha: 0.26)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (badge.icon != null) ...[
-            Icon(badge.icon, size: 11, color: text),
-            const SizedBox(width: 4),
+            Icon(badge.icon, size: 11, color: Colors.white),
+            const SizedBox(width: 5),
           ],
           Text(
             badge.label,
-            style: TextStyle(
+            style: const TextStyle(
               fontFamily: 'Inter',
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
               fontSize: 10.5,
               height: 1.2,
-              color: text,
+              color: Colors.white,
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Cards two per row, as the website grid on a narrow screen; an odd last
-/// card keeps its half width.
-class NovaCardGrid extends StatelessWidget {
-  const NovaCardGrid({
-    super.key,
-    required this.children,
-    this.padding = const EdgeInsets.symmetric(horizontal: 20),
-    this.spacing = 12,
-  });
-
-  final List<Widget> children;
-  final EdgeInsetsGeometry padding;
-  final double spacing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: padding,
-      child: Column(
-        children: [
-          for (int i = 0; i < children.length; i += 2)
-            Padding(
-              padding: EdgeInsets.only(bottom: spacing),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: children[i]),
-                  SizedBox(width: spacing),
-                  Expanded(child: i + 1 < children.length ? children[i + 1] : const SizedBox.shrink()),
-                ],
-              ),
-            ),
         ],
       ),
     );
