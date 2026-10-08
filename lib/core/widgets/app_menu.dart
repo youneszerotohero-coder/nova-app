@@ -149,12 +149,15 @@ class _MenuPanelState extends State<_MenuPanel>
                           onTap: () => _select(i),
                         ),
                       ),
-                    const SizedBox(height: 10),
-                    _Stagger(
-                      controller: _controller,
-                      start: 0.68,
-                      child: const _RewardCard(),
-                    ),
+                    // Points and lessons belong to an account (D-127: a visitor has none).
+                    if (AppScope.of(context).session.signedIn) ...[
+                      const SizedBox(height: 10),
+                      _Stagger(
+                        controller: _controller,
+                        start: 0.68,
+                        child: const _RewardCard(),
+                      ),
+                    ],
                   ],
                 ),
               ),

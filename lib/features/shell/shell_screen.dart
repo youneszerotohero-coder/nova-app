@@ -6,6 +6,7 @@ import '../../core/theme/nova_typography.dart';
 import '../../core/widgets/app_menu.dart';
 import '../../core/widgets/nova_bottom_bar.dart';
 import '../account/profile_screen.dart';
+import '../auth/require_account.dart';
 import '../cart/cart_screen.dart';
 import '../explore/explore_screen.dart';
 import '../home/home_screen.dart';
@@ -13,7 +14,8 @@ import '../learning/my_learning_screen.dart';
 
 /// Hosts the five tab destinations under the floating pill navigation:
 /// home, explore, my learning, cart and profile, kept alive once visited
-/// and switched instantly, with a live cart badge.
+/// and switched instantly, with a live cart badge. A visitor (signed out,
+/// D-127) browses home and explore; the other tabs ask to sign in.
 class ShellScreen extends StatefulWidget {
   const ShellScreen({super.key});
 
@@ -59,6 +61,7 @@ class _ShellScreenState extends State<ShellScreen> {
       _visited.add(index);
     });
     final AppState app = AppScope.of(context);
+    if (!app.session.signedIn && index >= 2) return;
     switch (index) {
       case 1:
         app.catalog.load();
@@ -117,6 +120,13 @@ class _ShellScreenState extends State<ShellScreen> {
   }
 
   Widget _buildTab(BuildContext context, int index) {
+    if (!AppScope.of(context).session.signedIn && index >= 2) {
+      return switch (index) {
+        2 => const SignInPrompt(icon: Icons.play_circle_outline_rounded, titleKey: 'guest.learning'),
+        3 => const SignInPrompt(icon: Icons.shopping_bag_outlined, titleKey: 'guest.cart'),
+        _ => const SignInPrompt(icon: Icons.person_outline_rounded, titleKey: 'guest.profile'),
+      };
+    }
     switch (index) {
       case 0:
         return HomeScreen(

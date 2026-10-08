@@ -20,6 +20,7 @@ import '../../core/api/api_exception.dart';
 import '../../core/widgets/nova_toast.dart';
 import '../learning/open_course.dart';
 import 'pack_picker.dart';
+import '../auth/require_account.dart';
 
 /// Course detail (and Offer detail via `.pack`): hero, description,
 /// curriculum accordion, purchase card with the add-to-cart / buy-now
@@ -122,6 +123,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   Future<void> _buyNow() => _buyItem(_kind, _productId);
 
   Future<bool> _addItem(String kind, int id) async {
+    if (!requireAccount(context)) return false;
     if (_app.contains('$kind:$id')) return true;
     setState(() => _busy = true);
     try {
@@ -154,6 +156,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   /// D-091: one Pack is added or bought at once; with several the
   /// Student picks one (cheapest first, as Laravel lists them).
   Future<void> _choosePack({required bool buy}) async {
+    if (!requireAccount(context)) return;
     final List<CoursePack> packs = _coursePacks;
     if (packs.isEmpty) return;
     final CoursePack? pack = packs.length == 1
@@ -169,6 +172,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
 
   /// Free Courses are never sold (D-054): the Student joins them.
   Future<void> _joinFree() async {
+    if (!requireAccount(context)) return;
     setState(() => _busy = true);
     try {
       await _app.learning.enrollFree(_course!);
@@ -252,7 +256,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     );
   }
 
-  void _openCourse() => openOwnedCourse(context, _course!);
+  void _openCourse() {
+    if (requireAccount(context)) openOwnedCourse(context, _course!);
+  }
 
   List<String> _courseStats() {
     final Course course = _course!;

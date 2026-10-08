@@ -44,7 +44,7 @@ class GreetingHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${context.tr('home.hello')}, $name',
+                  name.isEmpty ? context.tr('home.hello') : '${context.tr('home.hello')}, $name',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: NovaTypography.textTheme.headlineMedium,

@@ -14,6 +14,7 @@ import 'package:nova_mobile/features/auth/login_screen.dart';
 import 'package:nova_mobile/features/auth/register_screen.dart';
 import 'package:nova_mobile/features/auth/school_year_screen.dart';
 import 'package:nova_mobile/features/detail/course_detail_screen.dart';
+import 'package:nova_mobile/features/home/home_screen.dart';
 import 'package:nova_mobile/features/shell/app_gate.dart';
 
 import 'fixtures/fake_api.dart';
@@ -403,6 +404,36 @@ void main() {
       'track_id': null,
     });
     expect(find.text('The selected track does not belong to the selected level.'), findsOneWidget);
+  });
+
+  testWidgets('a visitor browses without an account; account features ask to sign in (D-127)', (tester) async {
+    final FakeBackend backend = FakeBackend(<String, FakeResponse>{
+      'GET /auth/me': _error(401, 'UNAUTHENTICATED', 'Authentication is required.'),
+    });
+    final SessionStore session = SessionStore(fakeApi(backend));
+    await tester.runAsync(session.boot);
+    expect(session.signedIn, isFalse);
+    await _pump(tester, _install(session), const AppGate());
+
+    // App Store 5.1.1(v): the app opens on the catalogue, not on sign-in.
+    expect(find.byType(LoginScreen), findsNothing);
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.text('Popular courses'), findsOneWidget);
+
+    // The cart needs an account: the tab says so and offers both ways in.
+    await tester.tap(find.byIcon(Icons.shopping_bag_outlined).last);
+    await tester.pumpAndSettle();
+    expect(find.text('Your cart'), findsOneWidget);
+    expect(find.text('Create your account'), findsWidgets);
+    expect(backend.requests.where((FakeRequest r) => r.path == '/cart'), isEmpty);
+
+    await _tap(tester, 'Sign in');
+    expect(find.byType(LoginScreen), findsOneWidget);
+    // Sign-in opens over the app: back returns to browsing.
+    await tester.tap(find.bySemanticsLabel('Back'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LoginScreen), findsNothing);
+    expect(find.text('Your cart'), findsOneWidget);
   });
 
   testWidgets('Settings changes the password with a code sent to the Student (D-093)',

@@ -16,7 +16,13 @@ import 'register_screen.dart';
 /// Split auth screen: brand panel + phone/password sign-in, with the
 /// forgotten-password flow by code (D-093).
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.showBack = false, this.initialPhone});
+
+  /// Opened over the app by a visitor (D-127): a back button returns to browsing.
+  final bool showBack;
+
+  /// A number registration found already taken: sign in with it.
+  final String? initialPhone;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -31,6 +37,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// Back from a forgotten-password reset: "sign in with the new password".
   bool _passwordReset = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialPhone != null) _phone.text = widget.initialPhone!;
+  }
 
   @override
   void dispose() {
@@ -98,6 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
         padding: const EdgeInsets.only(bottom: 24),
         children: [
           AuthHero(
+            showBack: widget.showBack,
             title: context.tr('auth.welcomeBack'),
             subtitle: context.tr('auth.signInSubtitle'),
             bottom: AuthModeSwitch(signIn: true, onSwitch: _openRegister),

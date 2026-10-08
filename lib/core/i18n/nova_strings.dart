@@ -15,6 +15,16 @@ const Map<String, Map<String, String>> K = {
   'tab.myCourses': {'en': 'My courses', 'fr': 'Mes cours', 'ar': 'دروسي'},
   'tab.cart': {'en': 'Cart', 'fr': 'Panier', 'ar': 'السلة'},
   'tab.profile': {'en': 'Profile', 'fr': 'Profil', 'ar': 'الملف'},
+
+  // A visitor browses the app; these tabs need an account (D-127, App Store 5.1.1(v)).
+  'guest.learning': {'en': 'Your courses and Lives', 'fr': 'Vos cours et vos Lives', 'ar': 'دروسك والبثوث المباشرة'},
+  'guest.cart': {'en': 'Your cart', 'fr': 'Votre panier', 'ar': 'سلتك'},
+  'guest.profile': {'en': 'Your profile', 'fr': 'Votre profil', 'ar': 'ملفك الشخصي'},
+  'guest.message': {
+    'en': 'Sign in or create an account to use this part of NOVA. Browsing courses and offers needs no account.',
+    'fr': 'Connectez-vous ou créez un compte pour utiliser cette partie de NOVA. Parcourir les cours et les offres ne demande aucun compte.',
+    'ar': 'سجّل الدخول أو أنشئ حسابًا لاستعمال هذا الجزء من نوفا. تصفّح الدروس والعروض لا يحتاج إلى حساب.',
+  },
   'menu.close': {'en': 'Close', 'fr': 'Fermer', 'ar': 'إغلاق'},
   'menu.darkMode': {'en': 'Dark mode', 'fr': 'Mode sombre', 'ar': 'الوضع الداكن'},
   'menu.language': {'en': 'Language', 'fr': 'Langue', 'ar': 'اللغة'},

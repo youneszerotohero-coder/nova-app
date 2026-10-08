@@ -7,7 +7,6 @@ import '../../core/theme/nova_typography.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../data/session_store.dart';
 import '../auth/change_password_screen.dart';
-import '../auth/login_screen.dart';
 import '../auth/phone_step_screen.dart';
 import '../auth/register_screen.dart';
 import '../auth/school_year_screen.dart';
@@ -44,7 +43,8 @@ class _AppGateState extends State<AppGate> {
         child: switch (session.status) {
           SessionStatus.booting => const _Splash(),
           SessionStatus.offline => const _Offline(),
-          SessionStatus.signedOut => const LoginScreen(),
+          // D-127 (App Store 5.1.1(v)): a visitor browses the app; account features ask to sign in.
+          SessionStatus.signedOut => const ShellScreen(),
           SessionStatus.signedIn => switch (session.nextRequiredStep) {
               'password_change' => const ChangePasswordScreen(),
               // D-079: an account without a valid mobile, before onboarding.

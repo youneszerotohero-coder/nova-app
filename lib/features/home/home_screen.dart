@@ -11,6 +11,7 @@ import '../../core/widgets/motion.dart';
 import '../../core/widgets/section_header.dart';
 import '../account/notifications_screen.dart';
 import '../account/profile_screen.dart';
+import '../auth/require_account.dart';
 import '../detail/course_detail_screen.dart';
 import '../detail/teacher_detail_screen.dart';
 import '../../core/state/app_state.dart';
@@ -48,7 +49,7 @@ class HomeScreen extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: () => Future.wait(<Future<void>>[
         app.catalog.load(),
-        app.refreshAccount(),
+        if (app.session.signedIn) app.refreshAccount(),
       ]),
       child: ListView(
       // Clear the status bar, then a little air above the header.
@@ -64,13 +65,16 @@ class HomeScreen extends StatelessWidget {
           subtitle: context.tr('home.welcome'),
           avatarLabel: student?.fullName ?? '',
           avatarPhoto: student?.photo,
-          onAvatarTap: () => Navigator.of(context).push(
-            // Profile is a tab screen; pushed outside the shell it needs
-            // its own Scaffold (Material) or its text renders unstyled.
-            MaterialPageRoute<void>(
-              builder: (_) => const Scaffold(body: ProfileScreen()),
-            ),
-          ),
+          onAvatarTap: () {
+            if (!requireAccount(context)) return;
+            Navigator.of(context).push(
+              // Profile is a tab screen; pushed outside the shell it needs
+              // its own Scaffold (Material) or its text renders unstyled.
+              MaterialPageRoute<void>(
+                builder: (_) => const Scaffold(body: ProfileScreen()),
+              ),
+            );
+          },
         ),
         const SizedBox(height: 22),
         if (packs.isNotEmpty)
@@ -192,11 +196,14 @@ class _Header extends StatelessWidget {
             icon: Icons.notifications_none_rounded,
             count: AppScope.of(context).unreadCount,
             semanticLabel: 'Notifications',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const NotificationsScreen(),
-              ),
-            ),
+            onTap: () {
+              if (!requireAccount(context)) return;
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const NotificationsScreen(),
+                ),
+              );
+            },
           ),
         ],
       ),
