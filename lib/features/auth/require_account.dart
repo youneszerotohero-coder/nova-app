@@ -11,9 +11,16 @@ import 'register_screen.dart';
 /// App Store guideline 5.1.1(v) (D-127): browsing needs no account. A
 /// feature that does (cart, purchase, my Units, profile, notifications)
 /// asks to sign in first; once signed in, the root gate shows the app.
-bool requireAccount(BuildContext context) {
-  if (AppScope.of(context).session.signedIn) return true;
-  openSignIn(context);
+///
+/// [purchase] is remembered: once signed in, the item is put in the cart and
+/// the cart opens (the purchase goes on). Back without signing in forgets it.
+bool requireAccount(BuildContext context, {({String kind, int id})? purchase}) {
+  final AppState app = AppScope.of(context);
+  if (app.session.signedIn) return true;
+  app.pendingPurchase = purchase;
+  openSignIn(context).then((_) {
+    if (!app.session.signedIn) app.pendingPurchase = null;
+  });
   return false;
 }
 

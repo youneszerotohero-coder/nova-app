@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../core/api/api_error_text.dart';
+import '../../core/api/api_exception.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_typography.dart';
 import '../../core/widgets/app_menu.dart';
 import '../../core/widgets/nova_bottom_bar.dart';
+import '../../core/widgets/nova_toast.dart';
 import '../account/profile_screen.dart';
 import '../auth/require_account.dart';
 import '../cart/cart_screen.dart';
@@ -28,6 +31,32 @@ class _ShellScreenState extends State<ShellScreen> {
 
   /// Tabs built so far; a tab is built on its first visit only.
   final Set<int> _visited = <int>{0};
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _resumePurchase());
+  }
+
+  /// D-127: a visitor tapped "Buy now" or "Add to cart", then signed in or
+  /// created an account: the item goes in the cart and the cart opens.
+  Future<void> _resumePurchase() async {
+    if (!mounted) return;
+    final AppState app = AppScope.of(context);
+    final ({String kind, int id})? pending = app.pendingPurchase;
+    if (pending == null || !app.session.signedIn) return;
+    app.pendingPurchase = null;
+    _select(3);
+    try {
+      if (!app.contains('${pending.kind}:${pending.id}')) {
+        await app.commerce.add(kind: pending.kind, id: pending.id);
+      }
+    } on ApiException catch (error) {
+      if (mounted) {
+        novaToast(context, apiErrorText(context, error), icon: Icons.error_outline_rounded);
+      }
+    }
+  }
 
   List<NovaNavItem> _items(BuildContext context, int cartCount) => [
         NovaNavItem(

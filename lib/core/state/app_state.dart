@@ -138,6 +138,10 @@ class AppState extends ChangeNotifier {
   String? _lastRequiredStep;
 
   bool get darkMode => _darkMode;
+
+  /// D-127: what a visitor asked to buy before signing in. Once signed in,
+  /// the shell adds it to the cart and opens the cart.
+  ({String kind, int id})? pendingPurchase;
   NovaLang get lang => _lang;
 
   /// Starts the app: the Student's saved language, then the public

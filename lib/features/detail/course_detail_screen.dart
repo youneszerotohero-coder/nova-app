@@ -123,7 +123,8 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   Future<void> _buyNow() => _buyItem(_kind, _productId);
 
   Future<bool> _addItem(String kind, int id) async {
-    if (!requireAccount(context)) return false;
+    // A visitor signs in first, then lands in the cart with this item (D-127).
+    if (!requireAccount(context, purchase: (kind: kind, id: id))) return false;
     if (_app.contains('$kind:$id')) return true;
     setState(() => _busy = true);
     try {
@@ -156,7 +157,6 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   /// D-091: one Pack is added or bought at once; with several the
   /// Student picks one (cheapest first, as Laravel lists them).
   Future<void> _choosePack({required bool buy}) async {
-    if (!requireAccount(context)) return;
     final List<CoursePack> packs = _coursePacks;
     if (packs.isEmpty) return;
     final CoursePack? pack = packs.length == 1

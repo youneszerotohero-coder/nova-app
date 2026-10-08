@@ -202,7 +202,10 @@ class _CheckoutBar extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Column(
+                // The total takes the room left by the button: no overflow
+                // on narrow phones or with long translations.
+                Expanded(
+                  child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -219,6 +222,8 @@ class _CheckoutBar extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       formatDaPrice(total),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontFamily: 'InterDisplay',
                         fontWeight: FontWeight.w700,
@@ -229,8 +234,9 @@ class _CheckoutBar extends StatelessWidget {
                       ),
                     ),
                   ],
+                  ),
                 ),
-                const Spacer(),
+                const SizedBox(width: 10),
                 Container(
                   height: 46,
                   padding: const EdgeInsets.symmetric(horizontal: 18),
@@ -244,6 +250,8 @@ class _CheckoutBar extends StatelessWidget {
                     children: [
                       Text(
                         context.tr('cart.checkout'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontFamily: 'Inter',
                           fontWeight: FontWeight.w700,

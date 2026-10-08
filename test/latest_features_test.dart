@@ -10,6 +10,7 @@ import 'package:nova_mobile/data/commerce_store.dart';
 import 'package:nova_mobile/data/models.dart';
 import 'package:nova_mobile/data/session_store.dart';
 import 'package:nova_mobile/features/account/settings_screen.dart';
+import 'package:nova_mobile/features/cart/cart_screen.dart';
 import 'package:nova_mobile/features/auth/login_screen.dart';
 import 'package:nova_mobile/features/auth/register_screen.dart';
 import 'package:nova_mobile/features/auth/school_year_screen.dart';
@@ -588,6 +589,49 @@ void main() {
 
       await _tap(tester, 'Physics — First Trimester');
       expect(_body(_sent(backend, 'POST', '/cart/items')), <String, Object?>{'offer_id': 11});
+    });
+
+    testWidgets('a visitor who buys signs in, then lands in the cart with the item (D-127)', (tester) async {
+      final Map<String, Object?> user = <String, Object?>{
+        'id': 9, 'role': 'student', 'phone': '0555123456', 'next_required_step': null,
+        'student': <String, Object?>{'first_name': 'Ines', 'last_name': 'Benali'},
+      };
+      final FakeBackend backend = FakeBackend(<String, FakeResponse>{
+        'GET /auth/me': _error(401, 'UNAUTHENTICATED', 'Authentication is required.'),
+        'POST /auth/login': FakeResponse(200, <String, Object?>{'data': user}),
+        'GET /courses/course-40': FakeResponse(200, <String, Object?>{'data': course(<Object>[term])}),
+        'GET /cart': const FakeResponse(200, <String, Object>{'data': <Object>[]}),
+        'GET /orders': const FakeResponse(200, <String, Object>{'data': <Object>[]}),
+        'POST /cart/items': const FakeResponse(200, <String, Object>{
+          'data': <Object>[
+            <String, Object>{'kind': 'offer', 'id': 11, 'title': 'Physics — First Trimester', 'price': '4000.00'},
+          ],
+        }),
+      });
+      final SessionStore session = SessionStore(fakeApi(backend));
+      await tester.runAsync(session.boot);
+      final AppState state = _install(session, catalog: CatalogStore(fakeApi(backend)), commerce: CommerceStore(fakeApi(backend)));
+      await _pump(tester, state, const AppGate());
+      Navigator.of(tester.element(find.byType(HomeScreen))).push(MaterialPageRoute<void>(
+        builder: (_) => CourseDetailScreen(course: Course.fromJson(Map<String, dynamic>.of(course(<Object>[term])))),
+      ));
+      await tester.pumpAndSettle();
+
+      // A visitor: sign-in first, nothing reaches the cart yet.
+      await _tap(tester, 'Add the Pack');
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(backend.requests.where((FakeRequest r) => r.path == '/cart/items'), isEmpty);
+
+      await tester.enterText(find.byType(TextField).at(0), '0555123456');
+      await tester.enterText(find.byType(TextField).at(1), 'NovaSecure9!');
+      await _tap(tester, 'Sign in');
+
+      // Signed in: the item goes in the cart and the cart opens.
+      expect(session.signedIn, isTrue);
+      expect(find.byType(LoginScreen), findsNothing);
+      expect(_body(_sent(backend, 'POST', '/cart/items')), <String, Object?>{'offer_id': 11});
+      expect(find.byType(CartScreen), findsOneWidget);
+      expect(state.pendingPurchase, isNull);
     });
 
     testWidgets('with one Pack it is added at once; without any nothing is sold', (tester) async {
