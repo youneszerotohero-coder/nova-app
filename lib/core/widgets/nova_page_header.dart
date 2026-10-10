@@ -160,7 +160,9 @@ class NovaPageHeader extends StatelessWidget {
   }
 }
 
-/// Translucent white circular button for use on the header block.
+/// Round button over a header or a poster (back, close, notifications):
+/// solid white with a dark icon and a soft shadow, so it stays visible on a
+/// light poster as well as on the blue header (it was translucent white).
 class FrostedIconButton extends StatelessWidget {
   const FrostedIconButton({
     super.key,
@@ -194,11 +196,14 @@ class FrostedIconButton extends StatelessWidget {
               height: size,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.22),
+                color: Colors.white.withValues(alpha: 0.96),
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                border: Border.all(color: NovaColors.ink950.withValues(alpha: 0.08)),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x33091224), blurRadius: 12, offset: Offset(0, 3)),
+                ],
               ),
-              child: Icon(icon, size: size * 0.46, color: Colors.white),
+              child: Icon(icon, size: size * 0.46, color: NovaColors.ink950),
             ),
             if (badge > 0)
               Positioned(
