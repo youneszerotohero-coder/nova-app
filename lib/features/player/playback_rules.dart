@@ -20,7 +20,7 @@ class ProgressReporter {
   void saved(int seconds) => _lastSaved = seconds;
 }
 
-/// The server already resets finished lessons to 0; the client also
+/// The server's resume is the last second seen (D-134); the client also
 /// refuses to resume inside the last few seconds, where playback would
 /// end before it starts: `min(5, max(3, duration × 10 %))`.
 int safeResumeSeconds(int resume, double duration) {

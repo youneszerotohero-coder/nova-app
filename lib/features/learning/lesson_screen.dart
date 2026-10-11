@@ -118,7 +118,8 @@ class _LessonScreenState extends State<LessonScreen> {
   }
 
   Future<void> _refreshCourse() async {
-    final AppState app = AppScope.of(context);
+    // The last report of a Lesson may arrive after the page has closed.
+    final AppState app = mounted ? AppScope.of(context) : AppState.instance;
     try {
       widget.course.value = await app.learning.courseWithProgress(_course);
       if (mounted) setState(() {});

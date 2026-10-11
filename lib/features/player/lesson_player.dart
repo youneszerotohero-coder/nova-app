@@ -80,10 +80,22 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
   final Stopwatch _startClock = Stopwatch();
   String? _reportedFailure;
   PlaybackAuthorization? _auth;
+
+  /// The Lesson [_auth] belongs to: the Lesson page keeps this player when
+  /// the Student moves to another Lesson, and the last second of the one
+  /// left is still saved under its own id and session (D-134).
+  int? _authLesson;
   int _start = 0;
+
+  /// The picture has reached the resume second once. Before that it may
+  /// still report 0, and saving it would erase the Student's place.
+  bool _resumeReached = false;
   ProtectedVideoController? _video;
   ProgressReporter? _reporter;
   bool _saving = false;
+
+  /// One report at a time; the latest second asked meanwhile follows it.
+  _Report? _queued;
   bool _durationChecked = false;
 
   final WatermarkPlacer _placer = WatermarkPlacer();
@@ -144,6 +156,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
       _stage = _Stage.idle;
       _failure = null;
       _auth = null;
+      _authLesson = null;
       _reportedFailure = null;
     });
   }
@@ -274,16 +287,19 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
 
     setState(() => _phaseKey =
         auth.clear || auth.clearDeliveryAvailable ? 'player.clearLoading' : 'player.phaseMedia');
-    final int start = auth.clear && resumeAt != null
-        ? safeResumeSeconds(resumeAt.inSeconds, auth.durationSeconds)
-        : auth.watchAgain
-            ? 0
-            : safeResumeSeconds(auth.resumeSeconds, auth.durationSeconds);
+    // D-134: the server's resume is the last second seen, also for a
+    // finished Lesson; `watch_again` no longer restarts it at 0.
+    final int start = safeResumeSeconds(
+      auth.clear && resumeAt != null ? resumeAt.inSeconds : auth.resumeSeconds,
+      auth.durationSeconds,
+    );
     final ProtectedVideoController video = ProtectedVideoController()..addListener(_onVideo);
     setState(() {
       _auth = auth;
+      _authLesson = widget.lesson.id;
       _fairPlay = support == DrmSupport.fairplay;
       _start = start;
+      _resumeReached = start == 0;
       _video = video;
       _reporter = ProgressReporter(initialSeconds: start);
       _stage = _Stage.playing;
@@ -413,6 +429,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
     }
 
     final int seconds = state.position.inSeconds;
+    if (!_resumeReached && seconds >= _start - 2) _resumeReached = true;
     if (state.phase == 'ended') {
       _save(state.duration.inSeconds, force: true);
     } else if (!state.playing && state.phase == 'ready') {
@@ -423,30 +440,55 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
     if (mounted) setState(() {});
   }
 
+  /// Saves [seconds] as the place to resume (D-134: wherever the Student
+  /// is, after a jump too); the server alone turns it into progress.
   Future<void> _save(int seconds, {bool force = false}) async {
     final PlaybackAuthorization? auth = _auth;
     final ProgressReporter? reporter = _reporter;
-    final Lesson lesson = widget.lesson;
-    if (auth == null || reporter == null || _saving) return;
+    final int? lessonId = _authLesson;
+    if (auth == null || reporter == null || lessonId == null || !_resumeReached) return;
     if (auth.progressSession.isEmpty) return;
     if (!force && !reporter.due(seconds)) return;
     if (force && seconds == reporter.lastSaved) return;
-    _saving = true;
     reporter.saved(seconds);
+    await _send((lesson: lessonId, auth: auth, seconds: seconds));
+  }
+
+  Future<void> _send(_Report report) async {
+    if (_saving) {
+      _queued = report;
+      return;
+    }
+    _saving = true;
     try {
       final Json row = await AppState.instance.learning.saveProgress(
-        lesson.id,
-        positionSeconds: seconds,
-        session: auth.progressSession,
+        report.lesson,
+        positionSeconds: report.seconds,
+        session: report.auth.progressSession,
       );
       widget.onProgress(row);
     } on ApiException catch (error) {
       // The progress session expired or was replaced: playback must be
       // re-authorized before anything else is recorded.
-      if (error.code == 'PLAYBACK_SESSION_INVALID' && mounted) _fail('session_expired');
+      if (error.code == 'PLAYBACK_SESSION_INVALID' && mounted && identical(_auth, report.auth)) {
+        _fail('session_expired');
+      }
     } finally {
       _saving = false;
+      final _Report? queued = _queued;
+      _queued = null;
+      if (queued != null) unawaited(_send(queued));
     }
+  }
+
+  /// A seek by the Student is saved at once, wherever it lands.
+  void _seek(Duration target) {
+    final ProtectedVideoController? video = _video;
+    if (video == null) return;
+    final Duration to = target < Duration.zero ? Duration.zero : target;
+    video.seekTo(to);
+    _resumeReached = true;
+    _save(to.inSeconds, force: true);
   }
 
   void _moveWatermark() {
@@ -483,8 +525,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
   void _skip(int seconds) {
     final ProtectedVideoController? video = _video;
     if (video == null) return;
-    final Duration target = video.value.position + Duration(seconds: seconds);
-    video.seekTo(target < Duration.zero ? Duration.zero : target);
+    _seek(video.value.position + Duration(seconds: seconds));
     _scheduleHide();
   }
 
@@ -634,7 +675,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
             onBack: () => _skip(-10),
             onForward: () => _skip(10),
             onSeek: (Duration d) {
-              _video?.seekTo(d);
+              _seek(d);
               _scheduleHide();
             },
             onSettings: _openSettings,
@@ -1082,3 +1123,5 @@ class _SettingsSheet extends StatelessWidget {
     );
   }
 }
+
+typedef _Report = ({int lesson, PlaybackAuthorization auth, int seconds});

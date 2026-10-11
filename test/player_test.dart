@@ -256,6 +256,86 @@ void main() {
       expect(find.text('Try again'), findsOneWidget);
     });
 
+    testWidgets('D-134: a finished Lesson resumes at the last second seen, saved only once the picture is there', (tester) async {
+      backend = FakeBackend(<String, FakeResponse>{
+        'POST /lessons/0/playback': FakeResponse(200, <String, Object?>{
+          'data': <String, Object?>{..._authorization(), 'resume_position_seconds': 900, 'watch_again': true},
+        }),
+        'PUT /lessons/0/progress': const FakeResponse(200, <String, Object?>{'data': <String, Object?>{}}),
+      });
+      await pumpLesson(tester, widevine: 'L1');
+      List<int> saved() => <int>[
+            for (final FakeRequest r in backend.requests.where((FakeRequest r) => r.path == '/lessons/0/progress'))
+              (r.data! as Map<String, dynamic>)['position_seconds'] as int,
+          ];
+
+      await tester.tap(find.text('Play'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+      // A Lesson watched before continues where the Student stopped.
+      expect(players.created.single['startMs'], 900000);
+
+      // Ready and paused before the picture reports the resume second:
+      // saving 0 now would erase the Student's place.
+      players.emit(<String, Object?>{'event': 'state', 'state': 'ready'});
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(saved(), isEmpty);
+
+      players.emit(<String, Object?>{'event': 'position', 'position': 905000, 'duration': 1620400, 'buffered': 930000, 'liveOffset': -1});
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(saved(), <int>[905]);
+
+      // Jumps forward and back are saved at once, wherever they land.
+      await tester.tap(find.byIcon(Icons.forward_10_rounded));
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(find.byIcon(Icons.replay_10_rounded));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(saved(), <int>[905, 915, 895]);
+      expect(backend.requests.where((FakeRequest r) => r.path == '/lessons/0/progress').last.data,
+          containsPair('playback_session', 'p' * 64));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('D-134: moving to another Lesson saves the second left under that Lesson and its session', (tester) async {
+      const Map<String, Object?> row = <String, Object?>{
+        'lesson_id': 1023, 'resume_position_seconds': 340, 'max_position_seconds': 340,
+        'video_progress_percent': '20.98', 'completed': false,
+      };
+      backend = FakeBackend(<String, FakeResponse>{
+        'POST /lessons/1023/playback': FakeResponse(200, <String, Object?>{'data': _authorization()}),
+        'PUT /lessons/1023/progress': const FakeResponse(200, <String, Object?>{'data': row}),
+      });
+      await pumpLesson(tester, widevine: 'L1', index: 2);
+
+      await tester.tap(find.text('Play'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(players.created.single['startMs'], 312000);
+      players.emit(<String, Object?>{'event': 'playing', 'value': true});
+      players.emit(<String, Object?>{'event': 'state', 'state': 'ready'});
+      players.emit(<String, Object?>{'event': 'position', 'position': 330000, 'duration': 1620400, 'buffered': 360000, 'liveOffset': -1});
+      await tester.pump(const Duration(milliseconds: 50));
+      // 15 s are not reached since the heartbeat: only leaving saves 345 s.
+      players.emit(<String, Object?>{'event': 'position', 'position': 345000, 'duration': 1620400, 'buffered': 370000, 'liveOffset': -1});
+      await tester.pump(const Duration(milliseconds: 50));
+
+      await _reveal(tester, find.text('Next lesson'), 300);
+      await tester.tap(find.text('Next lesson'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // The heartbeat at 330 s, then the second left (345 s), both under
+      // Lesson 1023 and its own session; nothing reaches the next Lesson.
+      final List<FakeRequest> saves = backend.requests.where((FakeRequest r) => r.path.endsWith('/progress')).toList();
+      expect(saves.map((FakeRequest r) => r.path), <String>['/lessons/1023/progress', '/lessons/1023/progress']);
+      expect(saves.map((FakeRequest r) => (r.data! as Map<String, dynamic>)['position_seconds']), <int>[330, 345]);
+      expect(find.text('Lesson 4 of 5'), findsOneWidget);
+      expect(find.text('Check & play'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
+    });
+
     testWidgets('mode A: iPhone plays the FairPlay HLS stream (D-118)', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       try {
