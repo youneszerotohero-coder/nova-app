@@ -10,10 +10,10 @@ import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../core/theme/nova_typography.dart';
-import '../../core/widgets/hue_card.dart';
 import '../../core/widgets/nova_toast.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../data/models.dart';
+import 'cart_screen.dart';
 
 /// Lets the Student choose a CCP receipt: JPEG, PNG or PDF up to
 /// 10 MB, the backend's own limits. Null when cancelled.
@@ -107,39 +107,35 @@ class _OrderPaymentSheetState extends State<_OrderPaymentSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // The website's dark checkout panel and its payment cards.
     return Container(
       margin: const EdgeInsets.all(10),
       padding: EdgeInsets.fromLTRB(
+        16,
         20,
-        20,
-        20,
-        20 + MediaQuery.paddingOf(context).bottom,
+        16,
+        16 + MediaQuery.paddingOf(context).bottom,
       ),
-      decoration: BoxDecoration(
-        color: NovaColors.paperCard,
-        borderRadius: BorderRadius.circular(28),
-      ),
+      decoration: CheckoutPanelColors.decoration(radius: 28),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(context.tr('checkout.method'),
-              style: NovaTypography.textTheme.titleMedium),
+          Text(context.tr('checkout.method'), style: _label(17, Colors.white)),
           const SizedBox(height: 4),
           Text(
             '${widget.order.number} · ${widget.order.program}',
-            style: NovaTypography.muted(NovaTypography.textTheme.bodySmall!),
+            style: _text(14, CheckoutPanelColors.mute),
           ),
           const SizedBox(height: 16),
           if (_busy)
             const Padding(
               padding: EdgeInsets.all(18),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: CircularProgressIndicator(color: NovaColors.yellow)),
             )
           else ...[
             _Option(
               icon: Icons.receipt_long_rounded,
-              hue: NovaHue.butter,
               title: context.tr('checkout.ccp'),
               subtitle: context.tr('checkout.uploadReceipt'),
               onTap: _ccp,
@@ -147,7 +143,6 @@ class _OrderPaymentSheetState extends State<_OrderPaymentSheet> {
             const SizedBox(height: 10),
             _Option(
               icon: Icons.credit_card_rounded,
-              hue: NovaHue.sky,
               title: context.tr('checkout.card'),
               subtitle: context.tr('checkout.cardSub'),
               onTap: _card,
@@ -159,17 +154,34 @@ class _OrderPaymentSheetState extends State<_OrderPaymentSheet> {
   }
 }
 
+TextStyle _label(double size, Color color) => TextStyle(
+      fontFamily: NovaTypography.display,
+      fontFamilyFallback: NovaTypography.fallback,
+      fontWeight: FontWeight.w800,
+      fontSize: size,
+      height: 1.3,
+      color: color,
+    );
+
+TextStyle _text(double size, Color color) => TextStyle(
+      fontFamily: NovaTypography.body,
+      fontFamilyFallback: NovaTypography.fallback,
+      fontWeight: FontWeight.w500,
+      fontSize: size,
+      height: 1.45,
+      color: color,
+    );
+
+/// `.nvPayCard`: the white art tile, the method and its help line.
 class _Option extends StatelessWidget {
   const _Option({
     required this.icon,
-    required this.hue,
     required this.title,
     required this.subtitle,
     required this.onTap,
   });
 
   final IconData icon;
-  final NovaHue hue;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
@@ -178,33 +190,34 @@ class _Option extends StatelessWidget {
   Widget build(BuildContext context) {
     return PressableScale(
       onTap: onTap,
+      pressedScale: 0.98,
       semanticLabel: title,
       child: Container(
-        padding: const EdgeInsets.all(13),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: NovaColors.borderOnLight),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: CheckoutPanelColors.line),
         ),
         child: Row(
           children: [
-            IconTile(icon: icon, hue: hue, size: 40),
-            const SizedBox(width: 12),
+            Container(
+              width: 64,
+              height: 44,
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+              child: Icon(icon, size: 22, color: const Color(0xFF17191D)),
+            ),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: NovaTypography.textTheme.titleSmall),
+                  Text(title, style: _label(16, Colors.white)),
                   const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: NovaTypography.muted(
-                      NovaTypography.textTheme.bodySmall!,
-                    ),
-                  ),
+                  Text(subtitle, style: _text(14, CheckoutPanelColors.mute)),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: NovaColors.textMuted),
+            const Icon(Icons.chevron_right_rounded, color: CheckoutPanelColors.mute),
           ],
         ),
       ),

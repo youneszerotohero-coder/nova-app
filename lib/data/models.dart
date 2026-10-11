@@ -338,7 +338,6 @@ class AppNotification {
   factory AppNotification.fromJson(Json json) {
     final String type = json.str('type');
     final DateTime? created = json.date('created_at');
-    final NovaHue hue = _notificationHue(type);
     return AppNotification(
       id: json.str('id'),
       type: type,
@@ -354,8 +353,10 @@ class AppNotification {
       time: '',
       read: json['read_at'] != null,
       group: _groupFor(created, DateTime.now()),
-      tint: hue.surfaceStrong,
-      iconColor: hue.solid,
+      // The website's panel gives every notification the same yellow tile
+      // (`.noticeIcon`, dashboard.css): no per-type colour.
+      tint: NovaColors.yellow,
+      iconColor: NovaColors.yellowInk,
     );
   }
 
@@ -420,20 +421,6 @@ class AppNotification {
         'points_credited' || 'referral_reward_credited' => Icons.stars_rounded,
         'access_closed' => Icons.lock_clock_rounded,
         _ => Icons.campaign_rounded,
-      };
-
-  static NovaHue _notificationHue(String type) => switch (type) {
-        'live_scheduled' ||
-        'live_started' ||
-        'live_rescheduled' ||
-        'live_reminder' =>
-          NovaHue.sky,
-        'live_replay_ready' => NovaHue.lilac,
-        'lesson_published' => NovaHue.mint,
-        'purchase_paid' || 'ccp_approved' => NovaHue.mint,
-        'ccp_rejected' || 'live_cancelled' || 'access_closed' => NovaHue.rose,
-        'points_credited' || 'referral_reward_credited' => NovaHue.butter,
-        _ => NovaHue.peach,
       };
 
   static NotificationGroup _groupFor(DateTime? at, DateTime now) {
@@ -759,7 +746,7 @@ class Pack {
       teachers: json.list('teachers').map(personName).toList(),
       lessonsCount: json.integer('lessons_count'),
       plannedLives: json.integer('planned_live_count'),
-      image: json.strOrNull('cover_url') ?? json.strOrNull('cover_original_url'),
+      image: json.strOrNull('cover_url') ?? json.strOrNull('cover_original_url') ?? fallbackCover(id),
       matchesStudentProfile: _profileMatch(json),
     );
   }
@@ -868,7 +855,7 @@ class Course {
       owned: owned,
       individualPurchaseEnabled: json.flag('individual_purchase_enabled', true),
       isFree: json.flag('is_free'),
-      image: json.strOrNull('cover_url') ?? json.strOrNull('cover_original_url'),
+      image: json.strOrNull('cover_url') ?? json.strOrNull('cover_original_url') ?? fallbackCover(id),
       matchesStudentProfile: _profileMatch(json),
       offerPriceFrom: json['offer_price_from'] == null ? null : dinars(json['offer_price_from']),
       packs: json.list('offers').map(CoursePack.fromJson).toList(),
@@ -1079,3 +1066,7 @@ bool? _profileMatch(Json json) {
   final Object? value = json['matches_student_profile'];
   return value is bool ? value : null;
 }
+
+/// The website's covers for a Unit or an Offer without one
+/// (`getCardCover`, product-card.tsx): the same photo for the same id.
+String fallbackCover(int id) => 'assets/images/covers/cover_${id.abs() % 5}.jpg';

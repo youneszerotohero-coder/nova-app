@@ -7,7 +7,7 @@ import '../../data/models.dart';
 import '../i18n/notification_text.dart';
 import '../state/app_state.dart';
 import '../theme/nova_colors.dart';
-import '../theme/nova_dimens.dart';
+import 'nova_toast.dart';
 import 'pressable_scale.dart';
 
 /// The short sound of a notification delivered in realtime (web
@@ -181,65 +181,13 @@ class _Banner extends StatelessWidget {
         // text its plain default style.
         child: Material(
           type: MaterialType.transparency,
-          child: Container(
-            padding: const EdgeInsetsDirectional.fromSTEB(12, 12, 16, 12),
-            decoration: BoxDecoration(
-              color: NovaColors.ink950,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: NovaDimens.shadowFloating,
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: notification.tint,
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                  child: Icon(
-                    notification.icon,
-                    size: 20,
-                    color: notification.iconColor,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        text.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontFamily: 'Geist',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          color: NovaColors.textOnDark,
-                        ),
-                      ),
-                      if (text.message.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          text.message,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: 'Geist',
-                            fontWeight: FontWeight.w500,
-                            fontSize: 12.5,
-                            height: 1.35,
-                            color: NovaColors.textMutedOnDark,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          // The website's `.notificationToast`: the white sticker with a
+          // blue-soft tile.
+          child: NovaToastCard(
+            message: text.title,
+            detail: text.message,
+            icon: notification.icon,
+            tone: (NovaColors.accent, NovaColors.accentMist),
           ),
         ),
       ),

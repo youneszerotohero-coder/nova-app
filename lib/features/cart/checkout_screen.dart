@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -9,9 +10,7 @@ import '../../core/theme/nova_colors.dart';
 import '../../core/theme/nova_typography.dart';
 import '../../core/utils/format_price.dart';
 import '../../core/i18n/nova_strings.dart';
-import '../../core/theme/nova_dimens.dart';
-import '../../core/widgets/gradient_pill_button.dart';
-import '../../core/widgets/hue_card.dart';
+import '../../core/widgets/hero_style.dart';
 import '../../core/widgets/nova_page_header.dart';
 import '../../core/widgets/nova_scene_image.dart';
 import '../../core/widgets/success_burst.dart';
@@ -19,6 +18,7 @@ import '../../core/widgets/motion.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../data/commerce_store.dart';
 import '../account/orders_screen.dart';
+import 'cart_screen.dart';
 import 'order_payment_sheet.dart';
 
 /// Checkout for one program, driven by the backend: every amount comes
@@ -218,6 +218,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: NovaColors.paperPublic,
       body: Stack(
         children: [
           if (_phase == _Phase.processing)
@@ -233,35 +234,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   title: context.tr('checkout.title'),
                   kicker: _kindLabel(context),
                   showBack: true,
-                  watermark: Icons.lock_rounded,
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 20),
+                // The website's dark checkout panel (`.nvCheckout`).
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: NovaDimens.screenPadding,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: stagger(<Widget>[
-                      _programCard(),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: _summaryCard(),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Entrance(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: CheckoutPanelColors.decoration(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(context.tr('cart.orderSummary'), style: _panelLabel(27, Colors.white)),
+                          const SizedBox(height: 18),
+                          _programCard(),
+                          const SizedBox(height: 18),
+                          _summary(),
+                          const SizedBox(height: 18),
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 260),
+                            curve: Curves.easeOutCubic,
+                            alignment: Alignment.topCenter,
+                            child: _free ? _coveredNotice() : _paymentSection(),
+                          ),
+                          const SizedBox(height: 18),
+                          _actions(),
+                        ],
                       ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 22),
-                        child: AnimatedSize(
-                          duration: const Duration(milliseconds: 260),
-                          curve: Curves.easeOutCubic,
-                          alignment: Alignment.topCenter,
-                          child: _free ? _coveredCard() : _paymentSection(),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 20),
-                        child: _actions(),
-                      ),
-                    ]),
+                    ),
                   ),
                 ),
               ],
@@ -275,18 +276,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  /// What is being bought: cover, kind, title, access year and price.
+  /// `.nvSummaryProduct`: what is being bought, its kind and access year.
   Widget _programCard() {
     final Object? year = _quote?.json['academic_year'];
-    return _Card(
-      padding: const EdgeInsets.all(12),
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: const Color(0x0DFFFFFF), borderRadius: BorderRadius.circular(18)),
       child: Row(
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             child: SizedBox(
-              width: 60,
-              height: 60,
+              width: 64,
+              height: 64,
               child: NovaSceneImage(
                 scene: widget.item.scene,
                 image: widget.item.image,
@@ -295,53 +297,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: NovaHue.sky.surfaceStrong,
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                  child: Text(
-                    _kindLabel(context),
-                    style: NovaTypography.textTheme.labelSmall!.copyWith(
-                      color: NovaHue.sky.onSurface,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 5),
+                Text(_kindLabel(context), style: _panelLabel(13.5, CheckoutPanelColors.mute)),
+                const SizedBox(height: 3),
                 Text(
                   widget.item.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: NovaTypography.textTheme.titleSmall,
+                  style: _panelLabel(16, Colors.white),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   year is String
                       ? context.trf('checkout.accessYear', {'y': year})
                       : context.tr('checkout.accessActiveYear'),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: NovaTypography.muted(
-                    NovaTypography.textTheme.labelSmall!,
-                  ).copyWith(fontWeight: FontWeight.w500),
+                  style: _panelText(14, CheckoutPanelColors.mute),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            formatDaPrice(_quote?.base ?? widget.item.price),
-            // Amounts read left to right in Arabic too.
-            textDirection: TextDirection.ltr,
-            style: NovaTypography.textTheme.titleMedium!.copyWith(
-              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -349,42 +327,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  /// The server quote line by line, ending on the total due.
-  Widget _summaryCard() {
+  /// The server quote line by line, then the total due.
+  Widget _summary() {
     final Quote? quote = _quote;
-    return _Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  context.tr('checkout.orderSummary'),
-                  style: NovaTypography.textTheme.titleMedium,
-                ),
-              ),
-              if (_quoting && quote != null)
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (quote != null)
-            AnimatedOpacity(
-              duration: const Duration(milliseconds: 200),
-              opacity: _quoting ? 0.55 : 1,
-              child: _breakdown(quote),
-            )
-          else if (_quoteError != null)
-            _quoteFailure(_quoteError!)
-          else
-            const _SummarySkeleton(),
-        ],
-      ),
+    if (quote == null) {
+      return _quoteError != null ? _quoteFailure(_quoteError!) : const _SummarySkeleton();
+    }
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 200),
+      opacity: _quoting ? 0.55 : 1,
+      child: _breakdown(quote),
     );
   }
 
@@ -424,43 +376,38 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             value: minus(quote.pointsDiscount),
             discount: true,
           ),
-        const SizedBox(height: 4),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: NovaColors.accentMist,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.tr('checkout.totalDue'),
-                      style: NovaTypography.textTheme.titleSmall!.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      context.tr('checkout.vatNote'),
-                      style: NovaTypography.muted(
-                        NovaTypography.textTheme.labelSmall!,
-                      ).copyWith(fontWeight: FontWeight.w500, height: 1.3),
-                    ),
-                  ],
+        const SizedBox(height: 6),
+        // `.nvTotal`: a dashed rule, "Total due", the amount.
+        CustomPaint(
+          painter: _DashedRule(),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(context.tr('checkout.totalDue'), style: _panelLabel(17, Colors.white)),
+                      const SizedBox(height: 2),
+                      Text(context.tr('checkout.vatNote'), style: _panelText(13, CheckoutPanelColors.mute)),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              _AnimatedPrice(
-                quote.finalAmount,
-                style: NovaTypography.textTheme.headlineMedium!.copyWith(
-                  color: NovaHue.sky.onSurface,
-                ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                if (_quoting)
+                  const Padding(
+                    padding: EdgeInsetsDirectional.only(end: 10, bottom: 6),
+                    child: SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: CheckoutPanelColors.mute),
+                    ),
+                  ),
+                _AnimatedPrice(quote.finalAmount, style: _panelLabel(29, Colors.white, height: 1)),
+              ],
+            ),
           ),
         ),
       ],
@@ -471,8 +418,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ErrorBanner(message: message),
-        const SizedBox(height: 10),
+        _Notice(message: message),
+        const SizedBox(height: 6),
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: _TextLink(
@@ -485,31 +432,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  /// `.nvPayMethods`: the legend with the secure hint, then the two cards.
   Widget _paymentSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
-            Expanded(
-              child: Text(
-                context.tr('checkout.method'),
-                style: NovaTypography.textTheme.titleMedium,
-              ),
-            ),
-            Icon(Icons.lock_rounded, size: 13, color: NovaColors.textMuted),
-            const SizedBox(width: 5),
-            Text(
-              context.tr('checkout.securePayment'),
-              style: NovaTypography.muted(NovaTypography.textTheme.labelSmall!),
-            ),
+            Expanded(child: Text(context.tr('checkout.method'), style: _panelLabel(17, Colors.white))),
+            const Icon(Icons.lock_outline_rounded, size: 14, color: CheckoutPanelColors.mute),
+            const SizedBox(width: 6),
+            Text(context.tr('checkout.securePayment'), style: _panelText(13.5, CheckoutPanelColors.mute)),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         _MethodTile(
           selected: _method == _PayMethod.card,
           icon: Icons.credit_card_rounded,
-          hue: NovaHue.sky,
           title: context.tr('checkout.card'),
           subtitle: context.tr('checkout.cardSub'),
           onTap: () => setState(() => _method = _PayMethod.card),
@@ -518,7 +457,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _MethodTile(
           selected: _method == _PayMethod.ccp,
           icon: Icons.receipt_long_rounded,
-          hue: NovaHue.butter,
           title: context.tr('checkout.ccp'),
           subtitle: context.tr('checkout.ccpSub'),
           onTap: () => setState(() => _method = _PayMethod.ccp),
@@ -539,125 +477,86 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   /// Shown instead of the payment methods when nothing is left to pay.
-  Widget _coveredCard() {
-    return HueCard(
-      hue: NovaHue.mint,
-      padding: const EdgeInsets.all(14),
-      radius: NovaDimens.radiusTile,
-      child: Row(
-        children: [
-          const IconTile(
-            icon: Icons.verified_rounded,
-            hue: NovaHue.mint,
-            size: 38,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              context.tr('checkout.covered'),
-              style: NovaTypography.textTheme.bodySmall!.copyWith(
-                color: NovaHue.mint.onSurface,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _coveredNotice() => _Notice(message: context.tr('checkout.covered'), success: true);
 
-  /// The one primary action, with the discount code link beneath it.
+  /// The one primary action, with the discount code beneath it.
   Widget _actions() {
     final String label = _free
         ? context.tr('checkout.confirmOrder')
         : _method == _PayMethod.ccp
             ? context.tr('checkout.sendOrder')
             : context.tr('checkout.continue');
-    final bool enabled = _canSubmit;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (_submitError != null) ...[
-          _ErrorBanner(message: _submitError!),
+          _Notice(message: _submitError!),
           const SizedBox(height: 12),
         ],
-        AnimatedOpacity(
-          duration: const Duration(milliseconds: 200),
-          opacity: enabled ? 1 : 0.5,
-          child: GradientPillButton(
-            icon: Icons.lock_rounded,
-            label: label,
-            width: double.infinity,
-            semanticLabel: label,
-            onTap: enabled ? _submit : null,
-          ),
-        ),
-        const SizedBox(height: 6),
+        CheckoutButton(label: label, onTap: _canSubmit ? _submit : null),
+        const SizedBox(height: 18),
         _codeSection(),
       ],
     );
   }
 
-  /// Mirrors the website: a "Have a discount code?" link under the pay
-  /// button that reveals one field for a referral or a promo code.
+  /// `.nvCode`: a "Have a discount code?" row under the pay button that
+  /// reveals one field for a referral or a promo code.
   Widget _codeSection() {
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
-      alignment: Alignment.topCenter,
-      child: !_codeVisible
-          ? Align(
-              alignment: AlignmentDirectional.centerEnd,
-              child: _TextLink(
-                icon: Icons.local_offer_rounded,
-                label: context.tr('checkout.haveCode'),
-                dashed: true,
-                onTap: () => setState(() => _codeOpen = true),
-              ),
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: _TextLink(
-                    label: context.tr('checkout.codeLabel'),
-                    trailingIcon: _appliedCode == null
-                        ? Icons.expand_less_rounded
-                        : null,
-                    onTap: _appliedCode == null
-                        ? () => setState(() {
-                              _codeOpen = false;
-                              _codeError = null;
-                            })
-                        : null,
-                  ),
-                ),
-                Text(
-                  context.tr('checkout.codeHelp'),
-                  style: NovaTypography.muted(
-                    NovaTypography.textTheme.labelSmall!,
-                  ).copyWith(fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 10),
-                Row(
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: CheckoutPanelColors.line),
+      ),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _TextLink(
+              icon: Icons.local_offer_outlined,
+              label: context.tr(_codeVisible ? 'checkout.codeLabel' : 'checkout.haveCode'),
+              color: _codeVisible ? Colors.white : CheckoutPanelColors.soft,
+              onTap: _appliedCode != null
+                  ? null
+                  : () => setState(() {
+                        _codeOpen = !_codeOpen;
+                        _codeError = null;
+                      }),
+            ),
+            if (_codeVisible)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 2, 10, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(child: _codeField()),
-                    const SizedBox(width: 8),
-                    _codeButton(),
+                    Text(context.tr('checkout.codeHelp'), style: _panelText(14, CheckoutPanelColors.mute)),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(child: _codeField()),
+                        const SizedBox(width: 8),
+                        _codeButton(),
+                      ],
+                    ),
+                    _codeStatus(),
                   ],
                 ),
-                _codeStatus(),
-              ],
-            ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _codeField() {
     OutlineInputBorder border(Color color, [double width = 1]) =>
         OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: color, width: width),
         );
     final bool applied = _appliedCode != null;
@@ -670,24 +569,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       enableSuggestions: false,
       textCapitalization: TextCapitalization.characters,
       textInputAction: TextInputAction.done,
+      cursorColor: Colors.white,
       onChanged: (_) => setState(() => _codeError = null),
       onSubmitted: (_) => _applyCode(),
-      style: NovaTypography.textTheme.bodyMedium!.copyWith(
-        fontWeight: FontWeight.w600,
-        color: applied ? NovaHue.mint.onSurface : NovaColors.textStrong,
-      ),
+      style: _panelText(16, applied ? CheckoutPanelColors.discount : Colors.white, weight: FontWeight.w600),
       decoration: InputDecoration(
         isDense: true,
         filled: true,
-        fillColor: NovaColors.paperCard,
+        fillColor: CheckoutPanelColors.field,
         hintText: context.tr('checkout.codeHint'),
-        hintStyle: NovaTypography.muted(NovaTypography.textTheme.bodyMedium!),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        enabledBorder: border(
-          _codeError != null ? NovaColors.heartRed : NovaColors.borderOnLight,
-        ),
-        disabledBorder: border(NovaHue.mint.solid.withValues(alpha: 0.5)),
-        focusedBorder: border(NovaColors.accent, 1.4),
+        hintStyle: _panelText(16, CheckoutPanelColors.mute),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+        enabledBorder: border(_codeError != null ? const Color(0xFFFF6B6B) : CheckoutPanelColors.line),
+        disabledBorder: border(CheckoutPanelColors.line),
+        focusedBorder: border(NovaColors.skyStrong, 1.4),
       ),
     );
   }
@@ -699,15 +594,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         onTap: _quoting ? null : _removeCode,
         semanticLabel: label,
         child: Container(
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          height: 50,
+          padding: const EdgeInsets.symmetric(horizontal: 18),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: NovaColors.paperCard,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: NovaColors.borderOnLight),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: CheckoutPanelColors.line),
           ),
-          child: Text(label, style: NovaTypography.textTheme.labelLarge),
+          child: Text(label, style: _panelLabel(15, CheckoutPanelColors.soft)),
         ),
       );
     }
@@ -718,32 +612,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       semanticLabel: label,
       child: AnimatedOpacity(
         duration: const Duration(milliseconds: 200),
-        opacity: enabled || _checkingCode ? 1 : 0.5,
+        opacity: enabled || _checkingCode ? 1 : 0.4,
         child: Container(
-          height: 48,
+          height: 46,
           constraints: const BoxConstraints(minWidth: 84),
           padding: const EdgeInsets.symmetric(horizontal: 18),
           alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: NovaColors.accent,
-            borderRadius: BorderRadius.circular(14),
-          ),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
           child: _checkingCode
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF17191D)),
                 )
-              : Text(
-                  label,
-                  style: NovaTypography.textTheme.labelLarge!.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+              : Text(label, style: _panelText(14, const Color(0xFF17191D), weight: FontWeight.w600)),
         ),
       ),
     );
@@ -754,10 +636,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Widget _codeStatus() {
     final String? applied = _appliedCode;
     final Quote? quote = _quote;
-    final Color ok = NovaHue.mint.onSurface;
+    const Color ok = CheckoutPanelColors.discount;
     final Widget? line = applied != null && quote != null
         ? _StatusLine(
-            icon: Icons.check_circle_rounded,
+            icon: Icons.check_circle_outline_rounded,
             color: ok,
             text: quote.commercialDiscount == 'referral'
                 ? context.tr('checkout.referralApplied')
@@ -769,12 +651,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         : _codeError != null
             ? _StatusLine(
                 icon: Icons.error_outline_rounded,
-                color: NovaColors.heartRed,
+                color: const Color(0xFFFF8A80),
                 text: _codeError!,
               )
             : applied == null && quote?.commercialDiscount == 'referral'
                 ? _StatusLine(
-                    icon: Icons.check_circle_rounded,
+                    icon: Icons.check_circle_outline_rounded,
                     color: ok,
                     text: context.tr('checkout.referralAuto'),
                   )
@@ -784,29 +666,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 }
 
-/// Paper card with the hairline border and soft lift of the app's
-/// list cards.
-class _Card extends StatelessWidget {
-  const _Card({required this.child, this.padding = const EdgeInsets.all(16)});
-
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: NovaColors.paperCard,
-        borderRadius: BorderRadius.circular(NovaDimens.radiusTile),
-        border: Border.all(color: NovaColors.borderOnLight),
-        boxShadow: NovaDimens.shadowSoft,
-      ),
-      child: child,
+TextStyle _panelLabel(double size, Color color, {double height = 1.3}) => TextStyle(
+      fontFamily: NovaTypography.display,
+      fontFamilyFallback: NovaTypography.fallback,
+      fontWeight: FontWeight.w800,
+      fontSize: size,
+      height: height,
+      color: color,
     );
-  }
-}
 
+TextStyle _panelText(double size, Color color, {FontWeight weight = FontWeight.w500}) => TextStyle(
+      fontFamily: NovaTypography.body,
+      fontFamilyFallback: NovaTypography.fallback,
+      fontWeight: weight,
+      fontSize: size,
+      height: 1.45,
+      color: color,
+    );
+
+/// `.nvSummaryRow`: soft label, white amount; a discount in green.
 class _SummaryRow extends StatelessWidget {
   const _SummaryRow({
     required this.label,
@@ -825,20 +703,13 @@ class _SummaryRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Text(
-              label,
-              style: NovaTypography.textTheme.bodySmall,
-            ),
-          ),
-          const SizedBox(width: 12),
+          Expanded(child: Text(label, style: _panelText(15, CheckoutPanelColors.soft))),
+          const SizedBox(width: 16),
           Text(
             value,
+            // Amounts read left to right in Arabic too.
             textDirection: TextDirection.ltr,
-            style: NovaTypography.textTheme.bodySmall!.copyWith(
-              fontWeight: FontWeight.w700,
-              color: discount ? NovaHue.mint.onSurface : NovaColors.textStrong,
-            ),
+            style: _panelLabel(16.5, discount ? CheckoutPanelColors.discount : Colors.white, height: 1.4),
           ),
         ],
       ),
@@ -846,7 +717,7 @@ class _SummaryRow extends StatelessWidget {
   }
 }
 
-/// Still placeholder rows while the first quote loads, so the card
+/// Still placeholder rows while the first quote loads, so the panel
 /// keeps its shape instead of jumping.
 class _SummarySkeleton extends StatelessWidget {
   const _SummarySkeleton();
@@ -857,7 +728,7 @@ class _SummarySkeleton extends StatelessWidget {
           width: width,
           height: height,
           decoration: BoxDecoration(
-            color: NovaColors.subtleFill,
+            color: const Color(0x14FFFFFF),
             borderRadius: BorderRadius.circular(8),
           ),
         );
@@ -869,7 +740,7 @@ class _SummarySkeleton extends StatelessWidget {
         );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [row(), row(), bar(double.infinity, 58)],
+      children: [row(), row(), bar(double.infinity, 48)],
     );
   }
 }
@@ -897,11 +768,12 @@ class _AnimatedPrice extends StatelessWidget {
   }
 }
 
+/// `.nvPayCard`: line border, radius 16; the selected one has the yellow
+/// border on a faint yellow wash and the yellow radio.
 class _MethodTile extends StatelessWidget {
   const _MethodTile({
     required this.selected,
     required this.icon,
-    required this.hue,
     required this.title,
     required this.subtitle,
     required this.onTap,
@@ -909,7 +781,6 @@ class _MethodTile extends StatelessWidget {
 
   final bool selected;
   final IconData icon;
-  final NovaHue hue;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
@@ -928,27 +799,27 @@ class _MethodTile extends StatelessWidget {
           curve: Curves.easeOutCubic,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: selected ? NovaColors.accentMist : NovaColors.paperCard,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: selected ? NovaColors.accent : NovaColors.borderOnLight,
-              width: selected ? 1.4 : 1,
-            ),
+            color: selected ? const Color(0x14FFD54A) : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: selected ? NovaColors.yellow : CheckoutPanelColors.line),
           ),
           child: Row(
             children: [
-              IconTile(icon: icon, hue: hue, size: 40),
-              const SizedBox(width: 12),
+              // `.nvPayArt`: a white tile.
+              Container(
+                width: 64,
+                height: 44,
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+                child: Icon(icon, size: 22, color: const Color(0xFF17191D)),
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: NovaTypography.textTheme.titleSmall),
+                    Text(title, style: _panelLabel(16, Colors.white)),
                     const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: NovaTypography.textTheme.bodySmall,
-                    ),
+                    Text(subtitle, style: _panelText(14, CheckoutPanelColors.mute)),
                   ],
                 ),
               ),
@@ -959,15 +830,17 @@ class _MethodTile extends StatelessWidget {
                 height: 20,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: selected ? NovaColors.accent : Colors.transparent,
-                  border: Border.all(
-                    color: selected ? NovaColors.accent : NovaColors.textMuted,
-                    width: 1.6,
-                  ),
+                  color: selected ? NovaColors.yellow : Colors.transparent,
+                  border: Border.all(color: selected ? NovaColors.yellow : CheckoutPanelColors.line, width: 2),
                 ),
                 child: selected
-                    ? const Icon(Icons.check_rounded,
-                        size: 14, color: Colors.white)
+                    ? Container(
+                        margin: const EdgeInsets.all(1),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFF17191D), width: 3),
+                        ),
+                      )
                     : null,
               ),
             ],
@@ -978,8 +851,8 @@ class _MethodTile extends StatelessWidget {
   }
 }
 
-/// The CCP receipt drop zone under the payment methods: what to attach
-/// until a file is chosen, then its name.
+/// `.nvReceipt`: the CCP receipt drop zone under the payment methods —
+/// what to attach until a file is chosen, then its name.
 class _ReceiptPicker extends StatelessWidget {
   const _ReceiptPicker({required this.file, required this.onTap});
 
@@ -990,7 +863,6 @@ class _ReceiptPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final File? file = this.file;
     final bool attached = file != null;
-    final NovaHue hue = attached ? NovaHue.mint : NovaHue.sky;
     final String action = attached
         ? context.tr('checkout.receiptChange')
         : context.tr('checkout.receiptUpload');
@@ -999,111 +871,89 @@ class _ReceiptPicker extends StatelessWidget {
       onTap: onTap,
       pressedScale: 0.98,
       semanticLabel: '${context.tr('checkout.receipt')} · $action',
-      child: Container(
-        padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 10, 10),
-        decoration: BoxDecoration(
-          color: hue.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: hue.solid.withValues(alpha: 0.45), width: 1.2),
-        ),
-        child: Row(
-          children: [
-            IconTile(
-              icon: attached
-                  ? Icons.check_circle_rounded
-                  : Icons.upload_file_rounded,
-              hue: hue,
-              size: 36,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.tr('checkout.receipt'),
-                    style: NovaTypography.textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    attached
-                        ? file.uri.pathSegments.last
-                        : context.tr('checkout.receiptTypes'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: NovaTypography.textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: hue.surfaceStrong,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: Text(
-                action,
-                style: NovaTypography.textTheme.labelSmall!.copyWith(
-                  color: hue.onSurface,
-                  fontWeight: FontWeight.w700,
+      child: CustomPaint(
+        foregroundPainter: _DashedRRect(color: CheckoutPanelColors.line, radius: 16),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(color: CheckoutPanelColors.field, shape: BoxShape.circle),
+                child: Icon(
+                  attached ? Icons.check_rounded : Icons.upload_file_rounded,
+                  size: 18,
+                  color: attached ? CheckoutPanelColors.discount : Colors.white,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(context.tr('checkout.receipt'), style: _panelLabel(16, Colors.white)),
+                    const SizedBox(height: 2),
+                    Text(
+                      attached ? file.uri.pathSegments.last : context.tr('checkout.receiptTypes'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _panelText(14, CheckoutPanelColors.mute),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(color: NovaColors.yellow, borderRadius: BorderRadius.circular(100)),
+                child: Text(action, style: _panelLabel(14, NovaColors.yellowInk, height: 1.2)),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// A tappable accent text line: the discount-code link, its collapse
-/// toggle and the quote retry.
+/// A tappable line in the panel: the discount-code row (`.nvCodeReveal`)
+/// and the quote retry.
 class _TextLink extends StatelessWidget {
   const _TextLink({
     required this.label,
     this.icon,
-    this.trailingIcon,
-    this.dashed = false,
+    this.color = CheckoutPanelColors.soft,
     this.onTap,
   });
 
   final String label;
   final IconData? icon;
-  final IconData? trailingIcon;
-  final bool dashed;
+  final Color color;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final Color color = NovaHue.sky.onSurface;
     return PressableScale(
       onTap: onTap,
       semanticLabel: label,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 44),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        alignment: AlignmentDirectional.centerStart,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 15, color: color),
-              const SizedBox(width: 6),
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 8),
             ],
-            Text(
-              label,
-              style: NovaTypography.textTheme.labelLarge!.copyWith(
-                color: color,
-                fontWeight: FontWeight.w700,
-                decoration: dashed ? TextDecoration.underline : null,
-                decorationStyle: TextDecorationStyle.dashed,
-                decorationColor: color,
+            Flexible(
+              child: Text(
+                label,
+                style: _panelLabel(15.5, color).copyWith(fontWeight: FontWeight.w700),
               ),
             ),
-            if (trailingIcon != null) ...[
-              const SizedBox(width: 2),
-              Icon(trailingIcon, size: 18, color: color),
-            ],
           ],
         ),
       ),
@@ -1127,47 +977,84 @@ class _StatusLine extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: color),
-        const SizedBox(width: 7),
-        Expanded(
-          child: Text(
-            text,
-            style: NovaTypography.textTheme.bodySmall!.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(icon, size: 15, color: color),
         ),
+        const SizedBox(width: 6),
+        Expanded(child: Text(text, style: _panelText(14, color))),
       ],
     );
   }
 }
 
-/// A readable failure (from `apiErrorText`) on a rose wash.
-class _ErrorBanner extends StatelessWidget {
-  const _ErrorBanner({required this.message});
+/// `.nvNotice` in the dark panel: a readable failure (from
+/// `apiErrorText`), or the success variant.
+class _Notice extends StatelessWidget {
+  const _Notice({required this.message, this.success = false});
 
   final String message;
+  final bool success;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       liveRegion: true,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: NovaHue.rose.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: NovaHue.rose.solid.withValues(alpha: 0.3)),
+          color: success ? const Color(0xFF11261A) : const Color(0xFF2A1718),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: success ? const Color(0xFF1F5A37) : const Color(0xFF5A2B2B)),
         ),
-        child: _StatusLine(
-          icon: Icons.error_outline_rounded,
-          color: NovaHue.rose.onSurface,
-          text: message,
+        child: Text(
+          message,
+          style: _panelText(14, success ? const Color(0xFF9BE3B8) : const Color(0xFFF3B9B9)),
         ),
       ),
     );
   }
+}
+
+/// The dashed top rule of `.nvTotal`.
+class _DashedRule extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()
+      ..color = CheckoutPanelColors.line
+      ..strokeWidth = 1;
+    for (double x = 0; x < size.width; x += 7) {
+      canvas.drawLine(Offset(x, 0.5), Offset(math.min(x + 4, size.width), 0.5), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedRule old) => false;
+}
+
+/// A 1 px dashed rounded border (`.nvReceipt { border-style: dashed }`).
+class _DashedRRect extends CustomPainter {
+  _DashedRRect({required this.color, required this.radius});
+
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final Path outline = Path()..addRRect(RRect.fromRectAndRadius((Offset.zero & size).deflate(0.5), Radius.circular(radius)));
+    for (final metric in outline.computeMetrics()) {
+      for (double d = 0; d < metric.length; d += 7) {
+        canvas.drawPath(metric.extractPath(d, math.min(d + 4, metric.length)), paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedRRect old) => old.color != color || old.radius != radius;
 }
 
 class _ProcessingView extends StatelessWidget {
@@ -1323,71 +1210,38 @@ class _ResultSheet extends StatelessWidget {
             style: NovaTypography.muted(NovaTypography.textTheme.bodySmall!),
           ),
           const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: PressableScale(
-                    // Back to the app's root screen, whether checkout came
-                    // from a course page or straight from the Cart tab.
-                    onTap: () => Navigator.of(context)
-                        .popUntil((Route<dynamic> route) => route.isFirst),
-                    semanticLabel: 'Continue shopping',
-                    child: Container(
-                      height: 52,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(100),
-                        border: Border.all(color: NovaColors.borderOnLight),
-                        color: NovaColors.paperCard,
-                      ),
-                      child: Text(
-                        context.tr('checkout.keepExploring'),
-                        style: TextStyle(
-                          fontFamily: 'Geist',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          color: NovaColors.textStrong,
-                        ),
-                      ),
-                    ),
-                  ),
+          // The website's success actions: "View Orders" with its chip,
+          // "Continue shopping" as the ghost.
+          Row(
+            children: [
+              Expanded(
+                child: NovaButton(
+                  label: context.tr('checkout.keepExploring'),
+                  variant: NovaButtonVariant.ghost,
+                  expand: true,
+                  // Back to the app's root screen, whether checkout came
+                  // from a course page or straight from the Cart tab.
+                  onTap: () => Navigator.of(context).popUntil((Route<dynamic> route) => route.isFirst),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: PressableScale(
-                    onTap: () {
-                      final NavigatorState navigator = Navigator.of(context);
-                      navigator.popUntil((Route<dynamic> route) => route.isFirst);
-                      navigator.push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const OrdersScreen(),
-                        ),
-                      );
-                    },
-                    semanticLabel: context.tr('checkout.viewOrders'),
-                    child: Container(
-                      height: 52,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(100),
-                        color: NovaColors.ink950,
-                      ),
-                      child: Text(
-                        context.tr('checkout.viewOrders'),
-                        style: TextStyle(
-                          fontFamily: 'Geist',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          color: NovaColors.textOnDark,
-                        ),
-                      ),
-                    ),
-                  ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: NovaButton(
+                  label: context.tr('checkout.viewOrders'),
+                  expand: true,
+                  onTap: () {
+                    final NavigatorState navigator = Navigator.of(context);
+                    navigator.popUntil((Route<dynamic> route) => route.isFirst);
+                    navigator.push(
+                      MaterialPageRoute<void>(builder: (_) => const OrdersScreen()),
+                    );
+                  },
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1464,7 +1318,7 @@ class _OrbitPainter extends CustomPainter {
         ..shader = SweepGradient(
           startAngle: angle,
           endAngle: angle + 2.1,
-          colors: [NovaColors.accentLight, NovaColors.accentDeep],
+          colors: [NovaColors.skyStrong, NovaColors.accent],
         ).createShader(Rect.fromCircle(center: center, radius: radius)),
     );
   }

@@ -132,9 +132,22 @@ class _PasswordChangeFormState extends State<PasswordChangeForm>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          context.tr('security.changeDesc'),
-          style: NovaTypography.muted(NovaTypography.textTheme.bodySmall!),
+        // `.accountPasswordIntro`: the key and one line.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(Icons.key_rounded, size: 16, color: NovaColors.accent),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                context.tr('security.changeDesc'),
+                style: NovaTypography.textTheme.bodyMedium!.copyWith(color: NovaColors.textBody, fontSize: 14),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 14),
         if (_challengeId.isEmpty) ...[
@@ -190,10 +203,10 @@ class _PasswordChangeFormState extends State<PasswordChangeForm>
             ),
           ),
         ],
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Text(
           context.tr('settings.securityNote'),
-          style: NovaTypography.textTheme.labelSmall!.copyWith(color: NovaColors.textMuted),
+          style: NovaTypography.textTheme.bodySmall!.copyWith(color: NovaColors.textMuted),
         ),
       ],
     );

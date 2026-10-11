@@ -3,10 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nova_mobile/core/state/app_state.dart';
 import 'package:nova_mobile/core/theme/nova_theme.dart';
 import 'package:nova_mobile/core/utils/format_price.dart';
-import 'package:nova_mobile/core/widgets/gradient_pill_button.dart';
 import 'package:nova_mobile/core/widgets/nova_scene_image.dart';
 import 'package:nova_mobile/core/widgets/pressable_scale.dart';
 import 'package:nova_mobile/data/commerce_store.dart';
+import 'package:nova_mobile/features/cart/cart_screen.dart';
 import 'package:nova_mobile/features/cart/checkout_screen.dart';
 
 import 'fixtures/fake_api.dart';
@@ -119,13 +119,13 @@ void main() {
     );
     expect(find.text(formatDaPrice(18150)), findsOneWidget);
 
-    // The code entry is a text link under the one primary button.
+    // The code entry is a text link under the one primary (yellow) button.
     final Finder link = find.text('Have a discount code?');
     expect(link, findsOneWidget);
     expect(find.byType(TextField), findsNothing);
     expect(
       tester.getRect(link).top,
-      greaterThan(tester.getRect(find.byType(GradientPillButton)).bottom),
+      greaterThan(tester.getRect(find.byType(CheckoutButton)).bottom),
     );
 
     await tester.tap(link);
@@ -133,7 +133,7 @@ void main() {
     expect(find.byType(TextField), findsOneWidget);
     expect(
       tester.getRect(find.byType(TextField)).top,
-      greaterThan(tester.getRect(find.byType(GradientPillButton)).bottom),
+      greaterThan(tester.getRect(find.byType(CheckoutButton)).bottom),
     );
 
     backend.routes['POST /checkout/quote'] = _quote(

@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 
-import '../../core/i18n/labels.dart';
 import '../../core/i18n/nova_strings.dart';
+import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
-import '../../core/theme/nova_typography.dart';
 import '../../core/utils/format_price.dart';
-import '../../core/widgets/hue_card.dart';
+import '../../core/widgets/hero_style.dart';
 import '../../core/widgets/motion.dart';
-import '../../core/widgets/page_scaffold.dart';
+import '../../core/widgets/nova_page_header.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../data/models.dart';
-import '../../core/state/app_state.dart';
 import '../cart/order_payment_sheet.dart';
+import '../catalog/offers_catalog_screen.dart';
+import 'dashboard_card.dart';
 
-/// Billing history: every order with its program, total and status
-/// chip (paid / awaiting payment / CCP pending review = no access).
+/// The website's `/account/orders` on a phone (`OrdersView`, `dashboard.css`):
+/// one card per Order with its program, date, total and status chip
+/// (paid / awaiting payment / CCP receipt under review = no access), and
+/// "Retry payment" while it can still be paid.
 class OrdersScreen extends StatelessWidget {
   const OrdersScreen({super.key});
 
@@ -22,78 +24,92 @@ class OrdersScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppState app = AppScope.of(context);
     final List<Order> orders = app.commerce.orders;
-    return PageScaffold(
-      title: context.tr('orders.title'),
-      kicker: context.trf(
-        'orders.kicker',
-        {'n': orders.length.toString()},
-      ),
-      watermark: Icons.receipt_long_rounded,
+    return Scaffold(
+      backgroundColor: NovaColors.paper,
       body: RefreshIndicator(
         onRefresh: app.commerce.load,
         child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
-        children: orders.isEmpty
-            ? <Widget>[
-                EmptyState(
-                  icon: Icons.receipt_long_rounded,
-                  title: context.tr('orders.emptyTitle'),
-                  message: context.tr('orders.emptyMsg'),
-                ),
-              ]
-            : stagger(
-          orders
-              .map(
-                (Order order) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _OrderCard(order: order),
-                ),
-              )
-              .toList(),
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(bottom: 40 + MediaQuery.paddingOf(context).bottom),
+          children: [
+            NovaPageHeader(kicker: context.tr('dash.orders_eyebrow'), title: context.tr('orders.title')),
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Entrance(
+                child: orders.isEmpty
+                    ? HeroEmpty(
+                        icon: Icons.credit_card_rounded,
+                        title: context.tr('orders.emptyTitle'),
+                        message: context.tr('orders.emptyMsg'),
+                        action: NovaButton(
+                          label: context.tr('dash.see_offers'),
+                          chipIcon: Icons.arrow_forward_rounded,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(builder: (_) => const OffersCatalogScreen()),
+                          ),
+                        ),
+                      )
+                    // `.ordersHistory`: one card holding the Order cards.
+                    : DashboardCard(
+                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(context.tr('dash.billing_history'), style: heroLabel(15, color: NovaColors.accent)),
+                            const SizedBox(height: 16),
+                            for (final Order order in orders)
+                              Padding(padding: const EdgeInsets.only(bottom: 12), child: _OrderCard(order: order)),
+                          ],
+                        ),
+                      ),
+              ),
+            ),
+          ],
         ),
-      ),
       ),
     );
   }
 }
 
-/// Hue, glyph and label for each order state — one source of truth so
-/// the chip and the icon tile can never disagree.
-({NovaHue hue, IconData icon, String label}) _statusStyle(
-  BuildContext context,
-  OrderStatus status,
-) {
+/// Tone, glyph and label of each Order state (`.orderStatus`): paid =
+/// success, awaiting or under review = warning, the rest = danger.
+({Color tone, Color background, IconData icon, String label}) _statusStyle(BuildContext context, OrderStatus status) {
   return switch (status) {
     OrderStatus.paid => (
-        hue: NovaHue.mint,
-        icon: Icons.check_circle_rounded,
+        tone: NovaColors.onlineGreen,
+        background: NovaColors.liveBg,
+        icon: Icons.check_circle_outline_rounded,
         label: context.tr('orders.paid'),
       ),
     OrderStatus.awaiting => (
-        hue: NovaHue.peach,
+        tone: NovaColors.badgeOrange,
+        background: NovaColors.quizBg,
         icon: Icons.schedule_rounded,
         label: context.tr('orders.awaiting'),
       ),
     OrderStatus.pendingReview => (
-        hue: NovaHue.butter,
+        tone: NovaColors.badgeOrange,
+        background: NovaColors.quizBg,
         icon: Icons.hourglass_top_rounded,
         label: context.tr('orders.pendingReview'),
       ),
     OrderStatus.rejected => (
-        hue: NovaHue.rose,
-        icon: Icons.receipt_long_rounded,
+        tone: NovaColors.heartRed,
+        background: NovaColors.dangerBg,
+        icon: Icons.error_outline_rounded,
         label: context.tr('orders.rejected'),
       ),
     OrderStatus.cancelled || OrderStatus.expired => (
-        hue: NovaHue.ink,
-        icon: Icons.block_rounded,
-        label: context.tr(
-          status == OrderStatus.cancelled ? 'orders.cancelled' : 'orders.expired',
-        ),
+        tone: NovaColors.heartRed,
+        background: NovaColors.dangerBg,
+        icon: Icons.error_outline_rounded,
+        label: context.tr(status == OrderStatus.cancelled ? 'orders.cancelled' : 'orders.expired'),
       ),
   };
 }
 
+/// `.tableRow` on a phone: line border, radius 20.
 class _OrderCard extends StatelessWidget {
   const _OrderCard({required this.order});
 
@@ -101,150 +117,87 @@ class _OrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ({NovaHue hue, IconData icon, String label}) style =
-        _statusStyle(context, order.status);
-
-    return NovaCard(
+    final ({Color tone, Color background, IconData icon, String label}) style = _statusStyle(context, order.status);
+    return Container(
       padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: NovaColors.paperCard,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NovaColors.borderOnLight),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              IconTile(icon: style.icon, hue: style.hue, size: 42),
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(color: NovaColors.accentMist, borderRadius: BorderRadius.circular(13)),
+                child: Icon(Icons.school_outlined, size: 20, color: NovaColors.accent),
+              ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      order.program,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: NovaTypography.textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${modelLabelText(context, order.kind)} · ${modelLabelText(context, order.method)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: NovaTypography.muted(
-                        NovaTypography.textTheme.bodySmall!,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  order.program.isEmpty ? order.number : order.program,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: heroLabel(15),
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: NovaColors.subtleFill,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        order.number,
-                        style: NovaTypography.textTheme.labelMedium,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        order.date,
-                        style: NovaTypography.muted(
-                          NovaTypography.textTheme.bodySmall!,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  formatDaPrice(order.total),
-                  style: NovaTypography.textTheme.titleMedium,
-                ),
-              ],
-            ),
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              _StatusChip(
-                label: style.label,
-                icon: style.icon,
-                hue: style.hue,
+              Icon(Icons.calendar_today_outlined, size: 17, color: NovaColors.textMuted),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(order.date, textDirection: TextDirection.ltr, style: heroLabel(15)),
+                ),
               ),
-              const Spacer(),
+              Icon(Icons.payments_outlined, size: 17, color: NovaColors.textMuted),
+              const SizedBox(width: 6),
+              // Amounts read left to right in Arabic too.
+              Text(formatDaPrice(order.total), textDirection: TextDirection.ltr, style: heroLabel(15)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(color: style.background, borderRadius: BorderRadius.circular(10)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(style.icon, size: 16, color: style.tone),
+                    const SizedBox(width: 6),
+                    Text(style.label, style: heroLabel(14, color: style.tone)),
+                  ],
+                ),
+              ),
               if (order.payable)
                 PressableScale(
                   onTap: () => showOrderPayment(context, order),
+                  pressedScale: 0.96,
                   semanticLabel: context.tr('orders.retry'),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: NovaColors.ink950,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Text(
-                      context.tr('orders.retry'),
-                      style: const TextStyle(
-                        fontFamily: 'Geist',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                        color: NovaColors.textOnDark,
-                      ),
+                    height: 44,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(color: NovaColors.accent, borderRadius: BorderRadius.circular(13)),
+                    child: Center(
+                      widthFactor: 1,
+                      child: Text(context.tr('orders.retry'), style: heroLabel(15, color: Colors.white)),
                     ),
                   ),
                 ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({
-    required this.label,
-    required this.icon,
-    required this.hue,
-  });
-
-  final String label;
-  final IconData icon;
-  final NovaHue hue;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: hue.surfaceStrong,
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: hue.onSurface),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'Geist',
-              fontWeight: FontWeight.w700,
-              fontSize: 11,
-              color: hue.onSurface,
-            ),
           ),
         ],
       ),

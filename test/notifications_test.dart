@@ -262,7 +262,10 @@ void main() {
       final AppNotification scheduled = _parse(_payload('s', 'live_scheduled', data: live, liveId: 12, url: '/live/12'));
       expect(reminder.icon, Icons.alarm_rounded);
       expect(reminder.iconColor, scheduled.iconColor);
-      expect(reminder.iconColor, NovaHue.sky.solid);
+      // The website's panel: every notification on the yellow tile.
+      expect(reminder.tint, NovaColors.yellow);
+      expect(reminder.iconColor, NovaColors.yellowInk);
+      expect(_parse(_payload('p', 'purchase_paid')).tint, NovaColors.yellow);
       expect(reminder.liveId, 12);
       expect(_parse(_payload('c', 'live_cancelled', data: live, url: '/account/lives')).liveId, isNull);
     });
