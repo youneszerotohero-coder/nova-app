@@ -6,62 +6,60 @@ import 'fixtures/fixture_app.dart';
 
 import 'nova_font_loader.dart';
 
-/// Generates design-snapshot goldens of the home page at a phone
-/// viewport. Run with:
+/// Generates design-snapshot goldens of the Student home (D-133) at a phone
+/// viewport, then the menu, Explore and its filters reached from it. Run with:
 ///   flutter test --update-goldens
 void main() {
   setUpAll(loadNovaFonts);
   setUp(installFixtureApp);
 
-  testWidgets('home page design snapshots', (tester) async {
+  goldenTestWidgets('home page design snapshots', (tester) async {
     tester.view.physicalSize = const Size(1170, 2532);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(const NovaApp());
-    await tester.pumpAndSettle();
-    await settleImages(tester);
+    // The live-now pulse loops: frames, not settle.
+    await pumpFrames(tester);
+    await settleImages(tester, looping: true);
 
     await expectLater(
       find.byType(NovaApp),
       matchesGoldenFile('goldens/home_top.png'),
     );
 
-    // Swipe up like a user to reveal the courses and teachers rails.
+    // Swipe up like a user to reveal the Units and Offers rails.
     await tester.dragFrom(const Offset(195, 600), const Offset(0, -760));
-    await tester.pumpAndSettle();
-    await settleImages(tester);
+    await settleImages(tester, looping: true);
     await expectLater(
       find.byType(NovaApp),
       matchesGoldenFile('goldens/home_bottom.png'),
     );
 
-    // Back to the top: the header owns the menu trigger.
+    // Back to the top: the top bar owns the menu trigger.
     await tester.dragFrom(const Offset(195, 600), const Offset(0, 1200));
-    await tester.pumpAndSettle();
+    await pumpFrames(tester);
 
-    // Open the menu and the filter sheet for design snapshots.
     await tester.tap(find.bySemanticsLabel('Menu'));
-    await tester.pumpAndSettle();
+    await pumpFrames(tester);
     await expectLater(
       find.byType(NovaApp),
       matchesGoldenFile('goldens/menu_open.png'),
     );
 
     await tester.tap(find.bySemanticsLabel('Close'));
-    await tester.pumpAndSettle();
+    await pumpFrames(tester);
 
-    // Search and filtering live on Explore.
-    await tester.tap(find.bySemanticsLabel('Explore'));
-    await tester.pumpAndSettle();
-    await settleImages(tester);
+    // Search and filtering live on Explore, opened from "See the Offers".
+    await tester.tap(find.text('See the Offers'));
+    await settleImages(tester, looping: true);
     await expectLater(
       find.byType(NovaApp),
       matchesGoldenFile('goldens/explore_top.png'),
     );
 
     await tester.tap(find.bySemanticsLabel('Filters'));
-    await tester.pumpAndSettle();
+    await pumpFrames(tester);
     await expectLater(
       find.byType(NovaApp),
       matchesGoldenFile('goldens/filter_sheet.png'),

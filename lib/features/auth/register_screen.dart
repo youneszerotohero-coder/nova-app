@@ -9,6 +9,7 @@ import '../../core/api/nova_api.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
+import '../../core/theme/nova_dimens.dart';
 import '../../core/theme/nova_typography.dart';
 import '../../core/utils/phone.dart';
 import '../../core/widgets/motion.dart';
@@ -17,6 +18,7 @@ import '../../data/account_store.dart';
 import '../../data/models.dart';
 import '../../data/otp.dart';
 import 'auth_hero.dart';
+import 'login_screen.dart';
 import 'otp_widgets.dart';
 
 /// Registration: first/last name, unique phone, school level, filière
@@ -32,9 +34,13 @@ import 'otp_widgets.dart';
 /// With [onboarding] the same form completes an imported Student's
 /// academic identity (`PUT /onboarding`): no phone or password.
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key, this.onboarding = false});
+  const RegisterScreen({super.key, this.onboarding = false, this.fromSignIn = false});
 
   final bool onboarding;
+
+  /// Opened from sign-in: "Already have an account?" goes back to it;
+  /// otherwise (the gateway, D-133) it opens sign-in in its place.
+  final bool fromSignIn;
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -445,12 +451,6 @@ class _RegisterScreenState extends State<RegisterScreen>
             subtitle: context.tr(
               widget.onboarding ? 'auth.onboardingSub' : 'auth.createSubtitle',
             ),
-            bottom: widget.onboarding
-                ? null
-                : AuthModeSwitch(
-                    signIn: false,
-                    onSwitch: () => Navigator.of(context).maybePop(),
-                  ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 26, 24, 0),
@@ -497,6 +497,18 @@ class _RegisterScreenState extends State<RegisterScreen>
                       ),
                     ],
                   ),
+                if (!widget.onboarding) ...[
+                  const SizedBox(height: 18),
+                  // The website's line under the form: "Already have an account? Sign in".
+                  AuthModeSwitch(
+                    signIn: false,
+                    onSwitch: () => widget.fromSignIn
+                        ? Navigator.of(context).maybePop()
+                        : Navigator.of(context).pushReplacement(
+                            MaterialPageRoute<void>(builder: (_) => const LoginScreen(showBack: true)),
+                          ),
+                  ),
+                ],
                 if (widget.onboarding) ...[
                   const SizedBox(height: 14),
                   Center(
@@ -506,7 +518,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                       child: Text(
                         context.tr('settings.signOut'),
                         style: TextStyle(
-                          fontFamily: 'Inter',
+                          fontFamily: 'Geist',
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                           color: NovaColors.textMuted,
@@ -547,7 +559,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                     ? Icon(Icons.check_circle_rounded, size: 16, color: color)
                     : Text(
                         '${index + 1}',
-                        style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 13, color: color),
+                        style: TextStyle(fontFamily: 'Geist', fontWeight: FontWeight.w800, fontSize: 13, color: color),
                       ),
                 const SizedBox(width: 6),
                 Expanded(
@@ -555,7 +567,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                     context.tr(key),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 12.5, color: color),
+                    style: TextStyle(fontFamily: 'Geist', fontWeight: FontWeight.w700, fontSize: 12.5, color: color),
                   ),
                 ),
               ],
@@ -587,27 +599,38 @@ class _RegisterScreenState extends State<RegisterScreen>
       onTap: onTap,
       pressedScale: 0.97,
       semanticLabel: semantic,
+      // The website's main button: royal blue, 17 px corners, arrow chip.
       child: Container(
-        height: 58,
-        alignment: Alignment.center,
+        height: 56,
+        padding: const EdgeInsetsDirectional.only(start: 20, end: 6),
         decoration: BoxDecoration(
-          color: NovaColors.ink950,
-          borderRadius: BorderRadius.circular(100),
+          color: NovaColors.accent,
+          borderRadius: BorderRadius.circular(NovaDimens.radiusControl),
         ),
         child: busy
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2.6, color: NovaColors.textOnDark),
-              )
-            : Text(
-                label,
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15.5,
-                  color: NovaColors.textOnDark,
+            ? const Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.6, color: Colors.white),
                 ),
+              )
+            : Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: NovaTypography.textTheme.labelLarge!.copyWith(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
+                    ),
+                  ),
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(color: NovaColors.yellow, borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.arrow_forward_rounded, size: 19, color: NovaColors.yellowInk),
+                  ),
+                ],
               ),
       ),
     );
@@ -623,17 +646,12 @@ class _RegisterScreenState extends State<RegisterScreen>
         padding: const EdgeInsets.symmetric(horizontal: 22),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(100),
-          border: Border.all(color: NovaColors.ink950.withValues(alpha: 0.18)),
+          borderRadius: BorderRadius.circular(NovaDimens.radiusControl),
+          border: Border.all(color: NovaColors.textStrong.withValues(alpha: 0.18), width: 1.5),
         ),
         child: Text(
           label,
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w700,
-            fontSize: 14.5,
-            color: NovaColors.ink950,
-          ),
+          style: NovaTypography.textTheme.labelLarge!.copyWith(fontSize: 15.5, fontWeight: FontWeight.w800),
         ),
       ),
     );
@@ -663,7 +681,7 @@ class _RegisterScreenState extends State<RegisterScreen>
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontFamily: 'Inter',
+              fontFamily: 'Geist',
               fontWeight: FontWeight.w700,
               fontSize: 13.5,
               color: filled ? Colors.white : NovaColors.accentDeep,
@@ -752,7 +770,7 @@ class _RegisterScreenState extends State<RegisterScreen>
               child: Text(
                 context.tr('auth.signInInstead'),
                 style: TextStyle(
-                  fontFamily: 'Inter',
+                  fontFamily: 'Geist',
                   fontWeight: FontWeight.w700,
                   fontSize: 12.5,
                   color: Colors.white,
@@ -1049,16 +1067,16 @@ class _Field extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: NovaTypography.textTheme.labelMedium),
+          Text(label, style: NovaTypography.textTheme.labelLarge),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
               color: NovaColors.paperCard,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(17),
               border: Border.all(
                 color: error == null
-                    ? NovaColors.borderOnLight
+                    ? NovaColors.textStrong.withValues(alpha: 0.14)
                     : NovaHue.rose.solid.withValues(alpha: 0.6),
               ),
             ),
@@ -1146,7 +1164,7 @@ class RefPickerField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: NovaTypography.textTheme.labelMedium),
+          Text(label, style: NovaTypography.textTheme.labelLarge),
           const SizedBox(height: 8),
           AnimatedOpacity(
             duration: const Duration(milliseconds: 200),
@@ -1155,10 +1173,10 @@ class RefPickerField extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 color: NovaColors.paperCard,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(17),
                 border: Border.all(
                   color: error == null
-                      ? NovaColors.borderOnLight
+                      ? NovaColors.textStrong.withValues(alpha: 0.14)
                       : NovaHue.rose.solid.withValues(alpha: 0.6),
                 ),
               ),

@@ -6,10 +6,12 @@ import '../../core/state/app_state.dart';
 import '../../core/widgets/nova_toast.dart';
 import '../../data/models.dart';
 import 'learn_screen.dart';
+import 'lesson_screen.dart';
 
-/// Opens an owned Course in the learning space with its curriculum and
-/// the Student's per-lesson lock/progress loaded from the backend.
-Future<void> openOwnedCourse(BuildContext context, Course course) async {
+/// Opens an owned Course on its list of Lessons, with the Student's per-lesson
+/// progress loaded from the backend; with [lessonId], straight on that Lesson
+/// (its video, PDF and quiz), the Unit's list behind it (D-132).
+Future<void> openOwnedCourse(BuildContext context, Course course, {int? lessonId}) async {
   final AppState app = AppScope.of(context);
   final NavigatorState navigator = Navigator.of(context);
   // Back cannot close the spinner: the pop below would then close the
@@ -35,10 +37,16 @@ Future<void> openOwnedCourse(BuildContext context, Course course) async {
     navigator.pop();
   }
   if (failure == null) {
-    final Course opened = full!;
+    final ValueNotifier<Course> opened = ValueNotifier<Course>(full!);
     navigator.push(
-      MaterialPageRoute<void>(builder: (_) => LearnScreen(course: opened)),
+      MaterialPageRoute<void>(builder: (_) => LearnScreen.of(opened)),
     );
+    final int index = lessonId == null ? -1 : opened.value.lessons.indexWhere((Lesson l) => l.id == lessonId);
+    if (index >= 0) {
+      navigator.push(
+        MaterialPageRoute<void>(builder: (_) => LessonScreen(course: opened, index: index)),
+      );
+    }
   } else if (context.mounted) {
     novaToast(context, apiErrorText(context, failure),
         icon: Icons.error_outline_rounded);

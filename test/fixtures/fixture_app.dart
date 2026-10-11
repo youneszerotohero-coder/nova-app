@@ -33,6 +33,7 @@ AppState installFixtureApp({
   LearningStore? learning,
   LiveStore? live,
   AccountStore? account,
+  NovaLang lang = NovaLang.en,
 }) {
   final List<Course> owned = HomeData.popularCourses
       .where((Course c) => c.owned)
@@ -58,7 +59,7 @@ AppState installFixtureApp({
           balance: HomeData.student.points,
         ),
     live: live,
-    lang: NovaLang.en,
+    lang: lang,
   );
   AppState.instance = state;
   return state;

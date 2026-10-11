@@ -1,0 +1,6 @@
+tags:
+  # The screenshot tour (test/app_tour_test.dart) renders every screen for a
+  # visual review; its pictures are not versioned, so it runs only on demand:
+  #   flutter test --run-skipped -t tour --update-goldens test/app_tour_test.dart
+  tour:
+    skip: "Screenshot tour: run on demand with --run-skipped -t tour --update-goldens"

@@ -197,7 +197,7 @@ class _OrderCard extends StatelessWidget {
                     child: Text(
                       context.tr('orders.retry'),
                       style: const TextStyle(
-                        fontFamily: 'Inter',
+                        fontFamily: 'Geist',
                         fontWeight: FontWeight.w700,
                         fontSize: 12,
                         color: NovaColors.textOnDark,
@@ -240,7 +240,7 @@ class _StatusChip extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              fontFamily: 'Inter',
+              fontFamily: 'Geist',
               fontWeight: FontWeight.w700,
               fontSize: 11,
               color: hue.onSurface,

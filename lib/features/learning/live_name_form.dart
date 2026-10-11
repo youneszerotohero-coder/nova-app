@@ -77,7 +77,7 @@ class _LiveNameFormState extends State<LiveNameForm> {
           errorText: error,
           filled: true,
           fillColor: Colors.white.withValues(alpha: 0.06),
-          labelStyle: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: NovaColors.textMutedOnDark),
+          labelStyle: const TextStyle(fontFamily: 'Geist', fontSize: 13, color: NovaColors.textMutedOnDark),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
         );
 
@@ -105,7 +105,7 @@ class _LiveNameFormState extends State<LiveNameForm> {
               context.tr('live.nameBody'),
               textAlign: TextAlign.center,
               style: const TextStyle(
-                fontFamily: 'Inter',
+                fontFamily: 'Geist',
                 fontSize: 12.5,
                 height: 1.45,
                 color: NovaColors.textMutedOnDark,
@@ -117,7 +117,7 @@ class _LiveNameFormState extends State<LiveNameForm> {
               maxLength: 255,
               textInputAction: TextInputAction.next,
               autofillHints: const <String>[AutofillHints.givenName],
-              style: const TextStyle(fontFamily: 'Inter', fontSize: 14, color: NovaColors.textOnDark),
+              style: const TextStyle(fontFamily: 'Geist', fontSize: 14, color: NovaColors.textOnDark),
               decoration: field(context.tr('live.firstName'), _firstError).copyWith(counterText: ''),
             ),
             const SizedBox(height: 10),
@@ -127,7 +127,7 @@ class _LiveNameFormState extends State<LiveNameForm> {
               textInputAction: TextInputAction.done,
               autofillHints: const <String>[AutofillHints.familyName],
               onSubmitted: (_) => _submit(),
-              style: const TextStyle(fontFamily: 'Inter', fontSize: 14, color: NovaColors.textOnDark),
+              style: const TextStyle(fontFamily: 'Geist', fontSize: 14, color: NovaColors.textOnDark),
               decoration: field(context.tr('live.lastName'), _lastError).copyWith(counterText: ''),
             ),
             if (_error != null) ...[
@@ -135,7 +135,7 @@ class _LiveNameFormState extends State<LiveNameForm> {
               Text(
                 _error!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: NovaColors.heartRed),
+                style: const TextStyle(fontFamily: 'Geist', fontSize: 12, color: NovaColors.heartRed),
               ),
             ],
             const SizedBox(height: 16),
@@ -158,7 +158,7 @@ class _LiveNameFormState extends State<LiveNameForm> {
                     : Text(
                         context.tr('live.nameSubmit'),
                         style: const TextStyle(
-                          fontFamily: 'Inter',
+                          fontFamily: 'Geist',
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
                           color: Colors.white,

@@ -222,7 +222,7 @@ class EmptyState extends StatelessWidget {
                   child: Text(
                     actionLabel!,
                     style: const TextStyle(
-                      fontFamily: 'Inter',
+                      fontFamily: 'Geist',
                       fontWeight: FontWeight.w700,
                       fontSize: 13.5,
                       color: Colors.white,

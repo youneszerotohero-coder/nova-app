@@ -7,6 +7,7 @@ import '../../core/theme/nova_colors.dart';
 import '../../data/session_store.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/theme/nova_typography.dart';
+import '../../core/widgets/hero_style.dart';
 import '../../core/widgets/motion.dart';
 import '../../core/widgets/pressable_scale.dart';
 import 'auth_hero.dart';
@@ -93,7 +94,7 @@ class _LoginScreenState extends State<LoginScreen> {
   /// has an account (409 `PHONE_ALREADY_REGISTERED`): sign in with it.
   Future<void> _openRegister() async {
     final String? phone = await Navigator.of(context).push<String>(
-      MaterialPageRoute<String>(builder: (_) => const RegisterScreen()),
+      MaterialPageRoute<String>(builder: (_) => const RegisterScreen(fromSignIn: true)),
     );
     if (phone == null || !mounted) return;
     setState(() {
@@ -113,7 +114,6 @@ class _LoginScreenState extends State<LoginScreen> {
             showBack: widget.showBack,
             title: context.tr('auth.welcomeBack'),
             subtitle: context.tr('auth.signInSubtitle'),
-            bottom: AuthModeSwitch(signIn: true, onSwitch: _openRegister),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 26, 24, 0),
@@ -130,116 +130,27 @@ class _LoginScreenState extends State<LoginScreen> {
                 ...stagger(_fields()),
                 if (_error != null) _Banner(text: _error!, error: true),
                 const SizedBox(height: 8),
-                PressableScale(
-                  onTap: _busy ? null : _submit,
-                  pressedScale: 0.97,
-                  semanticLabel: context.tr('auth.signIn'),
-                  child: Container(
-                    height: 58,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: NovaColors.ink950,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: _busy
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.6,
-                              color: NovaColors.textOnDark,
-                            ),
-                          )
-                        : Text(
-                            context.tr('auth.signIn'),
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15.5,
-                              color: NovaColors.textOnDark,
-                            ),
-                          ),
-                  ),
+                NovaButton(
+                  label: context.tr('auth.signIn'),
+                  chipIcon: Icons.arrow_forward_rounded,
+                  expand: true,
+                  loading: _busy,
+                  onTap: _submit,
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
                 Center(
                   child: PressableScale(
                     onTap: _openForgotPassword,
                     semanticLabel: 'Forgot password',
                     child: Text(
                       context.tr('auth.forgot'),
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        color: NovaColors.accentDeep,
-                      ),
+                      style: NovaTypography.textTheme.labelLarge!.copyWith(color: NovaColors.accent),
                     ),
                   ),
                 ),
                 const SizedBox(height: 22),
-                Row(
-                  children: [
-                    Expanded(child: Divider(color: NovaColors.borderOnLight)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        context.tr('auth.or'),
-                        style: NovaTypography.muted(
-                          NovaTypography.textTheme.labelMedium!,
-                        ),
-                      ),
-                    ),
-                    Expanded(child: Divider(color: NovaColors.borderOnLight)),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  context.tr('auth.newHere'),
-                  textAlign: TextAlign.center,
-                  style: NovaTypography.textTheme.bodySmall!.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                PressableScale(
-                  onTap: _openRegister,
-                  pressedScale: 0.97,
-                  semanticLabel: context.tr('auth.createNewAccount'),
-                  child: Container(
-                    height: 58,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: NovaColors.accent,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.person_add_alt_1_rounded,
-                          size: 20,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(width: 9),
-                        Flexible(
-                          child: Text(
-                            context.tr('auth.createNewAccount'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15.5,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                // The website's line under the form: "New to Nova? Create an account".
+                AuthModeSwitch(signIn: true, onSwitch: _openRegister),
               ],
             ),
           ),
@@ -311,14 +222,15 @@ class _AuthField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: NovaTypography.textTheme.labelMedium),
+          Text(label, style: NovaTypography.textTheme.labelLarge),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
               color: NovaColors.paperCard,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: NovaColors.borderOnLight),
+              borderRadius: BorderRadius.circular(17),
+              border: Border.all(
+color: NovaColors.textStrong.withValues(alpha: 0.14), width: 1.5),
             ),
             child: Row(
               children: [

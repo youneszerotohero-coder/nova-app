@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/nova_colors.dart';
 import '../theme/nova_dimens.dart';
+import '../theme/nova_typography.dart';
 import 'pressable_scale.dart';
 
 /// A destination in the floating pill navigation bar.
@@ -17,9 +18,9 @@ class NovaNavItem {
   final int badgeCount;
 }
 
-/// Floating ink pill navigation. The gradient marker slides between
-/// destinations rather than popping, so switching tabs reads as one
-/// continuous move.
+/// The website's phone bottom bar (`.studentBottomNav`): a navy pill, each
+/// destination an icon over its label, and a yellow marker that slides to
+/// the active one.
 class NovaBottomBar extends StatelessWidget {
   const NovaBottomBar({
     super.key,
@@ -32,100 +33,65 @@ class NovaBottomBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onChanged;
 
-  static const double _marker = 50;
-  static const double _inset = 9;
-
-  /// A tap on the pill's padding ring goes to the tab it is closest to.
-  void _tapRing(Offset position, double width, TextDirection direction) {
-    final double slot = (width - 2 * _inset) / items.length;
-    int index = ((position.dx - _inset) / slot).floor().clamp(
-      0,
-      items.length - 1,
-    );
-    if (direction == TextDirection.rtl) index = items.length - 1 - index;
-    onChanged(index);
-  }
+  static const double _pad = 6;
 
   @override
   Widget build(BuildContext context) {
-    final TextDirection direction = Directionality.of(context);
-
     return Positioned(
-      left: 0,
-      right: 0,
+      left: 12,
+      right: 12,
       // Above the system navigation bar when the app draws behind it
       // (edge-to-edge); 0 extra otherwise.
-      bottom: 18 + MediaQuery.viewPaddingOf(context).bottom,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints bar) =>
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTapUp: (TapUpDetails details) =>
-                    _tapRing(details.localPosition, bar.maxWidth, direction),
-                child: _pill(),
-              ),
+      bottom: 12 + MediaQuery.viewPaddingOf(context).bottom,
+      child: Container(
+        height: NovaDimens.bottomBarHeight,
+        padding: const EdgeInsets.all(_pad),
+        decoration: BoxDecoration(
+          color: NovaColors.ink950,
+          borderRadius: BorderRadius.circular(NovaDimens.radiusChip),
+          boxShadow: NovaDimens.shadowFloating,
         ),
-      ),
-    );
-  }
-
-  Widget _pill() {
-    return Container(
-      height: NovaDimens.bottomBarHeight,
-      padding: const EdgeInsets.all(_inset),
-      decoration: BoxDecoration(
-        color: NovaColors.ink950,
-        borderRadius: BorderRadius.circular(NovaDimens.radiusChip),
-        boxShadow: NovaDimens.shadowFloating,
-      ),
-      child: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          final double slot = constraints.maxWidth / items.length;
-
-          return Stack(
-            children: [
-              // Directional so the marker follows the Row, which
-              // lays out right-to-left in Arabic.
-              AnimatedPositionedDirectional(
-                duration: const Duration(milliseconds: 340),
-                curve: Curves.easeOutCubic,
-                start: slot * currentIndex + (slot - _marker) / 2,
-                top: 0,
-                child: Container(
-                  width: _marker,
-                  height: _marker,
-                  decoration: const BoxDecoration(
-                    gradient: NovaColors.accentGradient,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        offset: Offset(0, 6),
-                        blurRadius: 16,
-                        spreadRadius: -4,
-                        color: Color(0x662B87F7),
-                      ),
-                    ],
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final double slot = constraints.maxWidth / items.length;
+            return Stack(
+              children: [
+                // Directional so the marker follows the Row, which lays
+                // out right-to-left in Arabic.
+                AnimatedPositionedDirectional(
+                  duration: const Duration(milliseconds: 350),
+                  curve: const Cubic(0.2, 0.8, 0.2, 1),
+                  start: slot * currentIndex,
+                  top: 0,
+                  bottom: 0,
+                  width: slot,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: NovaColors.yellow,
+                      borderRadius: BorderRadius.circular(NovaDimens.radiusChip),
+                      boxShadow: const [
+                        BoxShadow(offset: Offset(0, 6), blurRadius: 16, spreadRadius: -4, color: Color(0x80FFD54A)),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              Row(
-                children: [
-                  for (int i = 0; i < items.length; i++)
-                    SizedBox(
-                      width: slot,
-                      child: _NavItemButton(
-                        item: items[i],
-                        active: i == currentIndex,
-                        onTap: () => onChanged(i),
+                Row(
+                  children: [
+                    for (int i = 0; i < items.length; i++)
+                      SizedBox(
+                        width: slot,
+                        child: _NavItemButton(
+                          item: items[i],
+                          active: i == currentIndex,
+                          onTap: () => onChanged(i),
+                        ),
                       ),
-                    ),
-                ],
-              ),
-            ],
-          );
-        },
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -150,63 +116,61 @@ class _NavItemButton extends StatelessWidget {
       label: item.label,
       child: PressableScale(
         onTap: onTap,
-        pressedScale: 0.88,
-        child: SizedBox(
-          height: NovaBottomBar._marker,
-          child: Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.center,
+        pressedScale: 0.9,
+        child: TweenAnimationBuilder<Color?>(
+          duration: const Duration(milliseconds: 250),
+          tween: ColorTween(end: active ? NovaColors.yellowInk : Colors.white.withValues(alpha: 0.72)),
+          builder: (BuildContext context, Color? color, _) => Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // A gentle lift on the active glyph, on top of the
-              // marker that slid in underneath it.
-              AnimatedScale(
-                duration: const Duration(milliseconds: 340),
-                curve: Curves.easeOutBack,
-                scale: active ? 1.08 : 1,
-                child: AnimatedSlide(
-                  duration: const Duration(milliseconds: 340),
-                  curve: Curves.easeOutCubic,
-                  offset: active ? const Offset(0, -0.04) : Offset.zero,
-                  child: TweenAnimationBuilder<Color?>(
-                    duration: const Duration(milliseconds: 280),
-                    tween: ColorTween(
-                      end: active ? Colors.white : NovaColors.textMutedOnDark,
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(item.icon, size: 22, color: color),
+                  if (item.badgeCount > 0)
+                    PositionedDirectional(
+                      top: -6,
+                      end: -10,
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 17),
+                        height: 17,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF5D5D),
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        child: Text(
+                          item.badgeCount > 9 ? '9+' : '${item.badgeCount}',
+                          style: const TextStyle(
+                            fontFamily: NovaTypography.body,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 10,
+                            height: 1.2,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
                     ),
-                    builder: (BuildContext context, Color? color, _) => Icon(
-                      item.icon,
-                      size: 23,
-                      color: color ?? NovaColors.textMutedOnDark,
-                    ),
+                ],
+              ),
+              const SizedBox(height: 3),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: Text(
+                  item.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: NovaTypography.display,
+                    fontFamilyFallback: NovaTypography.fallback,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                    height: 1.2,
+                    color: color,
                   ),
                 ),
               ),
-              if (item.badgeCount > 0 && !active)
-                PositionedDirectional(
-                  top: 8,
-                  end: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 1,
-                    ),
-                    constraints: const BoxConstraints(minWidth: 16),
-                    decoration: const BoxDecoration(
-                      color: NovaColors.accent,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text(
-                      item.badgeCount > 9 ? '9+' : '${item.badgeCount}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 9.5,
-                        height: 1.3,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
             ],
           ),
         ),

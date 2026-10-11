@@ -63,11 +63,10 @@ class MonogramAvatar extends StatelessWidget {
       child: Text(
         _initials(label),
         style: TextStyle(
-          fontFamily: 'Inter',
+          fontFamily: 'Geist',
           fontWeight: FontWeight.w700,
           fontSize: size * 0.34,
           height: 1,
-          letterSpacing: -0.2,
           color: Colors.white,
         ),
       ),

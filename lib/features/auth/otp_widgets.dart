@@ -112,7 +112,7 @@ class OtpChannelChoice extends StatelessWidget {
               Text(
                 label,
                 style: TextStyle(
-                  fontFamily: 'Inter',
+                  fontFamily: 'Geist',
                   fontWeight: FontWeight.w700,
                   fontSize: 13.5,
                   color: selected ? NovaColors.accentDeep : NovaColors.textMuted,
@@ -188,16 +188,16 @@ class AuthTextField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: NovaTypography.textTheme.labelMedium),
+          Text(label, style: NovaTypography.textTheme.labelLarge),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
               color: NovaColors.paperCard,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(17),
               border: Border.all(
                 color: error == null
-                    ? NovaColors.borderOnLight
+                    ? NovaColors.textStrong.withValues(alpha: 0.14)
                     : NovaHue.rose.solid.withValues(alpha: 0.6),
               ),
             ),
@@ -293,7 +293,7 @@ class AuthSubmitButton extends StatelessWidget {
             : Text(
                 label,
                 style: TextStyle(
-                  fontFamily: 'Inter',
+                  fontFamily: 'Geist',
                   fontWeight: FontWeight.w700,
                   fontSize: 15,
                   color: NovaColors.textOnDark,
@@ -321,7 +321,7 @@ class AuthTextAction extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-            fontFamily: 'Inter',
+            fontFamily: 'Geist',
             fontWeight: FontWeight.w600,
             fontSize: 13,
             color: onTap == null ? NovaColors.textMuted : NovaColors.accentDeep,

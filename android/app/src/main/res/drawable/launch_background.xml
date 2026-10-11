@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Launch screen: the NOVA logo on white, the same as the app's first screen. -->
+<!-- Launch screen (D-133): the website's royal blue; the Flutter launch animation
+     then draws the NOVA logo on the same blue, without a white flash. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
     <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@drawable/launch_logo" />
+        <shape android:shape="rectangle">
+            <solid android:color="#FF1F54D6" />
+        </shape>
     </item>
 </layer-list>

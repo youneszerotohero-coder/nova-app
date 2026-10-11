@@ -2,22 +2,20 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
-import '../../core/i18n/labels.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../core/theme/nova_dimens.dart';
 import '../../core/theme/nova_typography.dart';
 import '../../core/widgets/motion.dart';
-import '../../core/widgets/nova_course_card.dart';
 import '../../core/widgets/nova_decor.dart';
 import '../../core/widgets/nova_page_header.dart';
 import '../../core/widgets/nova_scene_image.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../data/catalog_store.dart';
 import '../../data/models.dart';
+import '../home/widgets/nova_product_card.dart';
 import '../../core/state/app_state.dart';
 import 'course_detail_screen.dart';
-import 'pack_card.dart';
 
 /// Teacher detail, shaped like a profile: colour block, portrait, the
 /// numbers behind them, bio, subjects and the courses they teach.
@@ -195,7 +193,14 @@ class TeacherDetailScreen extends StatelessWidget {
               .map(
                 (Pack pack) => Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
-                  child: PackCard(pack: pack),
+                  child: NovaProductCard.offer(
+                    context,
+                    pack,
+                    width: double.infinity,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(builder: (_) => CourseDetailScreen.pack(pack: pack)),
+                    ),
+                  ),
                 ),
               )
               .toList(),
@@ -289,10 +294,9 @@ class _TeacherHeader extends StatelessWidget {
                               Text(
                                 context.tr('teacher.title').toUpperCase(),
                                 style: const TextStyle(
-                                  fontFamily: 'Inter',
+                                  fontFamily: 'Geist',
                                   fontWeight: FontWeight.w700,
                                   fontSize: 10,
-                                  letterSpacing: 1.8,
                                   color: Colors.white,
                                 ),
                               ),
@@ -359,11 +363,10 @@ class _Stat extends StatelessWidget {
           CountUpText(
             value,
             style: TextStyle(
-              fontFamily: 'InterDisplay',
+              fontFamily: 'BalooBhaijaan2',
               fontWeight: FontWeight.w700,
               fontSize: 22,
               height: 1,
-              letterSpacing: -0.8,
               color: NovaColors.textStrong,
             ),
           ),
@@ -389,32 +392,10 @@ class TeacherCourseRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NovaCourseCard(
-      aspectRatio: 16 / 9.4,
-      title: course.title,
-      scene: course.scene,
-      image: course.image,
-      icon: course.icon,
-      meta: context.trf(
-        'detail.lessonsStat',
-        {'n': course.lessons.length.toString()},
-      ),
-      price: course.owned || course.isFree || course.packOnly ? null : course.price,
-      compareAtPrice: course.compareAtPrice,
-      actionLabel: course.owned
-          ? context.tr('common.open')
-          : course.packOnly && !course.isFree
-              ? packPriceText(context, course)
-              : null,
-      badges: [
-        CardBadge('${course.subject} · ${course.level}'),
-        if (course.owned)
-          CardBadge(
-            context.tr('common.owned'),
-            icon: Icons.check_rounded,
-            tone: NovaColors.onlineGreen,
-          ),
-      ],
+    return NovaProductCard.unit(
+      context,
+      course,
+      width: double.infinity,
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => CourseDetailScreen(course: course),

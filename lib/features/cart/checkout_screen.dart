@@ -674,7 +674,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       onSubmitted: (_) => _applyCode(),
       style: NovaTypography.textTheme.bodyMedium!.copyWith(
         fontWeight: FontWeight.w600,
-        letterSpacing: 0.6,
         color: applied ? NovaHue.mint.onSurface : NovaColors.textStrong,
       ),
       decoration: InputDecoration(
@@ -1344,7 +1343,7 @@ class _ResultSheet extends StatelessWidget {
                       child: Text(
                         context.tr('checkout.keepExploring'),
                         style: TextStyle(
-                          fontFamily: 'Inter',
+                          fontFamily: 'Geist',
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
                           color: NovaColors.textStrong,
@@ -1376,7 +1375,7 @@ class _ResultSheet extends StatelessWidget {
                       child: Text(
                         context.tr('checkout.viewOrders'),
                         style: TextStyle(
-                          fontFamily: 'Inter',
+                          fontFamily: 'Geist',
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
                           color: NovaColors.textOnDark,

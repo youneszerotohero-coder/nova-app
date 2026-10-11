@@ -181,11 +181,10 @@ class StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextStyle valueStyle = TextStyle(
-      fontFamily: 'InterDisplay',
+      fontFamily: 'BalooBhaijaan2',
       fontWeight: FontWeight.w700,
       fontSize: 30,
       height: 1,
-      letterSpacing: -1.2,
       color: NovaColors.textStrong,
     );
 

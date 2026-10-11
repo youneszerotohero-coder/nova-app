@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart' show VideoTrack, VideoTrackRenderer, VideoViewFit;
 
+import '../../core/utils/screen_awake.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
@@ -37,7 +38,7 @@ class LiveSpeakerLabel extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(
-          fontFamily: 'Inter',
+          fontFamily: 'Geist',
           fontWeight: FontWeight.w700,
           fontSize: 12,
           color: Colors.white,
@@ -73,6 +74,8 @@ class _LiveSpeakingStageState extends State<LiveSpeakingStage> {
   @override
   void initState() {
     super.initState();
+    // D-133: the Student talking with the class keeps the screen on.
+    ScreenAwake.hold(this);
     _watermarkTimer = Timer.periodic(const Duration(seconds: 12), (_) {
       if (mounted) setState(() => _spot = (_spot + 1) % liveWatermarkSpots.length);
     });
@@ -80,6 +83,7 @@ class _LiveSpeakingStageState extends State<LiveSpeakingStage> {
 
   @override
   void dispose() {
+    ScreenAwake.release(this);
     _watermarkTimer?.cancel();
     super.dispose();
   }
@@ -153,7 +157,7 @@ class _LiveSpeakingStageState extends State<LiveSpeakingStage> {
           Text(
             context.tr('live.youAreSpeaking'),
             style: const TextStyle(
-              fontFamily: 'Inter',
+              fontFamily: 'Geist',
               fontWeight: FontWeight.w700,
               fontSize: 11,
               color: Colors.white,
@@ -187,7 +191,7 @@ class _LiveSpeakingStageState extends State<LiveSpeakingStage> {
                   child: Text(
                     context.tr('live.tapToHear'),
                     style: const TextStyle(
-                      fontFamily: 'Inter',
+                      fontFamily: 'Geist',
                       fontWeight: FontWeight.w700,
                       fontSize: 12.5,
                       color: NovaColors.ink950,
@@ -222,7 +226,7 @@ class _VideoPausedNotice extends StatelessWidget {
               context.tr('live.videoPaused'),
               textAlign: TextAlign.center,
               style: const TextStyle(
-                fontFamily: 'Inter',
+                fontFamily: 'Geist',
                 fontWeight: FontWeight.w700,
                 fontSize: 13,
                 color: Colors.white,
@@ -233,7 +237,7 @@ class _VideoPausedNotice extends StatelessWidget {
               context.tr('live.videoPausedBody'),
               textAlign: TextAlign.center,
               style: const TextStyle(
-                fontFamily: 'Inter',
+                fontFamily: 'Geist',
                 fontSize: 11.5,
                 height: 1.4,
                 color: NovaColors.textMutedOnDark,

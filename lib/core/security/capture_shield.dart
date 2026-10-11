@@ -158,7 +158,7 @@ class _Shield extends StatelessWidget {
                           context.tr('capture.blocked'),
                           textAlign: TextAlign.center,
                           style: const TextStyle(
-                            fontFamily: 'Inter',
+                            fontFamily: 'Geist',
                             fontWeight: FontWeight.w600,
                             fontSize: 15,
                             height: 1.4,

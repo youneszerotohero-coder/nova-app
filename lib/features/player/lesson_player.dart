@@ -33,33 +33,21 @@ enum _Stage { idle, checking, playing, failed }
 class LessonPlayer extends StatefulWidget {
   const LessonPlayer({
     super.key,
-    required Course this.course,
-    required Lesson this.lesson,
-    required ValueChanged<Json> this.onProgress,
+    required this.course,
+    required this.lesson,
+    required this.onProgress,
     this.fullscreen = false,
     this.onToggleFullscreen,
-  }) : replayOf = null;
+  });
 
-  /// The protected replay of a finished Live: same player and rules,
-  /// no progress, watermark from the signed-in Student (web replay).
-  const LessonPlayer.replay({
-    super.key,
-    required LiveSession live,
-    this.fullscreen = false,
-    this.onToggleFullscreen,
-  })  : replayOf = live,
-        course = null,
-        lesson = null,
-        onProgress = null;
-
-  final Course? course;
-  final Lesson? lesson;
-  final LiveSession? replayOf;
+  /// D-132: a past Live plays here too, as the Lesson it became.
+  final Course course;
+  final Lesson lesson;
 
   /// A saved `/progress` response (resume, %, completed) for the lesson.
-  final ValueChanged<Json>? onProgress;
+  final ValueChanged<Json> onProgress;
 
-  String get mediaKey => lesson != null ? 'lesson-${lesson!.id}' : 'replay-${replayOf!.id}';
+  String get mediaKey => 'lesson-${lesson.id}';
   final bool fullscreen;
   final VoidCallback? onToggleFullscreen;
 
@@ -174,10 +162,9 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
     _startWatch?.cancel();
   }
 
-  String get _content => widget.lesson != null ? 'lesson' : 'replay';
-  NovaApi? get _diagnosticsApi =>
-      widget.lesson != null ? AppState.instance.learning.api : AppState.instance.live?.api;
-  int get _contentId => widget.lesson?.id ?? widget.replayOf!.id;
+  String get _content => 'lesson';
+  NovaApi? get _diagnosticsApi => AppState.instance.learning.api;
+  int get _contentId => widget.lesson.id;
 
   /// Texts may speak of protection only in a known mode A (D-077).
   bool get _neutral {
@@ -227,9 +214,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
 
     final PlaybackAuthorization auth;
     try {
-      auth = widget.lesson != null
-          ? await app.learning.playback(widget.lesson!.id, clear: requested != null)
-          : await app.live!.replay(widget.replayOf!.id, clear: requested != null);
+      auth = await app.learning.playback(widget.lesson.id, clear: requested != null);
     } on ApiException catch (error) {
       if (!mounted) return;
       if (error.code == 'VIDEO_CLEAR_DELIVERY_DISABLED') {
@@ -441,8 +426,8 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
   Future<void> _save(int seconds, {bool force = false}) async {
     final PlaybackAuthorization? auth = _auth;
     final ProgressReporter? reporter = _reporter;
-    final Lesson? lesson = widget.lesson;
-    if (auth == null || reporter == null || lesson == null || _saving) return;
+    final Lesson lesson = widget.lesson;
+    if (auth == null || reporter == null || _saving) return;
     if (auth.progressSession.isEmpty) return;
     if (!force && !reporter.due(seconds)) return;
     if (force && seconds == reporter.lastSaved) return;
@@ -454,7 +439,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
         positionSeconds: seconds,
         session: auth.progressSession,
       );
-      widget.onProgress?.call(row);
+      widget.onProgress(row);
     } on ApiException catch (error) {
       // The progress session expired or was replaced: playback must be
       // re-authorized before anything else is recorded.
@@ -556,9 +541,9 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
             Opacity(
               opacity: _stage == _Stage.idle ? 1 : 0.35,
               child: NovaSceneImage(
-                scene: widget.course?.scene ?? widget.replayOf!.scene,
-                image: widget.course?.image ?? widget.replayOf!.image,
-                icon: widget.course?.icon ?? Icons.movie_rounded,
+                scene: widget.course.scene,
+                image: widget.course.image,
+                icon: widget.course.icon,
                 iconScale: 0.9,
               ),
             ),
@@ -684,7 +669,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
             Text(
               context.tr(_neutral ? 'player.play' : 'player.checkPlay'),
               style: const TextStyle(
-                fontFamily: 'Inter',
+                fontFamily: 'Geist',
                 fontWeight: FontWeight.w700,
                 fontSize: 14,
                 color: Colors.white,
@@ -710,7 +695,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
           context.tr(_phaseKey),
           textAlign: TextAlign.center,
           style: const TextStyle(
-            fontFamily: 'Inter',
+            fontFamily: 'Geist',
             fontWeight: FontWeight.w600,
             fontSize: 13,
             color: Colors.white,
@@ -739,7 +724,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
           context.tr(playerFailureKey(category, clear: _failureClear)),
           textAlign: TextAlign.center,
           style: const TextStyle(
-            fontFamily: 'Inter',
+            fontFamily: 'Geist',
             fontWeight: FontWeight.w600,
             fontSize: 13,
             height: 1.4,
@@ -767,7 +752,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
           Text(
             _auth?.supportUrl ?? 'noova.elearning@gmail.com',
             style: TextStyle(
-              fontFamily: 'Inter',
+              fontFamily: 'Geist',
               fontSize: 12,
               color: Colors.white.withValues(alpha: 0.75),
             ),
@@ -812,7 +797,7 @@ class ProtectedBadge extends StatelessWidget {
           Text(
             context.tr(clear ? 'player.clearBadge' : 'player.protected'),
             style: const TextStyle(
-              fontFamily: 'Inter',
+              fontFamily: 'Geist',
               fontWeight: FontWeight.w700,
               fontSize: 10,
               color: Colors.white,
@@ -851,7 +836,7 @@ class PlayerWatermark extends StatelessWidget {
       ),
       child: DefaultTextStyle(
         style: TextStyle(
-          fontFamily: 'Inter',
+          fontFamily: 'Geist',
           fontWeight: FontWeight.w700,
           fontSize: 10.5,
           height: 1.35,
@@ -942,7 +927,7 @@ class _Controls extends StatelessWidget {
                 Text(
                   '${clockLabel(state.position)} / ${clockLabel(duration)}',
                   style: const TextStyle(
-                    fontFamily: 'Inter',
+                    fontFamily: 'Geist',
                     fontWeight: FontWeight.w600,
                     fontSize: 11,
                     color: Colors.white,

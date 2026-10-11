@@ -149,7 +149,7 @@ class _SchoolYearScreenState extends State<SchoolYearScreen> {
                     child: Text(
                       context.tr('settings.signOut'),
                       style: TextStyle(
-                        fontFamily: 'Inter',
+                        fontFamily: 'Geist',
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
                         color: NovaColors.textMuted,

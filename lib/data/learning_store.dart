@@ -40,6 +40,17 @@ class LearningStore extends ChangeNotifier {
 
   bool owns(int courseId) => _ownedIds.contains(courseId);
 
+  /// The Lesson to continue in an owned Course, as the server chose it
+  /// (`/me/dashboard` `resume_lesson`: the unfinished one furthest along).
+  ({int id, String title})? resumeLesson(int courseId) {
+    for (final Json row in _dashboard.list('courses')) {
+      if (row.integer('id') != courseId) continue;
+      final Json? lesson = row.obj('resume_lesson');
+      return lesson == null ? null : (id: lesson.integer('lesson_id'), title: lesson.str('title'));
+    }
+    return null;
+  }
+
   Future<void> load() async {
     final NovaApi? api = _api;
     if (api == null) return;

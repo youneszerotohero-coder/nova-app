@@ -12,6 +12,7 @@ import '../../data/account_store.dart';
 import '../../data/json.dart';
 import '../../data/models.dart';
 import '../learning/live_room_screen.dart';
+import '../learning/open_course.dart';
 
 /// Opens [notification] as a tap in the list does: marks it read, and a
 /// Live notification also opens its room (the web notification links
@@ -22,6 +23,18 @@ void openNotification(
   AppNotification notification,
 ) {
   app.account.markRead(notification);
+  // D-132: a past Live is a Lesson; its notification and new-lesson ones open it.
+  final int lessonId = notification.data.integer('lesson_id', notification.type == 'lesson_published' ? notification.data.integer('entity_id') : 0);
+  final int courseId = notification.data.integer('course_id');
+  final int? fromLive = notification.liveId == null
+      ? null
+      : app.learning.lives.where((LiveSession l) => l.id == notification.liveId).firstOrNull?.lessonId;
+  final Course? course = app.learning.owned.where((Course c) => c.id == courseId || c.slug == notification.data.str('course_slug')).firstOrNull ??
+      app.learning.owned.where((Course c) => c.slug == app.learning.lives.where((LiveSession l) => l.id == notification.liveId).firstOrNull?.courseSlug).firstOrNull;
+  if (course != null && (lessonId > 0 || fromLive != null)) {
+    openOwnedCourse(navigator.context, course, lessonId: lessonId > 0 ? lessonId : fromLive);
+    return;
+  }
   final int? liveId = notification.liveId;
   if (liveId == null) return;
   final LiveSession live = app.learning.lives.firstWhere(

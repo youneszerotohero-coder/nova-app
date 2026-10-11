@@ -70,11 +70,10 @@ class GradientPillButton extends StatelessWidget {
               Text(
                 label!,
                 style: const TextStyle(
-                  fontFamily: 'Inter',
+                  fontFamily: 'Geist',
                   fontWeight: FontWeight.w700,
                   fontSize: 15,
                   height: 1,
-                  letterSpacing: -0.2,
                   color: Colors.white,
                 ),
               ),

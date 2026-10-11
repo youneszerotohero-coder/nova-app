@@ -214,7 +214,7 @@ class _Banner extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontFamily: 'Inter',
+                          fontFamily: 'Geist',
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
                           color: NovaColors.textOnDark,
@@ -227,7 +227,7 @@ class _Banner extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontFamily: 'Inter',
+                            fontFamily: 'Geist',
                             fontWeight: FontWeight.w500,
                             fontSize: 12.5,
                             height: 1.35,

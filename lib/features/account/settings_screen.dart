@@ -150,7 +150,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Text(
                     context.tr('settings.signOut'),
                     style: const TextStyle(
-                      fontFamily: 'Inter',
+                      fontFamily: 'Geist',
                       fontWeight: FontWeight.w700,
                       fontSize: 14.5,
                       color: NovaColors.heartRed,

@@ -65,7 +65,7 @@ class AvatarStack extends StatelessWidget {
             Text(
               '+$extra',
               style: TextStyle(
-                fontFamily: 'Inter',
+                fontFamily: 'Geist',
                 fontWeight: FontWeight.w700,
                 fontSize: size * 0.43,
                 height: 1,

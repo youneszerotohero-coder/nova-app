@@ -1,209 +1,183 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/i18n/nova_strings.dart';
-import '../../core/theme/nova_colors.dart';
-import '../../core/theme/nova_dimens.dart';
-import '../../core/theme/nova_typography.dart';
-import '../../core/widgets/badge_icon_button.dart';
-import '../../core/widgets/circle_icon_button.dart';
-import '../../core/widgets/hue_card.dart';
-import '../../core/widgets/motion.dart';
-import '../../core/widgets/section_header.dart';
-import '../account/notifications_screen.dart';
-import '../account/profile_screen.dart';
-import '../auth/require_account.dart';
-import '../detail/course_detail_screen.dart';
-import '../detail/teacher_detail_screen.dart';
 import '../../core/state/app_state.dart';
+import '../../core/theme/nova_colors.dart';
+import '../../core/theme/nova_typography.dart';
+import '../../core/widgets/hero_style.dart';
+import '../../core/widgets/motion.dart';
+import '../../core/widgets/nova_page_header.dart';
+import '../../core/widgets/pressable_scale.dart';
 import '../../data/models.dart';
-import 'widgets/course_card.dart';
-import 'widgets/greeting_header.dart';
-import 'widgets/pack_banner_carousel.dart';
-import 'widgets/teacher_card.dart';
+import '../detail/course_detail_screen.dart';
+import '../explore/explore_screen.dart';
+import '../learning/live_room_screen.dart';
+import '../learning/open_course.dart';
+import '../shell/shell_screen.dart';
+import '../shell/student_top_bar.dart';
+import 'widgets/nova_product_card.dart';
 
-/// Promotional home: greeting, the pack hero slider, the two headline
-/// numbers, then the courses and teachers rails. Search and filtering
-/// live on Explore.
+/// The website's account home (`/account`, D-084/D-125): the greeting band
+/// with "Continue learning" and "See the Offers", the live-now bar while one
+/// of the Student's Lives runs, then the Units (theirs first) and the Offers.
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({
-    super.key,
-    this.onMenuTap,
-    this.onExplore,
-  });
-
-  /// Opens the app menu; provided by the shell so the drawer overlays
-  /// the whole application.
-  final VoidCallback? onMenuTap;
-
-  /// Switches the shell to the Explore tab ("See all").
-  final VoidCallback? onExplore;
+  const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final AppState app = AppScope.of(context);
-    final List<Course> courses = app.courses;
-    final List<Pack> packs = app.catalog.offers;
-    final List<Teacher> teachers = app.catalog.teachers;
     final StudentProfile? student = app.profile;
+    final List<Course> courses = <Course>[
+      ...app.courses.where((Course c) => c.owned),
+      ...app.courses.where((Course c) => !c.owned),
+    ];
+    final List<Pack> packs = app.catalog.offers;
+    final LiveSession? liveNow = app.learning.lives.where((LiveSession l) => l.status == LiveStatus.live).firstOrNull;
+    final bool owns = app.learning.owned.isNotEmpty;
+    final String forward = Directionality.of(context) == TextDirection.rtl ? '←' : '→';
 
     return RefreshIndicator(
-      onRefresh: () => Future.wait(<Future<void>>[
-        app.catalog.load(),
-        if (app.session.signedIn) app.refreshAccount(),
-      ]),
+      onRefresh: () => Future.wait(<Future<void>>[app.catalog.load(), app.refreshAccount()]),
       child: ListView(
-      // Clear the status bar, then a little air above the header.
-      padding: EdgeInsets.only(
-        top: MediaQuery.paddingOf(context).top + 10,
-        bottom: 130,
-      ),
-      children: [
-        _Header(onMenuTap: onMenuTap),
-        const SizedBox(height: 20),
-        GreetingHeader(
-          name: student?.firstName ?? '',
-          subtitle: context.tr('home.welcome'),
-          avatarLabel: student?.fullName ?? '',
-          avatarPhoto: student?.photo,
-          onAvatarTap: () {
-            if (!requireAccount(context)) return;
-            Navigator.of(context).push(
-              // Profile is a tab screen; pushed outside the shell it needs
-              // its own Scaffold (Material) or its text renders unstyled.
-              MaterialPageRoute<void>(
-                builder: (_) => const Scaffold(body: ProfileScreen()),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 22),
-        if (packs.isNotEmpty)
-        PackBannerCarousel(
-          packs: packs,
-          onPackTap: (Pack pack) => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => CourseDetailScreen.pack(pack: pack),
+        padding: const EdgeInsets.only(bottom: 130),
+        children: [
+          NovaPageHeader(
+            showBack: false,
+            kicker: _today(context),
+            title: student == null || student.firstName.isEmpty
+                ? context.tr('home.greetingGeneric')
+                : context.trf('home.greeting', {'name': student.firstName}),
+            lead: context.tr('home.lead'),
+            bottom: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                NovaButton(
+                  label: context.tr('home.continue'),
+                  variant: NovaButtonVariant.yellow,
+                  chipIcon: Icons.arrow_forward_rounded,
+                  onTap: () => ShellNav.maybeOf(context)?.select(ShellScreen.units),
+                ),
+                NovaButton(
+                  label: context.tr('home.seeOffers'),
+                  variant: NovaButtonVariant.onBlueGhost,
+                  icon: Icons.auto_awesome_outlined,
+                  onTap: () => _explore(context),
+                ),
+              ],
             ),
           ),
-        ),
-        const SizedBox(height: 26),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            children: [
-              Expanded(
-                child: StatTile(
-                  icon: Icons.menu_book_rounded,
-                  hue: NovaHue.peach,
-                  label: context.tr('stat.lessons'),
-                  value: student?.lessonsCompleted ?? 0,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                // Watch hours are not provided by the backend; owned
-                // courses are.
-                child: StatTile(
-                  icon: Icons.school_rounded,
-                  hue: NovaHue.lilac,
-                  label: context.tr('stat.courses'),
-                  value: app.learning.owned.length,
-                ),
-              ),
-            ],
+          if (liveNow != null) ...[
+            const SizedBox(height: 14),
+            _LiveNowBar(live: liveNow),
+          ],
+          const SizedBox(height: 26),
+          _SectionHead(
+            title: context.tr('home.unitsTitle'),
+            text: owns ? context.tr('home.unitsTextOwned') : context.tr('home.unitsText'),
+            action: '${context.tr('home.allUnits')} $forward',
+            onAction: () => _explore(context),
           ),
-        ),
-        const SizedBox(height: NovaDimens.sectionGap),
-        SectionHeader(
-          title: context.tr('home.popular'),
-          actionLabel: context.tr('common.seeAll'),
-          onAction: onExplore,
-        ),
-        SizedBox(
-          // Extra room under the cards so their shadow is not clipped.
-          height: CourseCard.height + 18,
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-            scrollDirection: Axis.horizontal,
-            itemCount: courses.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 14),
-            itemBuilder: (_, int index) => Entrance(
-              delay: Duration(milliseconds: 60 * index),
-              child: CourseCard(
-                course: courses[index],
-                index: index,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        CourseDetailScreen(course: courses[index]),
+          const SizedBox(height: 14),
+          if (courses.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: HeroEmpty(icon: Icons.auto_stories_outlined, title: context.tr('home.emptyTitle'), message: context.tr('home.emptyText')),
+            )
+          else
+            _Rail(
+              children: [
+                for (final Course course in courses)
+                  NovaProductCard.unit(
+                    context,
+                    course,
+                    onTap: () => course.owned
+                        ? openOwnedCourse(context, course)
+                        : Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => CourseDetailScreen(course: course))),
                   ),
-                ),
-              ),
+              ],
             ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        SectionHeader(
-          title: context.tr('home.ourTeachers'),
-
-          actionLabel: context.tr('common.seeAll'),
-          onAction: onExplore,
-        ),
-        SizedBox(
-          height: 78,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            scrollDirection: Axis.horizontal,
-            itemCount: teachers.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder: (_, int index) => TeacherCard(
-              teacher: teachers[index],
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) =>
-                      TeacherDetailScreen(teacher: teachers[index]),
-                ),
-              ),
+          if (packs.isNotEmpty) ...[
+            const SizedBox(height: 28),
+            _SectionHead(
+              title: context.tr('home.offersTitle'),
+              text: context.tr('home.offersText'),
+              action: '${context.tr('home.allOffers')} $forward',
+              onAction: () => _explore(context),
             ),
-          ),
-        ),
-      ],
+            const SizedBox(height: 14),
+            _Rail(
+              children: [
+                for (final Pack pack in packs)
+                  NovaProductCard.offer(
+                    context,
+                    pack,
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => CourseDetailScreen.pack(pack: pack))),
+                  ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
+
+  static void _explore(BuildContext context) =>
+      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const Scaffold(body: ExploreScreen())));
+
+  /// "الأحد 11 أكتوبر": the website's eyebrow, Algeria time.
+  static String _today(BuildContext context) {
+    final DateTime now = algeriaTime(clock.now());
+    final NovaLang lang = AppScope.of(context).lang;
+    const Map<NovaLang, List<String>> days = <NovaLang, List<String>>{
+      NovaLang.ar: <String>['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'],
+      NovaLang.fr: <String>['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
+      NovaLang.en: <String>['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+    };
+    const Map<NovaLang, List<String>> months = <NovaLang, List<String>>{
+      NovaLang.ar: <String>['جانفي', 'فيفري', 'مارس', 'أفريل', 'ماي', 'جوان', 'جويلية', 'أوت', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'],
+      NovaLang.fr: <String>['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'],
+      NovaLang.en: <String>['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+    };
+    final String day = days[lang]![now.weekday - 1];
+    final String month = months[lang]![now.month - 1];
+    return lang == NovaLang.en ? '$day, $month ${now.day}' : '$day ${now.day} $month';
+  }
 }
 
-class _Header extends StatelessWidget {
-  const _Header({this.onMenuTap});
+/// `.homeSectionHead`: title, one line, and the white "All …" pill.
+class _SectionHead extends StatelessWidget {
+  const _SectionHead({required this.title, required this.text, required this.action, required this.onAction});
 
-  final VoidCallback? onMenuTap;
+  final String title;
+  final String text;
+  final String action;
+  final VoidCallback onAction;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleIconButton(
-            icon: Icons.menu_rounded,
-            semanticLabel: 'Menu',
-            onTap: onMenuTap,
-          ),
-          const Spacer(),
-          const _Wordmark(),
-          const Spacer(),
-          BadgeIconButton(
-            icon: Icons.notifications_none_rounded,
-            count: AppScope.of(context).unreadCount,
-            semanticLabel: 'Notifications',
-            onTap: () {
-              if (!requireAccount(context)) return;
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const NotificationsScreen(),
-                ),
-              );
-            },
+          Text(title, style: NovaTypography.textTheme.displaySmall),
+          const SizedBox(height: 4),
+          Text(text, style: NovaTypography.muted(NovaTypography.textTheme.bodyMedium!)),
+          const SizedBox(height: 12),
+          PressableScale(
+            onTap: onAction,
+            semanticLabel: action,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: NovaColors.paperCard,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: NovaColors.borderOnLight),
+              ),
+              child: Text(action, style: NovaTypography.textTheme.labelLarge!.copyWith(color: NovaColors.accent)),
+            ),
           ),
         ],
       ),
@@ -211,30 +185,105 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _Wordmark extends StatelessWidget {
-  const _Wordmark();
+class _Rail extends StatelessWidget {
+  const _Rail({required this.children});
+
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'nova',
-          style: NovaTypography.textTheme.headlineMedium!.copyWith(
-            color: NovaColors.textStrong,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (int i = 0; i < children.length; i++) ...[
+            if (i > 0) const SizedBox(width: 14),
+            Entrance(delay: Duration(milliseconds: 60 * i), child: children[i]),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// `.homeLiveNow`: a Live of the Student is on; one tap opens its room.
+class _LiveNowBar extends StatelessWidget {
+  const _LiveNowBar({required this.live});
+
+  final LiveSession live;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: PressableScale(
+        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LiveRoomScreen(live: live))),
+        semanticLabel: live.title,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: NovaColors.yellow, borderRadius: BorderRadius.circular(20)),
+          child: Row(
+            children: [
+              const _Pulse(),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      live.waitingRoomOpen && live.rawStatus != 'live' ? context.tr('home.waitingRoom') : context.tr('home.liveNow'),
+                      style: NovaTypography.textTheme.titleMedium!.copyWith(color: NovaColors.yellowInk),
+                    ),
+                    Text(live.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: NovaTypography.textTheme.bodySmall!.copyWith(color: NovaColors.yellowInk)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.play_circle_fill_rounded, size: 34, color: NovaColors.accent),
+            ],
           ),
         ),
-        const SizedBox(width: 4),
-        Container(
-          width: 7,
-          height: 7,
-          decoration: const BoxDecoration(
-            gradient: NovaColors.accentGradient,
-            shape: BoxShape.circle,
-          ),
+      ),
+    );
+  }
+}
+
+class _Pulse extends StatefulWidget {
+  const _Pulse();
+
+  @override
+  State<_Pulse> createState() => _PulseState();
+}
+
+class _PulseState extends State<_Pulse> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 18,
+      height: 18,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (BuildContext context, _) => Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 8 + 10 * _c.value,
+              height: 8 + 10 * _c.value,
+              decoration: BoxDecoration(color: const Color(0xFFE5484D).withValues(alpha: 1 - _c.value), shape: BoxShape.circle),
+            ),
+            Container(width: 9, height: 9, decoration: const BoxDecoration(color: Color(0xFFE5484D), shape: BoxShape.circle)),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

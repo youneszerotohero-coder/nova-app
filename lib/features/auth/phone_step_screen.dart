@@ -180,7 +180,7 @@ class _PhoneStepScreenState extends State<PhoneStepScreen> {
                         : Text(
                             context.tr('phone.save'),
                             style: TextStyle(
-                              fontFamily: 'Inter',
+                              fontFamily: 'Geist',
                               fontWeight: FontWeight.w700,
                               fontSize: 15.5,
                               color: NovaColors.textOnDark,
@@ -198,7 +198,7 @@ class _PhoneStepScreenState extends State<PhoneStepScreen> {
                       child: Text(
                         context.tr('settings.signOut'),
                         style: TextStyle(
-                          fontFamily: 'Inter',
+                          fontFamily: 'Geist',
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                           color: NovaColors.textMuted,

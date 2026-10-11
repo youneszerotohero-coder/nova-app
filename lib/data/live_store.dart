@@ -4,20 +4,17 @@ import 'dart:math';
 import '../core/api/nova_api.dart';
 import 'json.dart';
 import 'models.dart';
-import 'playback_models.dart';
 
 /// `GET /lives/{id}`: the session plus the Student's own hand state.
 class LiveDetail {
   const LiveDetail({
     required this.live,
     required this.mediaState,
-    required this.replayAvailable,
     required this.startedAt,
     required this.serverTime,
     required this.handStatus,
     required this.muted,
     this.speaker,
-    this.replayDelivery,
   });
 
   factory LiveDetail.fromJson(Json body) {
@@ -26,25 +23,18 @@ class LiveDetail {
     return LiveDetail(
       live: LiveSession.fromJson(data),
       mediaState: data.strOrNull('media_state'),
-      replayAvailable: data.flag('replay_available'),
       startedAt: data.date('started_at'),
       serverTime: server,
       handStatus: body.strOrNull('hand_status'),
       muted: body.flag('muted'),
       speaker: LiveSpeakerName.fromJson(body.obj('speaker')),
-      replayDelivery: data.strOrNull('replay_delivery'),
     );
   }
-
-  /// The Videos switch the Replay player follows (D-070/D-077), sent while
-  /// a replay is available, so its texts match the mode from the start.
-  final String? replayDelivery;
 
   final LiveSession live;
 
   /// `preparing | ready | recovering | unavailable`, only while live.
   final String? mediaState;
-  final bool replayAvailable;
   final DateTime? startedAt;
   final DateTime? serverTime;
 
@@ -262,13 +252,6 @@ class LiveStore {
   /// which mode A refuses with 403 `LIVE_CLEAR_DELIVERY_DISABLED`.
   Future<LiveJoin> joinClear(int id, LivePolicy policy) async => LiveJoin.fromJson(
       (await _api.post('/lives/$id/join', policy.isClear ? null : const <String, String>{'delivery': 'clear'}))
-              .obj('data') ??
-          <String, dynamic>{});
-
-  /// Replay of a finished Live: protected like a lesson, no progress;
-  /// [clear] asks for the watermarked clear copy (D-070 mode B).
-  Future<PlaybackAuthorization> replay(int id, {bool clear = false}) async => PlaybackAuthorization.fromJson(
-      (await _api.get('/lives/$id/replay/playback', query: clear ? const <String, String>{'delivery': 'clear'} : null))
               .obj('data') ??
           <String, dynamic>{});
 

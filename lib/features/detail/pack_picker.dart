@@ -77,7 +77,7 @@ class _PackPicker extends StatelessWidget {
                 child: Text(
                   context.tr('menu.close'),
                   style: TextStyle(
-                    fontFamily: 'Inter',
+                    fontFamily: 'Geist',
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                     color: NovaColors.textMuted,

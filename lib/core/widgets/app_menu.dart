@@ -429,7 +429,7 @@ class _MenuRow extends StatelessWidget {
                       child: Text(
                         item.badgeCount > 9 ? '9+' : '${item.badgeCount}',
                         style: const TextStyle(
-                          fontFamily: 'Inter',
+                          fontFamily: 'Geist',
                           fontWeight: FontWeight.w800,
                           fontSize: 9,
                           height: 1.3,

@@ -46,3 +46,6 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Screenshot tour pictures (test/app_tour_test.dart), rendered on demand.
+/test/goldens/tour/

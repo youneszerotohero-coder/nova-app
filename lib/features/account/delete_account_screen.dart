@@ -147,7 +147,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                         : Text(
                             context.tr('deleteAccount.confirm'),
                             style: const TextStyle(
-                              fontFamily: 'Inter',
+                              fontFamily: 'Geist',
                               fontWeight: FontWeight.w700,
                               fontSize: 14.5,
                               color: Colors.white,

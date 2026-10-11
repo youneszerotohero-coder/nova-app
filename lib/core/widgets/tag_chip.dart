@@ -47,11 +47,10 @@ class TagChip extends StatelessWidget {
         label,
         style: NovaTypography.onDark(
           TextStyle(
-            fontFamily: 'Inter',
+            fontFamily: 'Geist',
             fontWeight: FontWeight.w600,
             fontSize: fontSize,
             height: 1.2,
-            letterSpacing: -0.1,
             color: textColor ?? Colors.white,
           ),
         ),

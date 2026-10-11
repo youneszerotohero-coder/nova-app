@@ -5,19 +5,25 @@ import 'package:nova_mobile/core/api/api_exception.dart';
 import 'package:nova_mobile/core/state/app_state.dart';
 import 'package:nova_mobile/core/theme/nova_theme.dart';
 import 'package:nova_mobile/core/utils/phone.dart';
+import 'package:nova_mobile/core/widgets/hero_style.dart';
 import 'package:nova_mobile/data/account_store.dart';
 import 'package:nova_mobile/data/catalog_store.dart';
 import 'package:nova_mobile/data/models.dart';
 import 'package:nova_mobile/data/session_store.dart';
+import 'package:nova_mobile/features/auth/auth_gateway_screen.dart';
+import 'package:nova_mobile/features/auth/auth_hero.dart';
 import 'package:nova_mobile/features/auth/change_password_screen.dart';
 import 'package:nova_mobile/features/auth/login_screen.dart';
 import 'package:nova_mobile/features/auth/phone_step_screen.dart';
 import 'package:nova_mobile/features/auth/register_screen.dart';
 import 'package:nova_mobile/features/shell/app_gate.dart';
+import 'package:nova_mobile/features/shell/shell_screen.dart';
+import 'package:nova_mobile/features/shell/student_top_bar.dart';
 
 import 'fixtures/fake_api.dart';
 import 'fixtures/fixture_app.dart';
 import 'fixtures/fixture_data.dart';
+import 'nova_font_loader.dart';
 
 /// D-078 / D-079 on the Student app, as on the website: one account per
 /// phone number, any spelling of that number, passwords not the phone.
@@ -122,7 +128,14 @@ Future<String> _text(WidgetTester tester, Object error, NovaLang lang) async {
 String _fieldText(WidgetTester tester, int index) =>
     tester.widget<TextField>(find.byType(TextField).at(index)).controller!.text;
 
+/// A title drawn with its circled word (`*word*`), by its plain text.
+Finder _heroTitle(String plain) =>
+    find.byWidgetPredicate((Widget w) => w is HeroTitle && HeroTitle.plain(w.text) == plain);
+
 void main() {
+  // Real typography, so the small-phone layout is the one Students see.
+  setUpAll(loadNovaFonts);
+
   group('Algerian mobile numbers (website normalizeAlgerianMobile)', () {
     const Map<String, String?> table = <String, String?>{
       '0555123456': '0555123456',
@@ -205,65 +218,79 @@ void main() {
       expect(backend.requests.where((FakeRequest r) => r.path == '/auth/register'), isEmpty);
     });
 
-    testWidgets('409 PHONE_ALREADY_REGISTERED offers to sign in with that number', (tester) async {
-      final FakeBackend backend = FakeBackend(<String, FakeResponse>{
-        'POST /auth/register': _error(409, 'PHONE_ALREADY_REGISTERED',
-            'An account already exists with this phone number.', <String, Object>{
-          'phone': <String>[
-            'An account already exists with this phone number. Sign in with this number, '
-                'or contact the school if you forgot your password.',
-          ],
-        }),
+    // Registration opens from the first screen's "I'm new here" (D-133) or
+    // from the sign-in screen's "New to Nova? Create an account".
+    for (final bool fromGateway in <bool>[true, false]) {
+      testWidgets(
+          '409 PHONE_ALREADY_REGISTERED offers to sign in with that number '
+          '(${fromGateway ? 'from the first screen' : 'from sign-in'})', (tester) async {
+        final FakeBackend backend = FakeBackend(<String, FakeResponse>{
+          'POST /auth/register': _error(409, 'PHONE_ALREADY_REGISTERED',
+              'An account already exists with this phone number.', <String, Object>{
+            'phone': <String>[
+              'An account already exists with this phone number. Sign in with this number, '
+                  'or contact the school if you forgot your password.',
+            ],
+          }),
+        });
+        backend.routes.addAll(_references);
+        await _pump(
+          tester,
+          _install(
+            SessionStore(fakeApi(backend)),
+            references: ReferenceStore(fakeApi(backend)),
+          ),
+          fromGateway ? const AuthGatewayScreen() : const LoginScreen(),
+        );
+        if (fromGateway) {
+          await tester.tap(find.text('Create my account'));
+        } else {
+          await tester.tap(find.byType(AuthModeSwitch));
+        }
+        await tester.pumpAndSettle();
+        expect(find.byType(RegisterScreen), findsOneWidget);
+
+        await tester.enterText(find.byType(TextField).at(0), 'Ines');
+        await tester.enterText(find.byType(TextField).at(1), 'Benali');
+        await tester.enterText(find.byType(TextField).at(2), '0555123456');
+        await tester.enterText(find.byType(TextField).at(3), 'NovaSecure9!');
+        await tester.enterText(find.byType(TextField).at(4), 'NovaSecure9!');
+        await tester.tap(find.text('Next step'));
+        await tester.pumpAndSettle();
+        await _pick(tester, 0, '2AS');
+        await _pick(tester, 2, 'Alger');
+        await _pick(tester, 3, 'Bab Ezzouar');
+        await tester.tap(find.byType(Checkbox));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Create my space'));
+        await tester.pumpAndSettle();
+
+        // Sent exactly as typed (D-081).
+        final FakeRequest register = backend.requests.last;
+        expect(register.path, '/auth/register');
+        expect((register.data! as Map<String, Object?>)['phone'], '0555123456');
+        expect(find.text(_phoneTaken), findsOneWidget);
+        expect(find.text('Sign in with this number'), findsOneWidget);
+
+        await tester.tap(find.text('Sign in with this number'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(RegisterScreen), findsNothing);
+        expect(find.byType(LoginScreen), findsOneWidget);
+        expect(_heroTitle('Welcome back'), findsOneWidget);
+        expect(_fieldText(tester, 0), '0555123456');
+        expect(backend.requests.where((FakeRequest r) => r.path == '/auth/login'), isEmpty);
       });
-      backend.routes.addAll(_references);
-      await _pump(
-        tester,
-        _install(
-          SessionStore(fakeApi(backend)),
-          references: ReferenceStore(fakeApi(backend)),
-        ),
-        const LoginScreen(),
-      );
-      await tester.tap(find.text('Create account'));
-      await tester.pumpAndSettle();
-
-      await tester.enterText(find.byType(TextField).at(0), 'Ines');
-      await tester.enterText(find.byType(TextField).at(1), 'Benali');
-      await tester.enterText(find.byType(TextField).at(2), '0555123456');
-      await tester.enterText(find.byType(TextField).at(3), 'NovaSecure9!');
-      await tester.enterText(find.byType(TextField).at(4), 'NovaSecure9!');
-      await tester.tap(find.text('Next step'));
-      await tester.pumpAndSettle();
-      await _pick(tester, 0, '2AS');
-      await _pick(tester, 2, 'Alger');
-      await _pick(tester, 3, 'Bab Ezzouar');
-      await tester.tap(find.byType(Checkbox));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Create my space'));
-      await tester.pumpAndSettle();
-
-      // Sent exactly as typed (D-081).
-      final FakeRequest register = backend.requests.last;
-      expect(register.path, '/auth/register');
-      expect((register.data! as Map<String, Object?>)['phone'], '0555123456');
-      expect(find.text(_phoneTaken), findsOneWidget);
-      expect(find.text('Sign in with this number'), findsOneWidget);
-
-      await tester.tap(find.text('Sign in with this number'));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(RegisterScreen), findsNothing);
-      expect(find.text('Welcome back'), findsOneWidget);
-      expect(_fieldText(tester, 0), '0555123456');
-      expect(backend.requests.where((FakeRequest r) => r.path == '/auth/login'), isEmpty);
-    });
+    }
   });
 
-  testWidgets('the first screen shows sign in and create account without scrolling',
+  testWidgets('on a small phone the first screen offers both ways in; sign-in and registration link under their form (D-133)',
       (tester) async {
-    final AppState state = _install(SessionStore(fakeApi(FakeBackend(
-      const <String, FakeResponse>{},
-    ))));
+    final SessionStore session = SessionStore(fakeApi(FakeBackend(<String, FakeResponse>{
+      'GET /auth/me': _error(401, 'UNAUTHENTICATED', 'Authentication is required.'),
+    })));
+    await tester.runAsync(session.boot);
+    final AppState state = _install(session);
     // A small phone: 360 × 640.
     tester.view.physicalSize = const Size(1080, 1920);
     tester.view.devicePixelRatio = 3.0;
@@ -271,31 +298,69 @@ void main() {
     await tester.pumpWidget(
       AppScope(
         state: state,
-        child: MaterialApp(theme: NovaTheme.light, home: const LoginScreen()),
+        child: MaterialApp(theme: NovaTheme.light, home: const AppGate()),
       ),
     );
     await tester.pumpAndSettle();
 
-    final Rect createTab = tester.getRect(find.text('Create account'));
-    expect(createTab.bottom, lessThan(640));
-    expect(find.text('Sign in'), findsNWidgets(2));
+    // Signed out: the question, with both choices on the first screen.
+    expect(find.byType(AuthGatewayScreen), findsOneWidget);
+    expect(tester.getRect(find.text('I already have an account')).bottom, lessThan(640));
+    expect(tester.getRect(find.text('Sign in')).bottom, lessThan(640));
+    expect(tester.getRect(find.text('I’m new here')).bottom, lessThan(640));
 
-    await tester.tap(find.text('Create account'));
-    await tester.pumpAndSettle();
-    expect(find.byType(RegisterScreen), findsOneWidget);
-
-    // The same switch leads back to sign-in.
     await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
-    expect(find.byType(RegisterScreen), findsNothing);
-    expect(find.text('Welcome back'), findsOneWidget);
+    expect(find.byType(LoginScreen), findsOneWidget);
+    // The website's sign-in: submit, "Forgot your password?", then the
+    // line to registration under the form — all without scrolling.
+    final Rect submit = tester.getRect(find.text('Sign in'));
+    final Rect forgot = tester.getRect(find.text('Forgot your password?'));
+    final Rect toRegister = tester.getRect(find.byType(AuthModeSwitch));
+    expect(forgot.top, greaterThan(submit.bottom));
+    expect(toRegister.top, greaterThan(forgot.bottom));
+    expect(toRegister.bottom, lessThan(640));
+    expect(find.text('New to Nova? Create an account', findRichText: true), findsOneWidget);
+    // No "or" divider nor second create button any more.
+    expect(find.text('or'), findsNothing);
+    expect(find.text('Create a new account'), findsNothing);
 
-    // The full-width button under the form opens registration too.
-    await tester.ensureVisible(find.text('Create a new account'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Create a new account'));
+    await tester.tap(find.byType(AuthModeSwitch));
     await tester.pumpAndSettle();
     expect(find.byType(RegisterScreen), findsOneWidget);
+    expect(_heroTitle('Create your account'), findsOneWidget);
+    await tester.ensureVisible(find.byType(AuthModeSwitch));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(find.byType(AuthModeSwitch)).top, greaterThan(tester.getRect(find.text('Next step')).bottom));
+    expect(find.text('Already have an account? Sign in', findRichText: true), findsOneWidget);
+
+    // The same line leads back to sign-in.
+    await tester.tap(find.byType(AuthModeSwitch));
+    await tester.pumpAndSettle();
+    expect(find.byType(RegisterScreen), findsNothing);
+    expect(_heroTitle('Welcome back'), findsOneWidget);
+
+    // Back on the question, "Create my account" is one scroll away.
+    await tester.tap(find.byType(BackPill));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Create my account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Create my account'));
+    await tester.pumpAndSettle();
+    expect(find.byType(RegisterScreen), findsOneWidget);
+
+    // Opened from the question, "Already have an account? Sign in" opens
+    // sign-in in its place (not the question again); Back returns there.
+    await tester.ensureVisible(find.byType(AuthModeSwitch));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(AuthModeSwitch));
+    await tester.pumpAndSettle();
+    expect(find.byType(RegisterScreen), findsNothing);
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(_heroTitle('Welcome back'), findsOneWidget);
+    await tester.tap(find.byType(BackPill));
+    await tester.pumpAndSettle();
+    expect(find.byType(AuthGatewayScreen), findsOneWidget);
   });
 
   group('phone step (D-079)', () {
@@ -342,9 +407,13 @@ void main() {
 
       await tester.enterText(find.byType(TextField), '0666123456');
       await tester.tap(find.text('Save my number'));
-      await tester.pumpAndSettle();
+      // The Student space opens (its home has a looping live pulse).
+      for (int i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
       expect(backend.requests.last.path, '/auth/phone');
       expect(find.byType(PhoneStepScreen), findsNothing);
+      expect(find.byType(ShellScreen), findsOneWidget);
       expect(session.nextRequiredStep, isNull);
     });
   });

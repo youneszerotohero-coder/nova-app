@@ -13,8 +13,11 @@ import 'package:nova_mobile/data/commerce_store.dart';
 import 'package:nova_mobile/data/learning_store.dart';
 import 'package:nova_mobile/data/live_store.dart';
 import 'package:nova_mobile/data/session_store.dart';
+import 'package:nova_mobile/features/learning/learn_screen.dart';
+import 'package:nova_mobile/features/learning/lesson_screen.dart';
 import 'package:nova_mobile/features/learning/live_room_screen.dart';
 import 'package:nova_mobile/features/player/playback_rules.dart';
+import 'package:nova_mobile/features/shell/student_top_bar.dart';
 
 import 'fixtures/fake_api.dart';
 import 'fixtures/fake_native_player.dart';
@@ -24,14 +27,17 @@ import 'nova_font_loader.dart';
 
 /// `GET /lives/{id}` in the backend's shape (`LiveSessionResource` plus
 /// `hand_status` / `muted` / `speaker`).
+///
+/// D-132: once its recording is ready, a finished Live carries the
+/// [lessonId] it became in its Unit ([courseSlug]).
 Map<String, Object?> _detail(
   String status, {
   String? mediaState,
-  bool replay = false,
   bool comments = true,
   String? hand,
   Map<String, String>? speaker,
-  String? replayDelivery,
+  int? lessonId,
+  String courseSlug = 'physics-mechanics',
 }) =>
     <String, Object?>{
       'data': <String, Object?>{
@@ -48,8 +54,8 @@ Map<String, Object?> _detail(
         'media_state': mediaState,
         'comments_enabled': comments,
         'comment_max_length': 500,
-        'replay_available': replay,
-        'replay_delivery': ?replayDelivery,
+        'course_slug': courseSlug,
+        'lesson_id': lessonId,
       },
       'hand_status': hand,
       'muted': false,
@@ -247,6 +253,7 @@ void main() {
       Map<String, List<FakeResponse>>? sequences,
       String? widevine = 'L1',
       bool withSession = false,
+      bool pushed = false,
     }) async {
       tester.view.physicalSize = const Size(1170, 2532);
       tester.view.devicePixelRatio = 3.0;
@@ -297,10 +304,28 @@ void main() {
           state: app,
           child: MaterialApp(
             theme: NovaTheme.light,
-            home: LiveRoomScreen(live: HomeData.lives.first),
+            // [pushed]: opened from a page, as from the Lives tab.
+            home: pushed
+                ? Builder(
+                    builder: (BuildContext context) => Scaffold(
+                      body: Center(
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                            builder: (_) => LiveRoomScreen(live: HomeData.lives.first),
+                          )),
+                          child: const Text('Open the room'),
+                        ),
+                      ),
+                    ),
+                  )
+                : LiveRoomScreen(live: HomeData.lives.first),
           ),
         ),
       );
+      if (pushed) {
+        await tester.tap(find.text('Open the room'));
+        await tester.pump();
+      }
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
       await tester.pump(const Duration(milliseconds: 50));
@@ -547,30 +572,81 @@ void main() {
       await leave(tester);
     });
 
-    testWidgets('an ended live without replay says so and closes questions', (tester) async {
-      await pumpRoom(tester, <String, FakeResponse>{
+    /// No Live replay endpoint exists any more (D-132).
+    Iterable<String> replayRequests(FakeBackend backend) =>
+        backend.requests.map((FakeRequest r) => r.path).where((String path) => path.contains('replay'));
+
+    testWidgets('an ended live without a lesson says so and closes questions', (tester) async {
+      final FakeBackend backend = await pumpRoom(tester, <String, FakeResponse>{
         'GET /lives/301': FakeResponse(200, _detail('ended')),
       });
       expect(find.text('This live class has ended.'), findsOneWidget);
       expect(find.byType(TextField), findsNothing);
+      expect(find.text('Play'), findsNothing);
+      expect(players.created, isEmpty);
+      expect(replayRequests(backend), isEmpty);
       await leave(tester);
     });
 
-    testWidgets('an ended live with a replay offers it, neutral while the mode is unknown', (tester) async {
-      await pumpRoom(tester, <String, FakeResponse>{
-        'GET /lives/301': FakeResponse(200, _detail('ended', replay: true)),
+    testWidgets('while its recording is processed, the room says the video will become a lesson', (tester) async {
+      final FakeBackend backend = await pumpRoom(tester, <String, FakeResponse>{
+        'GET /lives/301': FakeResponse(200, _detail('processing_replay')),
       });
+      expect(find.text('This live class has ended. Its video will soon be a lesson of your Unit.'), findsOneWidget);
+      expect(find.byType(TextField), findsNothing);
+      expect(find.text('Play'), findsNothing);
+      expect(players.created, isEmpty);
+      // Nothing to play here: no playback policy, no join, no replay.
+      expect(backend.requests.map((FakeRequest r) => r.path), <String>['/lives/301']);
+      await leave(tester);
+    });
+
+    testWidgets('an ended live that became a lesson closes the room and opens that Lesson in its Unit (D-132)', (tester) async {
+      final FakeBackend backend = await pumpRoom(
+        tester,
+        <String, FakeResponse>{
+          'GET /lives/301': FakeResponse(200, _detail('ended', lessonId: 1025)),
+        },
+        pushed: true,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LiveRoomScreen), findsNothing);
+      expect(find.byType(LessonScreen), findsOneWidget);
+      expect(find.text('Live — energy exercises, BAC style'), findsOneWidget);
+      expect(find.text('Recorded during the live class'), findsOneWidget);
+      expect(find.text('Lesson 5 of 5'), findsOneWidget);
+      // The Lesson plays like any other, on demand: nothing was requested.
       expect(find.text('Play'), findsOneWidget);
-      expect(find.text('Protected lesson'), findsNothing);
+      expect(players.created, isEmpty);
+      expect(backend.requests.map((FakeRequest r) => r.path), <String>['/lives/301']);
+
+      // Back: the Unit's Lessons, then the page the room was opened from.
+      await tester.tap(find.byType(BackPill));
+      await tester.pumpAndSettle();
+      expect(find.byType(LearnScreen), findsOneWidget);
+      expect(find.text('Physics — Mechanics Masterclass'), findsOneWidget);
+      await tester.tap(find.byType(BackPill));
+      await tester.pumpAndSettle();
+      expect(find.text('Open the room'), findsOneWidget);
+      expect(replayRequests(backend), isEmpty);
       await leave(tester);
     });
 
-    testWidgets('D-077: the replay speaks of protection only in mode A', (tester) async {
-      await pumpRoom(tester, <String, FakeResponse>{
-        'GET /lives/301': FakeResponse(200, _detail('ended', replay: true, replayDelivery: 'drm_only')),
-      });
-      expect(find.text('Check & play'), findsOneWidget);
-      expect(find.text('Protected lesson'), findsOneWidget);
+    testWidgets('an ended live of a Unit the Student does not have stays on the ended message', (tester) async {
+      final FakeBackend backend = await pumpRoom(
+        tester,
+        <String, FakeResponse>{
+          'GET /lives/301': FakeResponse(200, _detail('ended', lessonId: 1025, courseSlug: 'math-lab')),
+        },
+        pushed: true,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LiveRoomScreen), findsOneWidget);
+      expect(find.byType(LessonScreen), findsNothing);
+      expect(find.text('This live class has ended.'), findsOneWidget);
+      expect(replayRequests(backend), isEmpty);
       await leave(tester);
     });
 
@@ -645,39 +721,6 @@ void main() {
 
         expect(find.textContaining('iPhone'), findsWidgets);
         expect(joins(backend), isEmpty);
-        await leave(tester);
-      } finally {
-        debugDefaultTargetPlatformOverride = null;
-      }
-    });
-
-    testWidgets('mode C: iPhone plays the clear replay the server returns (D-070)', (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-      try {
-        final FakeBackend backend = await pumpRoom(tester, <String, FakeResponse>{
-          'GET /lives/301': FakeResponse(200, _detail('ended', replay: true)),
-          'GET /lives/301/replay/playback': const FakeResponse(200, <String, Object?>{
-            'data': <String, Object?>{
-              'mode': 'clear',
-              'manifest_url': 'https://vod.test/video/9/hls-clear/master.m3u8?token=t',
-              'mime_type': 'application/x-mpegurl',
-              'support_url': null,
-              'expires_at': 1790000000,
-              'duration_seconds': 3600,
-              'watermark': <String, String>{'name': 'Ines Benali', 'phone': '0555123456'},
-            },
-          }),
-        });
-        await tester.tap(find.text('Play'));
-        await tester.pump(const Duration(milliseconds: 100));
-        await tester.pump(const Duration(milliseconds: 100));
-
-        final FakeRequest replay =
-            backend.requests.firstWhere((FakeRequest r) => r.path == '/lives/301/replay/playback');
-        // FairPlay is tried first: no clear request from the app.
-        expect(replay.query, isNot(contains('delivery=clear')));
-        expect(players.created.single['clear'], isTrue);
-        expect(find.text('Personal copy · identity watermark'), findsOneWidget);
         await leave(tester);
       } finally {
         debugDefaultTargetPlatformOverride = null;

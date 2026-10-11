@@ -2,111 +2,53 @@ import 'package:flutter/material.dart';
 
 import 'nova_colors.dart';
 
-/// Nova type scale. Inter for UI, Inter Display for large headlines,
-/// with the tight tracking the visual direction uses on big type.
+/// Nova type scale, the website's (D-125 `hero.css`): Baloo Bhaijaan 2 for
+/// titles (`--hx-font`), Geist for Latin text with Baloo for every Arabic
+/// glyph (`--hx-font-body`). No negative tracking: it breaks Arabic joins.
 abstract final class NovaTypography {
-  static const String _sans = 'Inter';
-  static const String _display = 'InterDisplay';
+  static const String body = 'Geist';
+  static const String display = 'BalooBhaijaan2';
+
+  /// Arabic letters are not in Geist: they come from Baloo, as on the web.
+  static const List<String> fallback = <String>[display];
 
   static Color get _strong => NovaColors.textStrong;
   static const Color _onDark = NovaColors.textOnDark;
 
+  static TextStyle _title(double size, FontWeight weight, double height) => TextStyle(
+        fontFamily: display,
+        fontFamilyFallback: fallback,
+        fontWeight: weight,
+        fontSize: size,
+        height: height,
+        color: _strong,
+      );
+
+  static TextStyle _text(double size, FontWeight weight, double height, [Color? color]) => TextStyle(
+        fontFamily: body,
+        fontFamilyFallback: fallback,
+        fontWeight: weight,
+        fontSize: size,
+        height: height,
+        color: color ?? _strong,
+      );
+
   /// Rebuilt on every access so the text picks up the active palette.
   static TextTheme get textTheme => TextTheme(
-        displayLarge: TextStyle(
-            fontFamily: _display,
-            fontWeight: FontWeight.w700,
-            fontSize: 36,
-            height: 1.08,
-            letterSpacing: -1.2,
-            color: _strong),
-        displayMedium: TextStyle(
-            fontFamily: _display,
-            fontWeight: FontWeight.w700,
-            fontSize: 30,
-            height: 1.1,
-            letterSpacing: -1.0,
-            color: _strong),
-        displaySmall: TextStyle(
-            fontFamily: _display,
-            fontWeight: FontWeight.w700,
-            fontSize: 26,
-            height: 1.12,
-            letterSpacing: -0.8,
-            color: _strong),
-        headlineMedium: TextStyle(
-            fontFamily: _display,
-            fontWeight: FontWeight.w700,
-            fontSize: 22,
-            height: 1.15,
-            letterSpacing: -0.5,
-            color: _strong),
-        headlineSmall: TextStyle(
-            fontFamily: _sans,
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-            height: 1.2,
-            letterSpacing: -0.4,
-            color: _strong),
-        titleLarge: TextStyle(
-            fontFamily: _sans,
-            fontWeight: FontWeight.w700,
-            fontSize: 17,
-            height: 1.25,
-            letterSpacing: -0.3,
-            color: _strong),
-        titleMedium: TextStyle(
-            fontFamily: _sans,
-            fontWeight: FontWeight.w600,
-            fontSize: 15.5,
-            height: 1.3,
-            letterSpacing: -0.2,
-            color: _strong),
-        titleSmall: TextStyle(
-            fontFamily: _sans,
-            fontWeight: FontWeight.w600,
-            fontSize: 13.5,
-            height: 1.3,
-            letterSpacing: -0.1,
-            color: _strong),
-        bodyLarge: TextStyle(
-            fontFamily: _sans,
-            fontWeight: FontWeight.w500,
-            fontSize: 15.5,
-            height: 1.4,
-            color: _strong),
-        bodyMedium: TextStyle(
-            fontFamily: _sans,
-            fontWeight: FontWeight.w400,
-            fontSize: 14,
-            height: 1.4,
-            color: _strong),
-        bodySmall: TextStyle(
-            fontFamily: _sans,
-            fontWeight: FontWeight.w400,
-            fontSize: 12.5,
-            height: 1.35,
-            color: NovaColors.textMuted),
-        labelLarge: TextStyle(
-            fontFamily: _sans,
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-            height: 1.2,
-            letterSpacing: -0.1,
-            color: _strong),
-        labelMedium: TextStyle(
-            fontFamily: _sans,
-            fontWeight: FontWeight.w600,
-            fontSize: 12.5,
-            height: 1.2,
-            color: _strong),
-        labelSmall: TextStyle(
-            fontFamily: _sans,
-            fontWeight: FontWeight.w600,
-            fontSize: 11,
-            height: 1.2,
-            letterSpacing: 0.2,
-            color: _strong),
+        displayLarge: _title(36, FontWeight.w800, 1.15),
+        displayMedium: _title(30, FontWeight.w800, 1.15),
+        displaySmall: _title(26, FontWeight.w800, 1.18),
+        headlineMedium: _title(22, FontWeight.w800, 1.2),
+        headlineSmall: _title(19, FontWeight.w800, 1.25),
+        titleLarge: _title(18, FontWeight.w700, 1.3),
+        titleMedium: _title(16, FontWeight.w700, 1.3),
+        titleSmall: _title(14.5, FontWeight.w700, 1.3),
+        bodyLarge: _text(15.5, FontWeight.w500, 1.5),
+        bodyMedium: _text(14.5, FontWeight.w400, 1.5),
+        bodySmall: _text(13, FontWeight.w400, 1.45, NovaColors.textMuted),
+        labelLarge: _title(15, FontWeight.w700, 1.25),
+        labelMedium: _title(13.5, FontWeight.w700, 1.25),
+        labelSmall: _title(12, FontWeight.w700, 1.25),
       );
 
   /// White variants for text sitting on dark ink or on imagery.

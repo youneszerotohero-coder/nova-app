@@ -110,10 +110,9 @@ class SubjectChip extends StatelessWidget {
               Text(
                 label,
                 style: TextStyle(
-                  fontFamily: 'Inter',
+                  fontFamily: 'Geist',
                   fontWeight: FontWeight.w700,
                   fontSize: 13,
-                  letterSpacing: -0.1,
                   color: foreground,
                 ),
               ),
@@ -135,7 +134,7 @@ class SubjectChip extends StatelessWidget {
                   child: Text(
                     '$count',
                     style: TextStyle(
-                      fontFamily: 'Inter',
+                      fontFamily: 'Geist',
                       fontWeight: FontWeight.w700,
                       fontSize: 11,
                       height: 1,

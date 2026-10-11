@@ -11,6 +11,7 @@ class MainActivity : FlutterActivity() {
         ProtectedPlayback.register(flutterEngine)
         NotificationChime.register(flutterEngine, this)
         AppUpdate.register(flutterEngine, this)
+        ScreenAwake.register(flutterEngine, this)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

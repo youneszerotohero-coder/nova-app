@@ -85,7 +85,7 @@ class AppearanceControls extends StatelessWidget {
                     child: Text(
                       compact ? lang.name.toUpperCase() : lang.label,
                       style: TextStyle(
-                        fontFamily: 'Inter',
+                        fontFamily: 'Geist',
                         fontWeight: FontWeight.w700,
                         fontSize: compact ? 12 : 12.5,
                         color: state.lang == lang

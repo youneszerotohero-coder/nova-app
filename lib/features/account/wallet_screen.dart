@@ -130,10 +130,9 @@ class _BalanceCard extends StatelessWidget {
                 child: Text(
                   context.tr('wallet.available').toUpperCase(),
                   style: const TextStyle(
-                    fontFamily: 'Inter',
+                    fontFamily: 'Geist',
                     fontWeight: FontWeight.w700,
                     fontSize: 10.5,
-                    letterSpacing: 1.8,
                     color: NovaColors.textMutedOnDark,
                   ),
                 ),
@@ -145,11 +144,10 @@ class _BalanceCard extends StatelessWidget {
           CountUpText(
             AppScope.of(context).account.pointsBalance,
             style: const TextStyle(
-              fontFamily: 'InterDisplay',
+              fontFamily: 'BalooBhaijaan2',
               fontWeight: FontWeight.w700,
               fontSize: 48,
               height: 1,
-              letterSpacing: -1.6,
               color: NovaColors.gold,
             ),
           ),
@@ -157,7 +155,7 @@ class _BalanceCard extends StatelessWidget {
           Text(
             context.tr('wallet.note'),
             style: const TextStyle(
-              fontFamily: 'Inter',
+              fontFamily: 'Geist',
               fontWeight: FontWeight.w500,
               fontSize: 11.5,
               height: 1.45,
@@ -295,10 +293,9 @@ class _ReferralCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontFamily: 'Inter',
+                      fontFamily: 'Geist',
                       fontWeight: FontWeight.w800,
                       fontSize: 16,
-                      letterSpacing: 2.4,
                       color: NovaHue.lilac.onSurface,
                     ),
                   ),
@@ -327,7 +324,7 @@ class _ReferralCard extends StatelessWidget {
                     child: Text(
                       context.tr('wallet.copy'),
                       style: const TextStyle(
-                        fontFamily: 'Inter',
+                        fontFamily: 'Geist',
                         fontWeight: FontWeight.w700,
                         fontSize: 12.5,
                         color: NovaColors.textOnDark,

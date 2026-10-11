@@ -16,6 +16,7 @@ import 'package:nova_mobile/features/home/home_screen.dart';
 import 'package:nova_mobile/data/models.dart';
 import 'package:nova_mobile/features/account/wallet_screen.dart';
 import 'package:nova_mobile/features/learning/learn_screen.dart';
+import 'package:nova_mobile/features/learning/lesson_screen.dart';
 import 'package:nova_mobile/features/learning/my_learning_screen.dart';
 
 import 'fixtures/fake_api.dart';
@@ -31,7 +32,7 @@ void main() {
   setUpAll(loadNovaFonts);
   setUp(installFixtureApp);
 
-  Future<void> pumpScreen(WidgetTester tester, Widget screen) async {
+  Future<void> pumpScreen(WidgetTester tester, Widget screen, {bool looping = false}) async {
     tester.view.physicalSize = const Size(1170, 2532);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
@@ -46,11 +47,15 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
-    await settleImages(tester);
+    if (looping) {
+      await pumpFrames(tester);
+    } else {
+      await tester.pumpAndSettle();
+    }
+    await settleImages(tester, looping: looping);
   }
 
-  testWidgets('explore screen snapshot', (tester) async {
+  goldenTestWidgets('explore screen snapshot', (tester) async {
     await pumpScreen(tester, const ExploreScreen());
     await expectLater(
       find.byType(ExploreScreen),
@@ -58,7 +63,7 @@ void main() {
     );
   });
 
-  testWidgets('course detail snapshot', (tester) async {
+  goldenTestWidgets('course detail snapshot', (tester) async {
     final Course course = HomeData.popularCourses.first;
     await pumpScreen(tester, CourseDetailScreen(course: course));
     await expectLater(
@@ -67,7 +72,7 @@ void main() {
     );
   });
 
-  testWidgets('learn screen snapshot', (tester) async {
+  goldenTestWidgets('learn screen snapshot', (tester) async {
     final Course course =
         HomeData.popularCourses.where((Course c) => c.owned).first;
     await pumpScreen(tester, LearnScreen(course: course));
@@ -77,7 +82,17 @@ void main() {
     );
   });
 
-  testWidgets('checkout snapshot', (tester) async {
+  goldenTestWidgets('lesson screen snapshot', (tester) async {
+    final Course course =
+        HomeData.popularCourses.where((Course c) => c.owned).first;
+    await pumpScreen(tester, LessonScreen(course: ValueNotifier<Course>(course), index: 2));
+    await expectLater(
+      find.byType(LessonScreen),
+      matchesGoldenFile('goldens/screen_lesson.png'),
+    );
+  });
+
+  goldenTestWidgets('checkout snapshot', (tester) async {
     // The breakdown is the backend's quote, served in production's shape:
     // an Offer with one already-owned Course credited and points applied.
     installFixtureApp(
@@ -126,7 +141,7 @@ void main() {
     );
   });
 
-  testWidgets('profile snapshot', (tester) async {
+  goldenTestWidgets('profile snapshot', (tester) async {
     await pumpScreen(tester, const ProfileScreen());
     await expectLater(
       find.byType(ProfileScreen),
@@ -134,7 +149,7 @@ void main() {
     );
   });
 
-  testWidgets('notifications snapshot', (tester) async {
+  goldenTestWidgets('notifications snapshot', (tester) async {
     await pumpScreen(tester, const NotificationsScreen());
     await expectLater(
       find.byType(NotificationsScreen),
@@ -142,7 +157,7 @@ void main() {
     );
   });
 
-  testWidgets('my learning snapshot', (tester) async {
+  goldenTestWidgets('my learning snapshot', (tester) async {
     await pumpScreen(tester, const MyLearningScreen());
     await expectLater(
       find.byType(MyLearningScreen),
@@ -150,7 +165,7 @@ void main() {
     );
   });
 
-  testWidgets('wallet snapshot', (tester) async {
+  goldenTestWidgets('wallet snapshot', (tester) async {
     await pumpScreen(tester, const WalletScreen());
     await expectLater(
       find.byType(WalletScreen),
@@ -158,7 +173,7 @@ void main() {
     );
   });
 
-  testWidgets('cart snapshot', (tester) async {
+  goldenTestWidgets('cart snapshot', (tester) async {
     await pumpScreen(tester, const CartScreen());
     await expectLater(
       find.byType(CartScreen),
@@ -166,7 +181,7 @@ void main() {
     );
   });
 
-  testWidgets('teacher detail snapshot', (tester) async {
+  goldenTestWidgets('teacher detail snapshot', (tester) async {
     await pumpScreen(
       tester,
       TeacherDetailScreen(teacher: HomeData.teachers.first),
@@ -177,15 +192,16 @@ void main() {
     );
   });
 
-  testWidgets('home snapshot', (tester) async {
-    await pumpScreen(tester, const HomeScreen());
+  goldenTestWidgets('home snapshot', (tester) async {
+    // The live-now pulse of the Student's running Live loops.
+    await pumpScreen(tester, const HomeScreen(), looping: true);
     await expectLater(
       find.byType(HomeScreen),
       matchesGoldenFile('goldens/screen_home.png'),
     );
   });
 
-  testWidgets('success burst mid-flight snapshot', (tester) async {
+  goldenTestWidgets('success burst mid-flight snapshot', (tester) async {
     tester.view.physicalSize = const Size(900, 900);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);

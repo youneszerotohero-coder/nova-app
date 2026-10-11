@@ -25,7 +25,7 @@ void novaToast(BuildContext context, String message, {IconData? icon}) {
               child: Text(
                 message,
                 style: const TextStyle(
-                  fontFamily: 'Inter',
+                  fontFamily: 'Geist',
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
                   color: NovaColors.textOnDark,

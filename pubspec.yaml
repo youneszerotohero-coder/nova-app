@@ -2,7 +2,7 @@ name: nova_mobile
 description: "NOVA e-learning mobile app."
 publish_to: 'none'
 
-version: 0.2.1+14
+version: 0.3.0+15
 
 environment:
   sdk: ^3.13.3
@@ -14,6 +14,8 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
+  # Home's date eyebrow reads the clock through it, so pictures can fix the day.
+  clock: ^1.1.3
   dio: ^5.11.1
   cookie_jar: ^4.0.9
   dio_cookie_manager: ^3.5.0
@@ -42,20 +44,29 @@ flutter:
     - assets/images/packs/
     - assets/images/people/
 
+  # The website's faces (D-125 hero style): Baloo Bhaijaan 2 for titles and
+  # every Arabic glyph, Geist for Latin text. Static weights instanced from
+  # the OFL variable fonts (Flutter does not map FontWeight to a wght axis).
   fonts:
-    - family: Inter
+    - family: BalooBhaijaan2
       fonts:
-        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/BalooBhaijaan2-400.ttf
           weight: 400
-        - asset: assets/fonts/Inter-Medium.ttf
+        - asset: assets/fonts/BalooBhaijaan2-500.ttf
           weight: 500
-        - asset: assets/fonts/Inter-SemiBold.ttf
+        - asset: assets/fonts/BalooBhaijaan2-600.ttf
           weight: 600
-        - asset: assets/fonts/Inter-Bold.ttf
+        - asset: assets/fonts/BalooBhaijaan2-700.ttf
           weight: 700
-    - family: InterDisplay
+        - asset: assets/fonts/BalooBhaijaan2-800.ttf
+          weight: 800
+    - family: Geist
       fonts:
-        - asset: assets/fonts/InterDisplay-SemiBold.ttf
+        - asset: assets/fonts/Geist-400.ttf
+          weight: 400
+        - asset: assets/fonts/Geist-500.ttf
+          weight: 500
+        - asset: assets/fonts/Geist-600.ttf
           weight: 600
-        - asset: assets/fonts/InterDisplay-Bold.ttf
+        - asset: assets/fonts/Geist-700.ttf
           weight: 700

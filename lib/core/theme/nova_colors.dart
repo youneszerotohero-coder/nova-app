@@ -27,25 +27,28 @@ class NovaPalette {
   /// washes without every call site branching.
   final bool isDark;
 
+  /// The website's hero tokens (D-125, `hero.css`): page `--hx-bg`, white
+  /// surfaces, `--hx-ink` text, `--hx-mute` secondary text.
   static const NovaPalette light = NovaPalette(
-    paper: Color(0xFFFFFFFF),
+    paper: Color(0xFFF3F6FC),
     paperCard: Color(0xFFFFFFFF),
-    paperRaised: Color(0xFFFFFFFF),
-    textStrong: Color(0xFF0A1128),
-    textMuted: Color(0xFF75839E),
-    borderOnLight: Color(0x240A1128),
-    accentMist: Color(0xFFE4F1FE),
+    paperRaised: Color(0xFFF6F8FD),
+    textStrong: Color(0xFF121A33),
+    textMuted: Color(0xFF6F7892),
+    borderOnLight: Color(0x1A121A33),
+    accentMist: Color(0xFFE9F0FF),
     isDark: false,
   );
 
+  /// The website's `.dark` hero tokens.
   static const NovaPalette dark = NovaPalette(
-    paper: Color(0xFF0C1424),
-    paperCard: Color(0xFF16233D),
-    paperRaised: Color(0xFF1B2A4A),
-    textStrong: Color(0xFFEDF2FB),
-    textMuted: Color(0xFF8B9AB8),
-    borderOnLight: Color(0x14FFFFFF),
-    accentMist: Color(0xFF16294A),
+    paper: Color(0xFF0B1126),
+    paperCard: Color(0xFF131B36),
+    paperRaised: Color(0xFF182143),
+    textStrong: Color(0xFFEEF2FF),
+    textMuted: Color(0xFF8C97B8),
+    borderOnLight: Color(0x1AFFFFFF),
+    accentMist: Color(0xFF1B2A5C),
     isDark: true,
   );
 }
@@ -54,13 +57,16 @@ class NovaPalette {
 /// through one of these, so a card, its icon tile, its chips and its
 /// shadow always agree — and all of them flip together in dark mode.
 enum NovaHue {
-  sky(Color(0xFF2B87F7), Color(0xFF6FB3FF)),
-  lilac(Color(0xFF6C5CE7), Color(0xFF9B8BFF)),
-  peach(Color(0xFFF2762E), Color(0xFFFFA76B)),
-  mint(Color(0xFF17A673), Color(0xFF55D3A3)),
-  butter(Color(0xFFD99A0B), Color(0xFFFFC94D)),
-  rose(Color(0xFFE0526A), Color(0xFFFF8CA0)),
-  ink(Color(0xFF1A2848), Color(0xFF3C4F7E));
+  // The website's tones (hero.css): royal blue, sky, yellow, live green,
+  // quiz amber, danger red, ink. Kept as a family so a card, its icon tile
+  // and its chips always agree.
+  sky(Color(0xFF1F54D6), Color(0xFF4FACF0)),
+  lilac(Color(0xFF2F86DA), Color(0xFF9FD8FF)),
+  peach(Color(0xFFA8740A), Color(0xFFFFD54A)),
+  mint(Color(0xFF1F9A58), Color(0xFF4FD1A5)),
+  butter(Color(0xFFA8740A), Color(0xFFFFD54A)),
+  rose(Color(0xFFCF3434), Color(0xFFFF8A8A)),
+  ink(Color(0xFF121A33), Color(0xFF2E3A66));
 
   const NovaHue(this.solid, this.bright);
 
@@ -83,7 +89,7 @@ enum NovaHue {
   /// Readable hue-tinted text/icon colour on [surface].
   Color get onSurface => NovaColors.current.isDark
       ? Color.lerp(solid, Colors.white, 0.55)!
-      : Color.lerp(solid, const Color(0xFF0A1128), 0.16)!;
+      : Color.lerp(solid, const Color(0xFF121A33), 0.16)!;
 
   LinearGradient get gradient => LinearGradient(
         begin: Alignment.topLeft,
@@ -114,9 +120,8 @@ enum NovaHue {
   }
 }
 
-/// Nova palette sampled from the approved visual direction:
-/// white surfaces, deep navy ink, primary blue accent, and the pastel
-/// [NovaHue] family that carries the playful card system.
+/// Nova palette = the website's hero tokens (D-125, `website-front/src/hero.css`):
+/// royal blue, yellow marker, navy ink, light blue-grey page, white cards.
 ///
 /// The theme-dependent tones resolve against [current], which the app
 /// swaps when the user toggles dark mode; every screen rebuilds from
@@ -140,41 +145,48 @@ abstract final class NovaColors {
       ? Colors.white.withValues(alpha: 0.05)
       : const Color(0xFF0A1128).withValues(alpha: 0.04);
 
-  // Light surfaces raised on dark ink (unchanged across modes).
-  static const Color ink950 = Color(0xFF131F3A);
-  static const Color ink900 = Color(0xFF1A2848);
-  static const Color ink800 = Color(0xFF223156);
-  static const Color ink700 = Color(0xFF2D3D68);
+  // Dark ink (the website's `--hx-ink` navy): bottom bar, dark buttons,
+  // product cards.
+  static const Color ink950 = Color(0xFF121A33);
+  static const Color ink900 = Color(0xFF141C3A);
+  static const Color ink800 = Color(0xFF1E2A50);
+  static const Color ink700 = Color(0xFF2E3A66);
 
-  // Neutral near-black reserved for the search filter button, which
-  // stays black across the blue direction.
-  static const Color nearBlack = Color(0xFF121318);
+  // Neutral near-black reserved for the search filter button.
+  static const Color nearBlack = Color(0xFF121A33);
 
   // Text on dark ink surfaces.
-  static const Color textOnDark = Color(0xFFF4F7FD);
-  static const Color textMutedOnDark = Color(0xFF97A3C0);
+  static const Color textOnDark = Color(0xFFF6F5F1);
+  static const Color textMutedOnDark = Color(0xFFC4CBE0);
 
-  // Accent (primary blue).
-  static const Color accent = Color(0xFF2B87F7);
-  static const Color accentLight = Color(0xFF4D9EFF);
-  static const Color accentDeep = Color(0xFF1478EF);
-  static const Color accentDark = Color(0xFF1B5FD0);
+  // Accent: the website's royal blue (`--hx-blue`).
+  static const Color accent = Color(0xFF1F54D6);
+  static const Color accentLight = Color(0xFF3F72EA);
+  static const Color accentDeep = Color(0xFF1846B8);
+  static const Color accentDark = Color(0xFF10276B);
   static const LinearGradient accentGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [accentLight, accentDeep],
   );
 
-  // Supporting hues.
-  static const Color badgeOrange = Color(0xFFF18A50);
-  static const Color onlineGreen = Color(0xFF34C759);
-  static const Color heartRed = Color(0xFFE5484D);
-  static const Color gold = Color(0xFFF2B33D);
+  // The website's yellow marker and its ink (`--hx-yellow`).
+  static const Color yellow = Color(0xFFFFD54A);
+  static const Color yellowInk = Color(0xFF3A2C00);
+  static const Color postIt = Color(0xFFFFE38A);
+  static const Color sky = Color(0xFF9FD8FF);
+  static const Color skyStrong = Color(0xFF4FACF0);
+
+  // Status tones (`--hx-live`, `--hx-quiz`, `--hx-danger`).
+  static const Color badgeOrange = Color(0xFFA8740A);
+  static const Color onlineGreen = Color(0xFF1F9A58);
+  static const Color heartRed = Color(0xFFCF3434);
+  static const Color gold = Color(0xFFFFD54A);
 
   // Hairlines on dark ink.
   static const Color borderOnDark = Color(0x1AFFFFFF);
 
   // Translucent fills.
-  static const Color veilOnImage = Color(0x611D1B1F);
+  static const Color veilOnImage = Color(0x61121A33);
   static const Color veilOnDark = Color(0x24FFFFFF);
 }

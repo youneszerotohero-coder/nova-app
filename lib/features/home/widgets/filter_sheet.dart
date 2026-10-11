@@ -448,10 +448,9 @@ class _SectionLabel extends StatelessWidget {
     return Text(
       text.toUpperCase(),
       style: TextStyle(
-        fontFamily: 'Inter',
+        fontFamily: 'Geist',
         fontWeight: FontWeight.w700,
         fontSize: 10.5,
-        letterSpacing: 1.6,
         color: NovaColors.textMuted,
       ),
     );
@@ -756,11 +755,10 @@ class _ApplyButton extends StatelessWidget {
                   _ => context.trf('filter.showMany', <String, String>{'n': '$count'}),
                 },
                 style: TextStyle(
-                  fontFamily: 'Inter',
+                  fontFamily: 'Geist',
                   fontWeight: FontWeight.w700,
                   fontSize: 15,
                   height: 1,
-                  letterSpacing: -0.2,
                   color: empty ? NovaColors.textMuted : Colors.white,
                 ),
               ),

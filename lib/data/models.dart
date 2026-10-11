@@ -76,6 +76,7 @@ class Lesson {
     this.quiz,
     this.pdf,
     this.allowDownload = false,
+    this.fromLive = false,
   });
 
   /// Public curriculum row (`lessons[]` of a course detail).
@@ -90,6 +91,7 @@ class Lesson {
       watched: 0,
       hasQuiz: json.flag('has_quiz'),
       hasPdf: json.flag('has_pdf'),
+      fromLive: json.flag('from_live'),
     );
   }
 
@@ -116,6 +118,9 @@ class Lesson {
   final String? pdf;
   final bool allowDownload;
 
+  /// D-132: the Lesson is a past Live (its recording).
+  final bool fromLive;
+
   bool get completed =>
       apiCompleted ??
       (watched >= 90 && (quiz == null || !quiz!.required || quiz!.passed));
@@ -137,6 +142,7 @@ class Lesson {
         quiz: quiz,
         pdf: pdf,
         allowDownload: allowDownload,
+        fromLive: row.flag('from_live', fromLive),
       );
 }
 
@@ -229,6 +235,8 @@ class LiveSession {
     this.image,
     this.commentsEnabled = true,
     this.commentMaxLength = 500,
+    this.lessonId,
+    this.waitingRoomOpen = false,
   });
 
   factory LiveSession.fromJson(Json json) {
@@ -257,6 +265,8 @@ class LiveSession {
       image: json.strOrNull('course_cover_url'),
       commentsEnabled: json.flag('comments_enabled', true),
       commentMaxLength: json.integer('comment_max_length', 500),
+      lessonId: json['lesson_id'] is int ? json['lesson_id'] as int : null,
+      waitingRoomOpen: json.obj('waiting_room') != null,
     );
   }
 
@@ -280,6 +290,16 @@ class LiveSession {
   final String? image;
   final bool commentsEnabled;
   final int commentMaxLength;
+
+  /// D-132: the Lesson this Live became once its recording was ready.
+  final int? lessonId;
+
+  /// D-110: the waiting room is open.
+  final bool waitingRoomOpen;
+
+  /// Running or coming (the website's `isCurrentLive`); a finished Live is a
+  /// Lesson of its Unit (D-132).
+  bool get current => rawStatus == 'scheduled' || rawStatus == 'starting' || rawStatus == 'live' || rawStatus.isEmpty && status != LiveStatus.replay;
 
   bool get cancelled => rawStatus == 'cancelled' || rawStatus == 'failed';
   bool get ended =>

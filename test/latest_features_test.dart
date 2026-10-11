@@ -4,19 +4,22 @@ import 'package:nova_mobile/core/api/api_error_text.dart';
 import 'package:nova_mobile/core/api/api_exception.dart';
 import 'package:nova_mobile/core/state/app_state.dart';
 import 'package:nova_mobile/core/theme/nova_theme.dart';
+import 'package:nova_mobile/core/widgets/hero_style.dart';
 import 'package:nova_mobile/data/account_store.dart';
 import 'package:nova_mobile/data/catalog_store.dart';
 import 'package:nova_mobile/data/commerce_store.dart';
 import 'package:nova_mobile/data/models.dart';
 import 'package:nova_mobile/data/session_store.dart';
 import 'package:nova_mobile/features/account/settings_screen.dart';
-import 'package:nova_mobile/features/cart/cart_screen.dart';
+import 'package:nova_mobile/features/auth/auth_gateway_screen.dart';
 import 'package:nova_mobile/features/auth/login_screen.dart';
 import 'package:nova_mobile/features/auth/register_screen.dart';
 import 'package:nova_mobile/features/auth/school_year_screen.dart';
 import 'package:nova_mobile/features/detail/course_detail_screen.dart';
 import 'package:nova_mobile/features/home/home_screen.dart';
 import 'package:nova_mobile/features/shell/app_gate.dart';
+import 'package:nova_mobile/features/shell/shell_screen.dart';
+import 'package:nova_mobile/features/shell/student_top_bar.dart';
 
 import 'fixtures/fake_api.dart';
 import 'fixtures/fixture_app.dart';
@@ -126,6 +129,10 @@ final Map<String, FakeResponse> _references = <String, FakeResponse>{
   }),
 };
 
+/// A title drawn with its circled word (`*word*`), by its plain text.
+Finder _heroTitle(String plain) =>
+    find.byWidgetPredicate((Widget w) => w is HeroTitle && HeroTitle.plain(w.text) == plain);
+
 void main() {
   group('forgotten password by code (D-093/D-096)', () {
     testWidgets('phone and channel, code, new password, then sign-in with the number typed',
@@ -178,7 +185,7 @@ void main() {
         'password': 'NovaSecure9!',
         'password_confirmation': 'NovaSecure9!',
       });
-      expect(find.text('Welcome back'), findsOneWidget);
+      expect(_heroTitle('Welcome back'), findsOneWidget);
       expect(find.text('Your password was changed. Sign in with your new password.'), findsOneWidget);
       expect(_fieldText(tester, 0), '0555123456');
     });
@@ -407,34 +414,108 @@ void main() {
     expect(find.text('The selected track does not belong to the selected level.'), findsOneWidget);
   });
 
-  testWidgets('a visitor browses without an account; account features ask to sign in (D-127)', (tester) async {
-    final FakeBackend backend = FakeBackend(<String, FakeResponse>{
-      'GET /auth/me': _error(401, 'UNAUTHENTICATED', 'Authentication is required.'),
+  group('no public pages: signed out, the app asks first (D-133)', () {
+    Map<String, Object?> user() => <String, Object?>{
+          'id': 9,
+          'role': 'student',
+          'phone': '0555123456',
+          'next_required_step': null,
+          'student': <String, Object?>{'first_name': 'Ines', 'last_name': 'Benali'},
+        };
+
+    /// The paths a signed-out visitor must never reach.
+    bool studentSpace(FakeRequest r) => <String>['/cart', '/access-grants', '/me/dashboard', '/lives', '/me/notifications']
+        .any((String path) => r.path.startsWith(path));
+
+    testWidgets('"I already have an account" or "I\'m new here", each opening its screen', (tester) async {
+      final FakeBackend backend = FakeBackend(<String, FakeResponse>{
+        'GET /auth/me': _error(401, 'UNAUTHENTICATED', 'Authentication is required.'),
+      });
+      final SessionStore session = SessionStore(fakeApi(backend));
+      await tester.runAsync(session.boot);
+      expect(session.signedIn, isFalse);
+      final AppState state = _install(session);
+      await _pump(tester, state, const AppGate());
+
+      // The website's /start question, not the catalogue nor the Student space.
+      expect(find.byType(AuthGatewayScreen), findsOneWidget);
+      expect(find.byType(ShellScreen), findsNothing);
+      expect(find.byType(HomeScreen), findsNothing);
+      expect(find.byType(LoginScreen), findsNothing);
+      expect(find.text('I already have an account'), findsOneWidget);
+      expect(find.text('I’m new here'), findsOneWidget);
+      expect(find.text('Already registered? Don’t create a second account — just sign in.'), findsOneWidget);
+
+      // Sign-in opens over the question; back returns to it.
+      await _tap(tester, 'Sign in');
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(_heroTitle('Welcome back'), findsOneWidget);
+      await tester.tap(find.byType(BackPill));
+      await tester.pumpAndSettle();
+      expect(find.byType(LoginScreen), findsNothing);
+      expect(find.byType(AuthGatewayScreen), findsOneWidget);
+
+      await _tap(tester, 'Create my account');
+      expect(find.byType(RegisterScreen), findsOneWidget);
+      expect(_heroTitle('Create your account'), findsOneWidget);
+      await tester.tap(find.byType(BackPill));
+      await tester.pumpAndSettle();
+      expect(find.byType(AuthGatewayScreen), findsOneWidget);
+
+      // The language switch on the question (AR / FR / EN).
+      await tester.tap(find.text('FR'));
+      await tester.pumpAndSettle();
+      expect(state.lang, NovaLang.fr);
+      expect(find.text('J’ai déjà un compte'), findsOneWidget);
+      expect(find.text('Je suis nouveau'), findsOneWidget);
+
+      expect(backend.requests.where(studentSpace), isEmpty);
     });
-    final SessionStore session = SessionStore(fakeApi(backend));
-    await tester.runAsync(session.boot);
-    expect(session.signedIn, isFalse);
-    await _pump(tester, _install(session), const AppGate());
 
-    // App Store 5.1.1(v): the app opens on the catalogue, not on sign-in.
-    expect(find.byType(LoginScreen), findsNothing);
-    expect(find.byType(HomeScreen), findsOneWidget);
-    expect(find.text('Popular courses'), findsOneWidget);
+    testWidgets('signing in from the question opens the Student space, with nothing left behind', (tester) async {
+      final FakeBackend backend = FakeBackend(<String, FakeResponse>{
+        'GET /auth/me': _error(401, 'UNAUTHENTICATED', 'Authentication is required.'),
+        'POST /auth/login': FakeResponse(200, <String, Object?>{'data': user()}),
+      });
+      final SessionStore session = SessionStore(fakeApi(backend));
+      await tester.runAsync(session.boot);
+      await _pump(tester, _install(session), const AppGate());
 
-    // The cart needs an account: the tab says so and offers both ways in.
-    await tester.tap(find.byIcon(Icons.shopping_bag_outlined).last);
-    await tester.pumpAndSettle();
-    expect(find.text('Your cart'), findsOneWidget);
-    expect(find.text('Create your account'), findsWidgets);
-    expect(backend.requests.where((FakeRequest r) => r.path == '/cart'), isEmpty);
+      await _tap(tester, 'Sign in');
+      await tester.enterText(find.byType(TextField).at(0), '0555123456');
+      await tester.enterText(find.byType(TextField).at(1), 'NovaSecure9!');
+      await tester.tap(find.text('Sign in').last);
+      // The Student home has a looping live pulse: pump frames, not settle.
+      for (int i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
 
-    await _tap(tester, 'Sign in');
-    expect(find.byType(LoginScreen), findsOneWidget);
-    // Sign-in opens over the app: back returns to browsing.
-    await tester.tap(find.bySemanticsLabel('Back'));
-    await tester.pumpAndSettle();
-    expect(find.byType(LoginScreen), findsNothing);
-    expect(find.text('Your cart'), findsOneWidget);
+      expect(_body(_sent(backend, 'POST', '/auth/login')), <String, Object?>{
+        'phone': '0555123456',
+        'password': 'NovaSecure9!',
+      });
+      expect(session.signedIn, isTrue);
+      expect(find.byType(LoginScreen), findsNothing);
+      expect(find.byType(AuthGatewayScreen), findsNothing);
+      expect(find.byType(ShellScreen), findsOneWidget);
+      expect(_heroTitle('Welcome back, Ines.'), findsOneWidget);
+      // The space is the root: back has nothing to return to.
+      expect(Navigator.of(tester.element(find.byType(ShellScreen))).canPop(), isFalse);
+    });
+
+    testWidgets('a Student still signed in goes straight to their space', (tester) async {
+      final SessionStore session = SessionStore.seeded(StudentProfile.fromUser(user()), user: user());
+      await tester.pumpWidget(AppScope(
+        state: _install(session),
+        child: MaterialApp(theme: NovaTheme.light, home: const AppGate()),
+      ));
+      for (int i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byType(AuthGatewayScreen), findsNothing);
+      expect(find.byType(ShellScreen), findsOneWidget);
+      expect(find.byType(HomeScreen), findsOneWidget);
+    });
   });
 
   testWidgets('Settings changes the password with a code sent to the Student (D-093)',
@@ -589,49 +670,6 @@ void main() {
 
       await _tap(tester, 'Physics — First Trimester');
       expect(_body(_sent(backend, 'POST', '/cart/items')), <String, Object?>{'offer_id': 11});
-    });
-
-    testWidgets('a visitor who buys signs in, then lands in the cart with the item (D-127)', (tester) async {
-      final Map<String, Object?> user = <String, Object?>{
-        'id': 9, 'role': 'student', 'phone': '0555123456', 'next_required_step': null,
-        'student': <String, Object?>{'first_name': 'Ines', 'last_name': 'Benali'},
-      };
-      final FakeBackend backend = FakeBackend(<String, FakeResponse>{
-        'GET /auth/me': _error(401, 'UNAUTHENTICATED', 'Authentication is required.'),
-        'POST /auth/login': FakeResponse(200, <String, Object?>{'data': user}),
-        'GET /courses/course-40': FakeResponse(200, <String, Object?>{'data': course(<Object>[term])}),
-        'GET /cart': const FakeResponse(200, <String, Object>{'data': <Object>[]}),
-        'GET /orders': const FakeResponse(200, <String, Object>{'data': <Object>[]}),
-        'POST /cart/items': const FakeResponse(200, <String, Object>{
-          'data': <Object>[
-            <String, Object>{'kind': 'offer', 'id': 11, 'title': 'Physics — First Trimester', 'price': '4000.00'},
-          ],
-        }),
-      });
-      final SessionStore session = SessionStore(fakeApi(backend));
-      await tester.runAsync(session.boot);
-      final AppState state = _install(session, catalog: CatalogStore(fakeApi(backend)), commerce: CommerceStore(fakeApi(backend)));
-      await _pump(tester, state, const AppGate());
-      Navigator.of(tester.element(find.byType(HomeScreen))).push(MaterialPageRoute<void>(
-        builder: (_) => CourseDetailScreen(course: Course.fromJson(Map<String, dynamic>.of(course(<Object>[term])))),
-      ));
-      await tester.pumpAndSettle();
-
-      // A visitor: sign-in first, nothing reaches the cart yet.
-      await _tap(tester, 'Add the Pack');
-      expect(find.byType(LoginScreen), findsOneWidget);
-      expect(backend.requests.where((FakeRequest r) => r.path == '/cart/items'), isEmpty);
-
-      await tester.enterText(find.byType(TextField).at(0), '0555123456');
-      await tester.enterText(find.byType(TextField).at(1), 'NovaSecure9!');
-      await _tap(tester, 'Sign in');
-
-      // Signed in: the item goes in the cart and the cart opens.
-      expect(session.signedIn, isTrue);
-      expect(find.byType(LoginScreen), findsNothing);
-      expect(_body(_sent(backend, 'POST', '/cart/items')), <String, Object?>{'offer_id': 11});
-      expect(find.byType(CartScreen), findsOneWidget);
-      expect(state.pendingPurchase, isNull);
     });
 
     testWidgets('with one Pack it is added at once; without any nothing is sold', (tester) async {

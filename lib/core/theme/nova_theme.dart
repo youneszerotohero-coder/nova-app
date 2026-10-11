@@ -56,10 +56,10 @@ abstract final class NovaTheme {
 
   static ThemeData _base(Color scaffold, Color foreground) {
     final ColorScheme scheme = ColorScheme.light(
-      primary: NovaColors.ink900,
-      onPrimary: NovaColors.textOnDark,
-      secondary: NovaColors.accent,
-      onSecondary: Colors.white,
+      primary: NovaColors.accent,
+      onPrimary: Colors.white,
+      secondary: NovaColors.yellow,
+      onSecondary: NovaColors.yellowInk,
       surface: scaffold,
       onSurface: foreground,
       error: NovaColors.heartRed,
@@ -67,7 +67,16 @@ abstract final class NovaTheme {
 
     return ThemeData(
       useMaterial3: true,
+      // The website's faces: Geist, with Baloo Bhaijaan 2 for Arabic glyphs.
+      fontFamily: NovaTypography.body,
+      fontFamilyFallback: NovaTypography.fallback,
       colorScheme: scheme,
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: NovaColors.accent,
+        selectionColor: NovaColors.accent.withValues(alpha: 0.22),
+        selectionHandleColor: NovaColors.accent,
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(color: NovaColors.accent),
       scaffoldBackgroundColor: scaffold,
       textTheme: NovaTypography.textTheme,
       splashFactory: InkSparkle.splashFactory,

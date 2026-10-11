@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../shell/student_top_bar.dart';
+import '../../core/widgets/hero_style.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../core/theme/nova_typography.dart';
@@ -8,8 +10,6 @@ import '../../core/widgets/circle_icon_button.dart';
 import '../../core/i18n/labels.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/widgets/motion.dart';
-import '../../core/theme/nova_dimens.dart';
-import '../../core/widgets/nova_decor.dart';
 import '../../core/widgets/nova_scene_image.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/pressable_scale.dart';
@@ -20,7 +20,6 @@ import '../../core/api/api_exception.dart';
 import '../../core/widgets/nova_toast.dart';
 import '../learning/open_course.dart';
 import 'pack_picker.dart';
-import '../auth/require_account.dart';
 
 /// Course detail (and Offer detail via `.pack`): hero, description,
 /// curriculum accordion, purchase card with the add-to-cart / buy-now
@@ -123,8 +122,6 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   Future<void> _buyNow() => _buyItem(_kind, _productId);
 
   Future<bool> _addItem(String kind, int id) async {
-    // A visitor signs in first, then lands in the cart with this item (D-127).
-    if (!requireAccount(context, purchase: (kind: kind, id: id))) return false;
     if (_app.contains('$kind:$id')) return true;
     setState(() => _busy = true);
     try {
@@ -172,7 +169,6 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
 
   /// Free Courses are never sold (D-054): the Student joins them.
   Future<void> _joinFree() async {
-    if (!requireAccount(context)) return;
     setState(() => _busy = true);
     try {
       await _app.learning.enrollFree(_course!);
@@ -257,7 +253,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   }
 
   void _openCourse() {
-    if (requireAccount(context)) openOwnedCourse(context, _course!);
+    openOwnedCourse(context, _course!);
   }
 
   List<String> _courseStats() {
@@ -509,135 +505,89 @@ class _DetailHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double topInset = MediaQuery.paddingOf(context).top;
-
-    return Container(
-      height: 320 + topInset,
-      clipBehavior: Clip.antiAlias,
-      decoration: const BoxDecoration(
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(NovaDimens.radiusCardLarge),
-        ),
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Hero(
-            tag: 'cover-$title',
-            child: NovaSceneImage(scene: scene, image: image),
-          ),
-          // Placed by hand rather than through the scene so it clears
-          // both the button row above and the title below.
-          if (image == null)
-            Positioned(
-            right: -12,
-            top: topInset + 52,
-            child: Icon(
-              icon,
-              size: 124,
-              color: Colors.white.withValues(alpha: 0.22),
-            ),
-          ),
-          if (image == null)
-            const Positioned.fill(
-            child: NovaDecor(color: Colors.white, opacity: 0.2, seed: 2),
-          ),
-          const Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  stops: [0.3, 1],
-                  colors: [Colors.transparent, Color(0xD9131F3A)],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 20,
-            right: 20,
-            top: topInset + 14,
-            child: Row(
-              children: [
-                FrostedIconButton(
-                  icon: Icons.arrow_back_rounded,
-                  semanticLabel: context.tr('common.back'),
-                  onTap: () => Navigator.of(context).maybePop(),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 13,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.22),
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                  child: Text(
-                    kind.toUpperCase(),
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 10,
-                      letterSpacing: 1.8,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            left: 20,
-            right: 20,
-            bottom: 24,
+    // The website's Unit / Offer page head (D-125): the back pill, then the
+    // blue band with the cover in a tilted white frame, the stickers, the
+    // title and the figures.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const StudentTopBar(showBack: true),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: HeroBand(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Sparkle(size: 12),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        kicker.toUpperCase(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 10,
-                          letterSpacing: 2.2,
-                          color: Colors.white,
+                Center(
+                  child: Transform.rotate(
+                    angle: -0.035,
+                    child: Container(
+                      width: 240,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(28),
+                        boxShadow: const [BoxShadow(offset: Offset(0, 22), blurRadius: 40, spreadRadius: -18, color: Color(0x99071649))],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(21),
+                        child: AspectRatio(
+                          aspectRatio: 25 / 23,
+                          child: Hero(
+                            tag: 'cover-$title',
+                            child: NovaSceneImage(scene: scene, image: image, icon: icon),
+                          ),
                         ),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  title,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: NovaTypography.textTheme.displaySmall!.copyWith(
-                    color: Colors.white,
-                    height: 1.08,
                   ),
                 ),
+                const SizedBox(height: 22),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _Sticker(label: kicker, yellow: true),
+                    _Sticker(label: kind),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                HeroTitle(title, size: 30, maxLines: 3),
                 const SizedBox(height: 14),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: stats
-                      .map((String stat) => _FrostedStat(stat))
-                      .toList(),
+                  children: stats.map((String stat) => _FrostedStat(stat)).toList(),
                 ),
               ],
             ),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+}
+
+/// The yellow / white stickers of the website's page heads.
+class _Sticker extends StatelessWidget {
+  const _Sticker({required this.label, this.yellow = false});
+
+  final String label;
+  final bool yellow;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: yellow ? NovaColors.yellow : Colors.white,
+        borderRadius: BorderRadius.circular(13),
+        boxShadow: const [BoxShadow(offset: Offset(0, 10), blurRadius: 20, spreadRadius: -12, color: Color(0x66071649))],
+      ),
+      child: Text(
+        label,
+        style: NovaTypography.textTheme.labelLarge!.copyWith(color: yellow ? NovaColors.yellowInk : NovaColors.textStrong),
       ),
     );
   }
@@ -653,18 +603,13 @@ class _FrostedStat extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.w600,
-          fontSize: 11.5,
-          color: Colors.white,
-        ),
+        style: NovaTypography.textTheme.labelMedium!.copyWith(color: Colors.white),
       ),
     );
   }

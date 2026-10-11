@@ -212,10 +212,9 @@ class _CheckoutBar extends StatelessWidget {
                     Text(
                       context.tr('cart.total').toUpperCase(),
                       style: const TextStyle(
-                        fontFamily: 'Inter',
+                        fontFamily: 'Geist',
                         fontWeight: FontWeight.w700,
                         fontSize: 9.5,
-                        letterSpacing: 1.6,
                         color: NovaColors.textMutedOnDark,
                       ),
                     ),
@@ -225,11 +224,10 @@ class _CheckoutBar extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontFamily: 'InterDisplay',
+                        fontFamily: 'BalooBhaijaan2',
                         fontWeight: FontWeight.w700,
                         fontSize: 17,
                         height: 1.1,
-                        letterSpacing: -0.4,
                         color: NovaColors.textOnDark,
                       ),
                     ),
@@ -253,7 +251,7 @@ class _CheckoutBar extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontFamily: 'Inter',
+                          fontFamily: 'Geist',
                           fontWeight: FontWeight.w700,
                           fontSize: 13.5,
                           color: Colors.white,
@@ -374,7 +372,7 @@ class _CartRow extends StatelessWidget {
                                   formatDiscount(item.discountPercent),
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
-                                    fontFamily: 'Inter',
+                                    fontFamily: 'Geist',
                                     fontWeight: FontWeight.w800,
                                     fontSize: 10,
                                     color: Colors.white,
@@ -403,7 +401,7 @@ class _CartRow extends StatelessWidget {
                           child: Text(
                             modelLabelText(context, item.kind),
                             style: TextStyle(
-                              fontFamily: 'Inter',
+                              fontFamily: 'Geist',
                               fontWeight: FontWeight.w700,
                               fontSize: 10,
                               color: hue.onSurface,
@@ -479,7 +477,7 @@ class _CartRow extends StatelessWidget {
                           Text(
                             context.tr('cart.remove'),
                             style: const TextStyle(
-                              fontFamily: 'Inter',
+                              fontFamily: 'Geist',
                               fontWeight: FontWeight.w700,
                               fontSize: 11.5,
                               color: NovaColors.heartRed,

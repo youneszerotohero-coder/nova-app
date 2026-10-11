@@ -18,11 +18,11 @@ import '../../core/widgets/pressable_scale.dart';
 import '../../data/json.dart';
 import '../../data/live_store.dart';
 import '../../data/models.dart';
-import '../player/lesson_player.dart';
 import '../player/live_player.dart';
 import '../player/playback_rules.dart';
 import 'live_speaker.dart';
 import 'live_speaking_stage.dart';
+import 'open_course.dart';
 
 /// The Student's hand, web `live-room.tsx` states.
 enum _Hand { passive, pending, connecting, interactive }
@@ -117,7 +117,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
         // Realtime is the fresher source once it has spoken.
         if (!_speakerFromRealtime) _speakerName = detail.isLive ? detail.speaker : null;
       });
-      if (detail.replayDelivery != null) ClearDeliveryMemory.videoMode = detail.replayDelivery;
+      if (detail.isOver && detail.live.lessonId != null) {
+        _openLesson(detail.live);
+        return;
+      }
       _applyHandStatus(detail.handStatus);
       if (detail.muted) _speaker?.setMicrophone(false);
       _watchPresence(detail.isLive);
@@ -125,6 +128,16 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
       if (mounted) setState(() => _loadError = apiErrorText(context, error));
     }
     _schedulePoll();
+  }
+
+  /// D-132: a finished Live is a Lesson of its Unit; the room gives way to it.
+  void _openLesson(LiveSession live) {
+    final AppState app = AppScope.of(context);
+    final NavigatorState navigator = Navigator.of(context);
+    final Course? course = app.learning.owned.where((Course c) => c.slug == live.courseSlug).firstOrNull;
+    if (course == null) return;
+    navigator.pop();
+    openOwnedCourse(navigator.context, course, lessonId: live.lessonId);
   }
 
   /// Web cadence: every 20 s with realtime, every 8 s without, while the
@@ -293,7 +306,6 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
     final LiveDetail? detail = _detail;
     final Widget? player = detail == null ? null : _player(detail);
 
-    final bool isReplay = detail?.replayAvailable ?? widget.live.status == LiveStatus.replay;
     final bool isLive = detail?.isLive ?? false;
 
     if (_fullscreen && player != null) {
@@ -326,7 +338,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
         bottom: false,
         child: Column(
           children: [
-            _header(context, detail, isReplay: isReplay, isLive: isLive),
+            _header(context, detail, isLive: isLive),
             Expanded(
               child: Stack(
                 fit: StackFit.expand,
@@ -334,7 +346,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
                   NovaSceneImage(
                     scene: widget.live.scene,
                     image: widget.live.image,
-                    icon: isReplay ? Icons.movie_rounded : Icons.videocam_rounded,
+                    icon: Icons.videocam_rounded,
                     iconScale: 1.4,
                   ),
                   ColoredBox(color: NovaColors.ink950.withValues(alpha: 0.72)),
@@ -360,7 +372,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
                 ],
               ),
             ),
-            if (detail == null || !detail.isOver || detail.replayAvailable) _composer(context, detail),
+            if (detail == null || !detail.isOver) _composer(context, detail),
           ],
         ),
       ),
@@ -388,14 +400,6 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
           fullscreen: _fullscreen,
           onToggleFullscreen: () => _setFullscreen(!_fullscreen),
         ),
-      );
-    }
-    if (detail.isOver && detail.replayAvailable) {
-      return LessonPlayer.replay(
-        key: _playerKey,
-        live: detail.live,
-        fullscreen: _fullscreen,
-        onToggleFullscreen: () => _setFullscreen(!_fullscreen),
       );
     }
     return null;
@@ -441,7 +445,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
           text,
           textAlign: TextAlign.center,
           style: const TextStyle(
-            fontFamily: 'Inter',
+            fontFamily: 'Geist',
             fontWeight: FontWeight.w600,
             fontSize: 14,
             height: 1.45,
@@ -452,7 +456,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
     );
   }
 
-  Widget _header(BuildContext context, LiveDetail? detail, {required bool isReplay, required bool isLive}) {
+  Widget _header(BuildContext context, LiveDetail? detail, {required bool isLive}) {
     final String? mediaLabel = !isLive
         ? null
         : switch (detail?.mediaState) {
@@ -491,17 +495,16 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
                     Flexible(
                       child: Text(
                         <String>[
-                          isReplay && !isLive ? context.tr('live.replayBadge') : context.tr('live.class'),
+                          context.tr('live.class'),
                           ?clock,
                           ?mediaLabel,
                         ].join(' · '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontFamily: 'Inter',
+                          fontFamily: 'Geist',
                           fontWeight: FontWeight.w800,
                           fontSize: 11,
-                          letterSpacing: 1.2,
                           color: Colors.white,
                         ),
                       ),
@@ -514,7 +517,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontFamily: 'Inter',
+                    fontFamily: 'Geist',
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                     color: NovaColors.textMutedOnDark,
@@ -537,7 +540,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
                   Text(
                     '${_viewers ?? detail?.live.attendees ?? 1}',
                     style: const TextStyle(
-                      fontFamily: 'Inter',
+                      fontFamily: 'Geist',
                       fontWeight: FontWeight.w700,
                       fontSize: 11,
                       color: NovaColors.textOnDark,
@@ -572,12 +575,12 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
                   maxLength: detail?.live.commentMaxLength ?? 500,
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => _sendQuestion(),
-                  style: const TextStyle(fontFamily: 'Inter', fontSize: 13.5, color: NovaColors.textOnDark),
+                  style: const TextStyle(fontFamily: 'Geist', fontSize: 13.5, color: NovaColors.textOnDark),
                   decoration: InputDecoration(
                     counterText: '',
                     hintText: canAsk ? context.tr('live.questionHint') : context.tr('live.questionsClosed'),
                     hintStyle: const TextStyle(
-                      fontFamily: 'Inter',
+                      fontFamily: 'Geist',
                       fontSize: 12.5,
                       color: NovaColors.textMutedOnDark,
                     ),
@@ -663,7 +666,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
             Text(
               context.tr(key),
               style: const TextStyle(
-                fontFamily: 'Inter',
+                fontFamily: 'Geist',
                 fontWeight: FontWeight.w700,
                 fontSize: 13.5,
                 color: Colors.white,

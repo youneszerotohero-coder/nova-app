@@ -25,6 +25,27 @@ import UIKit
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "AppUpdate") {
       AppDelegate.registerAppUpdate(with: registrar)
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ScreenAwake") {
+      AppDelegate.registerScreenAwake(with: registrar)
+    }
+  }
+
+  /// `nova/screen` (D-133): the screen stays on while a video plays, as on
+  /// YouTube; Dart releases it on pause, end or exit, and the normal
+  /// auto-lock applies again.
+  private static func registerScreenAwake(with registrar: FlutterPluginRegistrar) {
+    let channel = FlutterMethodChannel(name: "nova/screen", binaryMessenger: registrar.messenger())
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "keepOn" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      let on = (call.arguments as? Bool) ?? false
+      DispatchQueue.main.async {
+        UIApplication.shared.isIdleTimerDisabled = on
+      }
+      result(nil)
+    }
   }
 
   /// `nova/app_update`: the installed version and bundle id, compared by

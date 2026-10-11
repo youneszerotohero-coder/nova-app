@@ -2,19 +2,23 @@ import 'package:flutter/material.dart';
 
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
-import '../../core/theme/nova_colors.dart';
-import '../../core/theme/nova_typography.dart';
-import '../../core/widgets/pressable_scale.dart';
+import '../../core/widgets/hero_style.dart';
 import '../../data/session_store.dart';
+import '../auth/auth_gateway_screen.dart';
 import '../auth/change_password_screen.dart';
 import '../auth/phone_step_screen.dart';
 import '../auth/register_screen.dart';
 import '../auth/school_year_screen.dart';
 import 'shell_screen.dart';
+import 'splash_screen.dart';
 
 /// Root route: shows what the session allows. Signing out, a replaced
 /// session or a finished onboarding step swap the root and drop every
 /// pushed route, so no screen of the previous state survives.
+///
+/// D-133: the launch animation plays once while the stored session loads; a
+/// Student still signed in goes straight to their space, anyone else to the
+/// "I have an account / I'm new" gateway. There are no public pages.
 class AppGate extends StatefulWidget {
   const AppGate({super.key});
 
@@ -25,10 +29,26 @@ class AppGate extends StatefulWidget {
 class _AppGateState extends State<AppGate> {
   Object? _lastKey;
 
+  /// The launch animation has been seen once (offline previews skip it).
+  bool? _introDone;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_introDone != null) return;
+    _introDone = AppScope.of(context).api == null;
+    if (!_introDone!) {
+      Future<void>.delayed(NovaSplash.minimum, () {
+        if (mounted) setState(() => _introDone = true);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final SessionStore session = AppScope.of(context).session;
-    final Object key = (session.status, session.nextRequiredStep);
+    final bool splash = session.status == SessionStatus.booting || _introDone != true;
+    final Object key = splash ? 'splash' : (session.status, session.nextRequiredStep);
     if (_lastKey != null && _lastKey != key) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) Navigator.of(context).popUntil((Route<dynamic> r) => r.isFirst);
@@ -37,58 +57,26 @@ class _AppGateState extends State<AppGate> {
     _lastKey = key;
 
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 320),
+      duration: const Duration(milliseconds: 420),
+      switchInCurve: Curves.easeOutCubic,
       child: KeyedSubtree(
         key: ValueKey<Object>(key),
-        child: switch (session.status) {
-          SessionStatus.booting => const _Splash(),
-          SessionStatus.offline => const _Offline(),
-          // D-127 (App Store 5.1.1(v)): a visitor browses the app; account features ask to sign in.
-          SessionStatus.signedOut => const ShellScreen(),
-          SessionStatus.signedIn => switch (session.nextRequiredStep) {
-              'password_change' => const ChangePasswordScreen(),
-              // D-079: an account without a valid mobile, before onboarding.
-              'phone' => const PhoneStepScreen(),
-              'onboarding' => const RegisterScreen(onboarding: true),
-              // D-098: a new school year, level and filière confirmed first.
-              'school_year' => const SchoolYearScreen(),
-              _ => const ShellScreen(),
-            },
-        },
-      ),
-    );
-  }
-}
-
-class _Splash extends StatelessWidget {
-  const _Splash();
-
-  @override
-  Widget build(BuildContext context) {
-    // The website's NOVA logo on white, continuing the native launch
-    // screen without a flash.
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset(
-              'assets/images/brand/nova_logo.png',
-              width: 168,
-              semanticLabel: 'NOVA',
-            ),
-            const SizedBox(height: 28),
-            const SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.4,
-                color: NovaColors.accent,
-              ),
-            ),
-          ],
-        ),
+        child: splash
+            ? const NovaSplash()
+            : switch (session.status) {
+                SessionStatus.booting => const NovaSplash(),
+                SessionStatus.offline => const _Offline(),
+                SessionStatus.signedOut => const AuthGatewayScreen(),
+                SessionStatus.signedIn => switch (session.nextRequiredStep) {
+                    'password_change' => const ChangePasswordScreen(),
+                    // D-079: an account without a valid mobile, before onboarding.
+                    'phone' => const PhoneStepScreen(),
+                    'onboarding' => const RegisterScreen(onboarding: true),
+                    // D-098: a new school year, level and filière confirmed first.
+                    'school_year' => const SchoolYearScreen(),
+                    _ => const ShellScreen(),
+                  },
+              },
       ),
     );
   }
@@ -101,42 +89,16 @@ class _Offline extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.wifi_off_rounded, size: 48, color: NovaColors.textMuted),
-              const SizedBox(height: 18),
-              Text(
-                context.tr('err.network'),
-                textAlign: TextAlign.center,
-                style: NovaTypography.textTheme.titleMedium,
-              ),
-              const SizedBox(height: 22),
-              PressableScale(
-                onTap: () => AppScope.of(context).boot(),
-                semanticLabel: 'Retry',
-                child: Container(
-                  height: 52,
-                  padding: const EdgeInsets.symmetric(horizontal: 28),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: NovaColors.ink950,
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                  child: Text(
-                    context.tr('common.retry'),
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      color: NovaColors.textOnDark,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+        child: Center(
+          child: HeroEmpty(
+            icon: Icons.wifi_off_rounded,
+            title: context.tr('err.network'),
+            boxed: false,
+            action: NovaButton(
+              label: context.tr('common.retry'),
+              icon: Icons.refresh_rounded,
+              onTap: () => AppScope.of(context).boot(),
+            ),
           ),
         ),
       ),

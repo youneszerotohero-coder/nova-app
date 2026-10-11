@@ -6,6 +6,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../core/utils/screen_awake.dart';
+
 
 /// Device support for protected playback.
 enum DrmSupport {
@@ -157,8 +159,11 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
     switch (event['event']) {
       case 'state':
         value = value.copyWith(phase: '${event['state']}');
+        if (event['state'] == 'ended') ScreenAwake.release(this);
       case 'playing':
         value = value.copyWith(playing: event['value'] == true);
+        // D-133: the screen stays on while the picture moves, as on YouTube.
+        event['value'] == true ? ScreenAwake.hold(this) : ScreenAwake.release(this);
       case 'position':
         value = value.copyWith(
           position: Duration(milliseconds: (event['position'] as num).toInt()),
@@ -182,6 +187,7 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
           licenseStatus: event['licenseStatus'] is num ? (event['licenseStatus'] as num).toInt() : 0,
           playing: false,
         );
+        ScreenAwake.release(this);
     }
   }
 
@@ -205,6 +211,7 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
 
   @override
   void dispose() {
+    ScreenAwake.release(this);
     _events?.cancel();
     _call('release');
     super.dispose();

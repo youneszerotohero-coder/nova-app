@@ -15,7 +15,7 @@ void main() {
   setUpAll(loadNovaFonts);
   setUp(installFixtureApp);
 
-  testWidgets('home renders in dark mode with Arabic RTL', (tester) async {
+  goldenTestWidgets('home renders in dark mode with Arabic RTL', (tester) async {
     tester.view.physicalSize = const Size(1170, 2532);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
@@ -25,7 +25,9 @@ void main() {
     state.setLang(NovaLang.ar);
 
     await tester.pumpWidget(const NovaApp());
-    await tester.pumpAndSettle();
+    // The Student home's live-now pulse loops: frames, not settle.
+    await pumpFrames(tester);
+    await settleImages(tester, looping: true);
 
     await expectLater(
       find.byType(NovaApp),
@@ -38,7 +40,7 @@ void main() {
     state.setDarkMode(false);
   });
 
-  testWidgets('settings screen in dark mode snapshot', (tester) async {
+  goldenTestWidgets('settings screen in dark mode snapshot', (tester) async {
     tester.view.physicalSize = const Size(1170, 2532);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);

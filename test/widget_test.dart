@@ -6,15 +6,25 @@ import 'package:nova_mobile/core/state/app_state.dart';
 import 'package:nova_mobile/core/theme/nova_theme.dart';
 import 'package:nova_mobile/core/utils/format_price.dart';
 import 'package:nova_mobile/core/utils/search_text.dart';
+import 'package:nova_mobile/core/widgets/hero_style.dart';
+import 'package:nova_mobile/core/widgets/nova_bottom_bar.dart';
 import 'package:nova_mobile/core/widgets/pressable_scale.dart';
 import 'package:nova_mobile/core/widgets/subject_chip.dart';
 import 'package:nova_mobile/data/catalog_store.dart';
 import 'package:nova_mobile/data/models.dart';
+import 'package:nova_mobile/features/account/profile_screen.dart';
+import 'package:nova_mobile/features/cart/cart_screen.dart';
 import 'package:nova_mobile/features/detail/course_detail_screen.dart';
 import 'package:nova_mobile/features/detail/teacher_detail_screen.dart';
 import 'package:nova_mobile/features/explore/explore_screen.dart';
 import 'package:nova_mobile/features/home/home_screen.dart';
+import 'package:nova_mobile/features/home/widgets/nova_product_card.dart';
 import 'package:nova_mobile/features/learning/learn_screen.dart';
+import 'package:nova_mobile/features/learning/lesson_screen.dart';
+import 'package:nova_mobile/features/learning/lives_screen.dart';
+import 'package:nova_mobile/features/learning/my_learning_screen.dart';
+import 'package:nova_mobile/features/shell/shell_screen.dart';
+import 'package:nova_mobile/features/shell/student_top_bar.dart';
 import 'package:nova_mobile/main.dart';
 
 import 'fixtures/fake_api.dart';
@@ -81,18 +91,21 @@ Map<String, Object?> _offer(int id, String title, Map<String, Object> teacher) =
       'teachers': <Object>[teacher],
     };
 
-/// Loads the bundled Inter families so text metrics match production.
+/// Loads the bundled Baloo Bhaijaan 2 / Geist families so text metrics match production.
 Future<void> _loadNovaFonts() async {
   const Map<String, List<String>> families = {
-    'Inter': [
-      'Inter-Regular.ttf',
-      'Inter-Medium.ttf',
-      'Inter-SemiBold.ttf',
-      'Inter-Bold.ttf',
+    'BalooBhaijaan2': [
+      'BalooBhaijaan2-400.ttf',
+      'BalooBhaijaan2-500.ttf',
+      'BalooBhaijaan2-600.ttf',
+      'BalooBhaijaan2-700.ttf',
+      'BalooBhaijaan2-800.ttf',
     ],
-    'InterDisplay': [
-      'InterDisplay-SemiBold.ttf',
-      'InterDisplay-Bold.ttf',
+    'Geist': [
+      'Geist-400.ttf',
+      'Geist-500.ttf',
+      'Geist-600.ttf',
+      'Geist-700.ttf',
     ],
   };
   for (final MapEntry<String, List<String>> family in families.entries) {
@@ -112,114 +125,167 @@ void main() {
   setUpAll(_loadNovaFonts);
   setUp(installFixtureApp);
 
+  /// Two seconds of frames: the home's live-now pulse loops, so the app
+  /// never "settles" while it shows.
+  Future<void> frames(WidgetTester tester) async {
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
+
   Future<void> pumpApp(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1170, 8100);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const NovaApp());
-    await tester.pumpAndSettle();
+    await frames(tester);
   }
 
-  testWidgets('home renders greeting and promotional sections', (
-    tester,
-  ) async {
+  /// A title drawn with its circled word (`*word*`), by its plain text.
+  Finder heroTitle(String plain) =>
+      find.byWidgetPredicate((Widget w) => w is HeroTitle && HeroTitle.plain(w.text) == plain);
+
+  Finder inBar(Finder finder) => find.descendant(of: find.byType(NovaBottomBar), matching: finder);
+
+  /// The menu's panel (316 wide), docked to the reading-start edge.
+  final Finder menuPanel = find.byWidgetPredicate(
+    (Widget w) => w is Container && w.constraints?.maxWidth == 316,
+  );
+
+  /// The tab the Student sees: the only one that answers touches.
+  Finder shown(Type screen) => find.byType(screen).hitTestable();
+
+  testWidgets('home is the website account home: greeting band, live-now bar, Units then Offers', (tester) async {
     await pumpApp(tester);
 
-    expect(find.text('nova'), findsOneWidget);
-    expect(find.text('Hello, ${HomeData.studentName}'), findsOneWidget);
-    expect(find.text(HomeData.greetingSubtitle), findsOneWidget);
-    // Search and filtering live on Explore now.
-    expect(find.text(HomeData.searchHint), findsNothing);
-    expect(find.text('Popular courses'), findsOneWidget);
-    expect(find.text('Our teachers'), findsOneWidget);
+    expect(find.byType(HomeScreen), findsOneWidget);
+    // The band: today's date (Algeria time), the greeting, one line, two ways on.
+    final DateTime now = algeriaTime(DateTime.now());
+    const List<String> days = <String>['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const List<String> months = <String>['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    expect(find.text('${days[now.weekday - 1]}, ${months[now.month - 1]} ${now.day}'), findsOneWidget);
+    expect(heroTitle('Welcome back, ${HomeData.studentName}.'), findsOneWidget);
+    expect(find.text('Open your Units or discover the ones made for your level.'), findsOneWidget);
+    expect(find.text('Continue learning'), findsOneWidget);
+    expect(find.text('See the Offers'), findsOneWidget);
+
+    // One of the Student's Lives is on: one tap from home.
+    expect(find.text('Your live class is on now'), findsOneWidget);
+    expect(find.text(HomeData.lives.first.title), findsOneWidget);
+
+    // Units: the Student's own first, then the others of their level.
+    expect(find.text('Units'), findsOneWidget);
+    expect(find.text('Your Units first, then more for your level.'), findsOneWidget);
+    expect(find.text('All Units →'), findsOneWidget);
+    final List<Course> courses = <Course>[
+      ...HomeData.popularCourses.where((Course c) => c.owned),
+      ...HomeData.popularCourses.where((Course c) => !c.owned),
+    ];
+    final List<double> starts = <double>[
+      for (final Course course in courses) tester.getRect(find.text(course.title)).left,
+    ];
+    expect(starts, orderedEquals(<double>[...starts]..sort()));
+    expect(find.text('Open Unit'), findsNWidgets(HomeData.popularCourses.where((Course c) => c.owned).length));
+    expect(find.text('Purchased'), findsNWidgets(HomeData.popularCourses.where((Course c) => c.owned).length));
+
+    // Offers: several Units in one purchase.
+    expect(find.text('Offers'), findsOneWidget);
+    expect(find.text('Several Units in a single purchase, for your level.'), findsOneWidget);
+    for (final Pack pack in HomeData.featuredPacks) {
+      expect(find.text(pack.name), findsOneWidget);
+    }
+    expect(find.text('Buy now'), findsNWidgets(HomeData.featuredPacks.length));
+    expect(find.byType(NovaProductCard), findsNWidgets(courses.length + HomeData.featuredPacks.length));
+
+    // The old home's sections are gone.
+    expect(find.text('Popular courses'), findsNothing);
+    expect(find.text('Our teachers'), findsNothing);
   });
 
-  testWidgets('pack banner carousel advances with next and prev', (
-    tester,
-  ) async {
+  testWidgets('"Continue learning" switches to My lessons; "See the Offers" and "All Units" open Explore', (tester) async {
     await pumpApp(tester);
 
-    Rect slideRect(String packName) => tester.getRect(
-          find.byWidgetPredicate(
-            (widget) =>
-                widget is PressableScale &&
-                widget.semanticLabel == 'Open pack $packName',
-          ),
-        );
+    await tester.tap(find.text('Continue learning'));
+    await frames(tester);
+    expect(tester.widget<NovaBottomBar>(find.byType(NovaBottomBar)).currentIndex, ShellScreen.units);
+    expect(shown(MyLearningScreen), findsOneWidget);
+    expect(shown(HomeScreen), findsNothing);
 
-    // The second banner only peeks from the right edge.
-    expect(
-      slideRect('Maths + Physics Power Pack').left,
-      greaterThan(300),
-    );
+    await tester.tap(inBar(find.text('Home')));
+    await frames(tester);
+    expect(shown(HomeScreen), findsOneWidget);
 
-    await tester.tap(find.bySemanticsLabel('Next pack'));
-    await tester.pumpAndSettle();
+    await tester.tap(find.text('See the Offers'));
+    await frames(tester);
+    expect(find.byType(ExploreScreen), findsOneWidget);
+    await tester.tap(find.byType(BackPill));
+    await frames(tester);
+    expect(find.byType(ExploreScreen), findsNothing);
 
-    // Now the second banner is the active page and the first is gone.
-    expect(slideRect('Maths + Physics Power Pack').left, lessThan(100));
-    expect(slideRect('Science Track — Complete Year').left, lessThan(-100));
-
-    await tester.tap(find.bySemanticsLabel('Previous pack'));
-    await tester.pumpAndSettle();
-
-    expect(
-      slideRect('Science Track — Complete Year').left,
-      lessThan(50),
-    );
+    await tester.tap(find.text('All Units →'));
+    await frames(tester);
+    expect(find.byType(ExploreScreen), findsOneWidget);
   });
 
-  testWidgets('pack banner arrows mirror in Arabic', (tester) async {
+  testWidgets('a card opens its Unit (owned), its page (not owned) or its Offer', (tester) async {
+    await pumpApp(tester);
+    Future<void> openCard(String title) async {
+      await tester.ensureVisible(find.text(title));
+      await frames(tester);
+      await tester.tap(find.text(title));
+      await frames(tester);
+    }
+
+    await openCard('Physics — Mechanics Masterclass');
+    expect(find.byType(LearnScreen), findsOneWidget);
+    expect(find.text('Unit Lessons'), findsOneWidget);
+    await tester.tap(find.byType(BackPill));
+    await frames(tester);
+
+    await openCard('Mathematics — Problem Solving Lab');
+    expect(find.byType(LearnScreen), findsNothing);
+    expect(find.byType(CourseDetailScreen), findsOneWidget);
+    expect(tester.widget<CourseDetailScreen>(find.byType(CourseDetailScreen)).course?.id, 101);
+    await tester.tap(find.byType(BackPill).last);
+    await frames(tester);
+    expect(find.byType(CourseDetailScreen), findsNothing);
+
+    await openCard('Science Track — Complete Year');
+    expect(find.byType(CourseDetailScreen), findsOneWidget);
+    expect(tester.widget<CourseDetailScreen>(find.byType(CourseDetailScreen)).pack?.id, 201);
+  });
+
+  testWidgets('in Arabic the greeting and the rails read from the right', (tester) async {
     final AppState state = AppState.instance;
     state.setLang(NovaLang.ar);
     addTearDown(() => state.setLang(NovaLang.en));
     await pumpApp(tester);
 
-    final double screenWidth =
-        tester.view.physicalSize.width / tester.view.devicePixelRatio;
-    Rect slideRect(String packName) => tester.getRect(
-          find.byWidgetPredicate(
-            (widget) =>
-                widget is PressableScale &&
-                widget.semanticLabel == 'Open pack $packName',
-          ),
-        );
-    Rect arrowRect(String label) =>
-        tester.getRect(find.bySemanticsLabel(label));
-
-    // Right to left: "previous" on the right edge, "next" on the left,
-    // matching the second banner peeking from the left.
-    expect(arrowRect('Previous pack').left, greaterThan(screenWidth / 2));
-    expect(arrowRect('Next pack').right, lessThan(screenWidth / 2));
-    expect(slideRect('Maths + Physics Power Pack').right, lessThan(100));
-
-    await tester.tap(find.bySemanticsLabel('Next pack'));
-    await tester.pumpAndSettle();
-
-    expect(
-      slideRect('Maths + Physics Power Pack').right,
-      greaterThan(screenWidth - 100),
-    );
-    expect(
-      slideRect('Science Track — Complete Year').right,
-      greaterThan(screenWidth + 100),
-    );
+    final double screenWidth = tester.view.physicalSize.width / tester.view.devicePixelRatio;
+    expect(heroTitle('أهلا ${HomeData.studentName}! يلّا نكمّلو'), findsOneWidget);
+    // The first Unit hugs the right edge; the next one sits to its left.
+    final Rect first = tester.getRect(find.ancestor(of: find.text('Physics — Mechanics Masterclass'), matching: find.byType(NovaProductCard)));
+    final Rect second = tester.getRect(find.ancestor(of: find.text('Philosophy — Essay Blueprint'), matching: find.byType(NovaProductCard)));
+    expect(first.right, greaterThan(screenWidth - 30));
+    expect(second.right, lessThan(first.left));
   });
 
   testWidgets('menu opens and switches tabs', (tester) async {
     await pumpApp(tester);
 
     await tester.tap(find.bySemanticsLabel('Menu'));
-    await tester.pumpAndSettle();
+    await frames(tester);
 
-    expect(find.text('Explore'), findsOneWidget);
-    expect(find.text('My courses'), findsOneWidget);
+    for (final String tab in <String>['Home', 'My lessons', 'Live', 'Cart', 'Account']) {
+      expect(find.descendant(of: menuPanel, matching: find.text(tab)), findsOneWidget);
+    }
 
-    await tester.tap(find.text('My courses'));
-    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(of: menuPanel, matching: find.text('My lessons')));
+    await frames(tester);
 
-    expect(find.text('My courses'), findsOneWidget);
-    expect(find.text('Physics — Mechanics Masterclass'), findsOneWidget);
+    expect(menuPanel, findsNothing);
+    expect(shown(MyLearningScreen), findsOneWidget);
+    expect(find.descendant(of: find.byType(MyLearningScreen), matching: find.text('Physics — Mechanics Masterclass')), findsOneWidget);
   });
 
   testWidgets('menu docks to the right edge in Arabic', (tester) async {
@@ -229,15 +295,11 @@ void main() {
     await pumpApp(tester);
 
     await tester.tap(find.bySemanticsLabel('Menu'));
-    await tester.pumpAndSettle();
+    await frames(tester);
 
     final double screenWidth =
         tester.view.physicalSize.width / tester.view.devicePixelRatio;
-    final Rect panel = tester.getRect(
-      find.byWidgetPredicate(
-        (Widget w) => w is Container && w.constraints?.maxWidth == 316,
-      ),
-    );
+    final Rect panel = tester.getRect(menuPanel);
     expect(panel.right, greaterThan(screenWidth - 20));
     expect(panel.left, greaterThan(0));
   });
@@ -555,51 +617,80 @@ void main() {
     expect(find.text('Buy now'), findsNothing);
   });
 
-  testWidgets('bottom navigation switches tabs', (tester) async {
+  /// The yellow marker of the bottom bar (`.studentBottomNav` active pill).
+  Rect marker(WidgetTester tester) =>
+      tester.getRect(inBar(find.byType(AnimatedPositionedDirectional)));
+
+  testWidgets('the bottom bar holds the website tabs and switches between them', (tester) async {
     await pumpApp(tester);
 
-    await tester.tap(find.bySemanticsLabel('Explore'));
-    await tester.pumpAndSettle();
+    const Map<String, Type> tabs = <String, Type>{
+      'Home': HomeScreen,
+      'My lessons': MyLearningScreen,
+      'Live': LivesScreen,
+      'Cart': CartScreen,
+      'Account': ProfileScreen,
+    };
+    final List<double> centers = <double>[
+      for (final String label in tabs.keys) tester.getCenter(inBar(find.text(label))).dx,
+    ];
+    // Left to right in English, in the website's order.
+    expect(centers, orderedEquals(<double>[...centers]..sort()));
+    expect(shown(HomeScreen), findsOneWidget);
+    expect(marker(tester).center.dx, closeTo(centers.first, 1));
 
-    expect(find.byType(HomeScreen), findsNothing);
-    expect(find.text('Explore'), findsOneWidget);
-
-    await tester.tap(find.bySemanticsLabel('Home'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(HomeScreen), findsOneWidget);
+    int index = 0;
+    for (final MapEntry<String, Type> tab in tabs.entries.toList().reversed) {
+      await tester.tap(inBar(find.text(tab.key)));
+      await frames(tester);
+      index = tabs.keys.toList().indexOf(tab.key);
+      expect(tester.widget<NovaBottomBar>(find.byType(NovaBottomBar)).currentIndex, index);
+      expect(shown(tab.value), findsOneWidget, reason: tab.key);
+      for (final Type other in tabs.values.where((Type t) => t != tab.value)) {
+        expect(shown(other), findsNothing, reason: '${tab.key} hides $other');
+      }
+      // The yellow marker sits under the active tab.
+      expect(marker(tester).center.dx, closeTo(centers[index], 1));
+    }
+    expect(index, 0);
   });
 
-  testWidgets('a bottom bar tab switches from anywhere in its slot', (tester) async {
+  testWidgets('a bottom bar tab answers anywhere in its slot', (tester) async {
     await pumpApp(tester);
-    final Rect explore = tester.getRect(find.bySemanticsLabel('Explore'));
+    final Rect cart = tester.getRect(inBar(find.ancestor(of: find.text('Cart'), matching: find.byType(PressableScale))));
 
-    // The slot's empty corner, away from the icon.
-    await tester.tapAt(explore.topLeft + const Offset(3, 3));
-    await tester.pumpAndSettle();
-    expect(find.byType(HomeScreen), findsNothing);
+    // The slot's empty corner, away from the icon and the label.
+    await tester.tapAt(cart.topLeft + const Offset(3, 3));
+    await frames(tester);
+    expect(shown(CartScreen), findsOneWidget);
+    expect(shown(HomeScreen), findsNothing);
 
-    // The pill's padding ring above the Home slot.
-    final Rect home = tester.getRect(find.bySemanticsLabel('Home'));
-    await tester.tapAt(Offset(home.center.dx, home.top - 5));
-    await tester.pumpAndSettle();
-    expect(find.byType(HomeScreen), findsOneWidget);
+    final Rect home = tester.getRect(inBar(find.ancestor(of: find.text('Home'), matching: find.byType(PressableScale))));
+    await tester.tapAt(home.bottomRight - const Offset(3, 3));
+    await frames(tester);
+    expect(shown(HomeScreen), findsOneWidget);
   });
 
-  testWidgets('the bottom bar ring maps to the mirrored tab in Arabic', (tester) async {
+  testWidgets('the bottom bar mirrors in Arabic', (tester) async {
     final AppState state = AppState.instance;
     state.setLang(NovaLang.ar);
     addTearDown(() => state.setLang(NovaLang.en));
     await pumpApp(tester);
 
-    final Rect explore = tester.getRect(find.bySemanticsLabel('استكشاف'));
-    await tester.tapAt(Offset(explore.center.dx, explore.bottom + 5));
-    await tester.pumpAndSettle();
-    expect(find.byType(HomeScreen), findsNothing);
-    expect(find.byType(ExploreScreen), findsOneWidget);
+    // Home (الدار) on the right, Account (حسابي) on the left.
+    final double home = tester.getCenter(inBar(find.text('الدار'))).dx;
+    final double account = tester.getCenter(inBar(find.text('حسابي'))).dx;
+    expect(home, greaterThan(account));
+    expect(marker(tester).center.dx, closeTo(home, 1));
+
+    await tester.tap(inBar(find.text('حسابي')));
+    await frames(tester);
+    expect(shown(ProfileScreen), findsOneWidget);
+    expect(shown(HomeScreen), findsNothing);
+    expect(marker(tester).center.dx, closeTo(account, 1));
   });
 
-  testWidgets('learn screen opens a fully completed course', (tester) async {
+  testWidgets('the Unit page of a finished Unit shows every Lesson done', (tester) async {
     tester.view.physicalSize = const Size(1170, 2532);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
@@ -619,7 +710,23 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Curriculum'), findsOneWidget);
+    expect(heroTitle(completed.title), findsOneWidget);
+    expect(find.text('${completed.lessons.length} of ${completed.lessons.length} done'), findsOneWidget);
+    expect(find.text('Unit Lessons'), findsOneWidget);
+    for (final Lesson lesson in completed.lessons) {
+      await tester.scrollUntilVisible(find.text(lesson.title), 200, scrollable: find.byType(Scrollable).first);
+      await tester.pumpAndSettle();
+      expect(find.text(lesson.title), findsOneWidget);
+    }
+    expect(find.text('Completed'), findsNWidgets(completed.lessons.length));
+    // Nothing left to start: no "Continue here" mark on a row.
+    expect(find.text('Continue here'), findsNothing);
+    expect(find.text('Start here'), findsNothing);
+
+    await tester.tap(find.text(completed.lessons.last.title));
+    await tester.pumpAndSettle();
+    expect(find.byType(LessonScreen), findsOneWidget);
+    expect(find.text('Video watched. Well done!'), findsOneWidget);
   });
 
   test('DA prices use thin-space grouping', () {

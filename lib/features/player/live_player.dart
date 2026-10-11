@@ -793,7 +793,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
               context.tr(key),
               textAlign: TextAlign.center,
               style: const TextStyle(
-                fontFamily: 'Inter',
+                fontFamily: 'Geist',
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
                 height: 1.4,
@@ -821,7 +821,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
               context.tr(playerFailureKey(category, clear: _neutral)),
               textAlign: TextAlign.center,
               style: const TextStyle(
-                fontFamily: 'Inter',
+                fontFamily: 'Geist',
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
                 height: 1.4,
@@ -887,10 +887,9 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
                 child: const Text(
                   'LIVE',
                   style: TextStyle(
-                    fontFamily: 'Inter',
+                    fontFamily: 'Geist',
                     fontWeight: FontWeight.w800,
                     fontSize: 10.5,
-                    letterSpacing: 1,
                     color: Colors.white,
                   ),
                 ),

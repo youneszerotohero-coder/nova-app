@@ -6,12 +6,17 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nova_mobile/core/state/app_state.dart';
 import 'package:nova_mobile/core/theme/nova_theme.dart';
+import 'package:nova_mobile/core/utils/screen_awake.dart';
 import 'package:nova_mobile/data/learning_store.dart';
 import 'package:nova_mobile/data/models.dart';
 import 'package:nova_mobile/data/playback_models.dart';
 import 'package:nova_mobile/features/learning/learn_screen.dart';
+import 'package:nova_mobile/features/learning/lesson_pdf_screen.dart';
+import 'package:nova_mobile/features/learning/lesson_screen.dart';
+import 'package:nova_mobile/features/learning/quiz_runner.dart';
 import 'package:nova_mobile/features/player/lesson_player.dart';
 import 'package:nova_mobile/features/player/playback_rules.dart';
+import 'package:nova_mobile/features/shell/student_top_bar.dart';
 
 import 'fixtures/fake_api.dart';
 import 'fixtures/fake_native_player.dart';
@@ -79,6 +84,12 @@ const FakeResponse _clearRefused = FakeResponse(403, <String, Object>{
     'message': 'Clear delivery is disabled.',
   },
 });
+
+/// Scrolls the page until [finder] can be tapped, then lets the layout settle.
+Future<void> _reveal(WidgetTester tester, Finder finder, double delta) async {
+  await tester.scrollUntilVisible(finder, delta, scrollable: find.byType(Scrollable).first);
+  await tester.pumpAndSettle();
+}
 
 void main() {
   group('Playback rules (web parity)', () {
@@ -183,7 +194,9 @@ void main() {
     late FakeNativePlayers players;
     const MethodChannel drm = MethodChannel('nova/drm');
 
-    Future<void> pumpLearn(WidgetTester tester, {String? widevine}) async {
+    /// The Lesson page (D-132) of the fixture's owned Unit: its first Lesson
+    /// (`/lessons/0/…`) unless [index] picks another one.
+    Future<void> pumpLesson(WidgetTester tester, {String? widevine, int index = 0}) async {
       tester.view.physicalSize = const Size(1170, 2532);
       tester.view.devicePixelRatio = 3.0;
       addTearDown(tester.view.reset);
@@ -200,7 +213,10 @@ void main() {
       await tester.pumpWidget(
         AppScope(
           state: app,
-          child: MaterialApp(theme: NovaTheme.light, home: LearnScreen(course: course)),
+          child: MaterialApp(
+            theme: NovaTheme.light,
+            home: LessonScreen(course: ValueNotifier<Course>(course), index: index),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -210,7 +226,7 @@ void main() {
       backend = FakeBackend(<String, FakeResponse>{
         'POST /lessons/0/playback': FakeResponse(200, <String, Object?>{'data': _authorization()}),
       });
-      await pumpLearn(tester, widevine: 'L3');
+      await pumpLesson(tester, widevine: 'L3');
 
       await tester.tap(find.text('Play'));
       await tester.pumpAndSettle();
@@ -231,7 +247,7 @@ void main() {
           },
         }),
       });
-      await pumpLearn(tester, widevine: 'L1');
+      await pumpLesson(tester, widevine: 'L1');
 
       await tester.tap(find.text('Play'));
       await tester.pumpAndSettle();
@@ -246,7 +262,7 @@ void main() {
         backend = FakeBackend(<String, FakeResponse>{
           'POST /lessons/0/playback': FakeResponse(200, <String, Object?>{'data': _authorization(fairplay: true)}),
         });
-        await pumpLearn(tester);
+        await pumpLesson(tester);
 
         await tester.tap(find.text('Play'));
         await tester.pump(const Duration(milliseconds: 100));
@@ -274,7 +290,7 @@ void main() {
         backend = FakeBackend(<String, FakeResponse>{
           'POST /lessons/0/playback': FakeResponse(200, <String, Object?>{'data': _authorization(fairplay: true)}),
         });
-        await pumpLearn(tester);
+        await pumpLesson(tester);
         await tester.tap(find.text('Play'));
         await tester.pump(const Duration(milliseconds: 100));
         await tester.pump(const Duration(milliseconds: 100));
@@ -302,7 +318,7 @@ void main() {
         backend = FakeBackend(<String, FakeResponse>{
           'POST /lessons/0/playback': FakeResponse(200, <String, Object?>{'data': _authorization()}),
         });
-        await pumpLearn(tester);
+        await pumpLesson(tester);
 
         await tester.tap(find.text('Play'));
         await tester.pumpAndSettle();
@@ -320,7 +336,7 @@ void main() {
         backend = FakeBackend(<String, FakeResponse>{
           'POST /lessons/0/playback': FakeResponse(200, <String, Object?>{'data': _clearAuthorization()}),
         });
-        await pumpLearn(tester);
+        await pumpLesson(tester);
 
         await tester.tap(find.text('Play'));
         await tester.pump(const Duration(milliseconds: 100));
@@ -348,7 +364,7 @@ void main() {
           ],
         },
       );
-      await pumpLearn(tester, widevine: 'L3');
+      await pumpLesson(tester, widevine: 'L3');
 
       await tester.tap(find.text('Play'));
       await tester.pump(const Duration(milliseconds: 100));
@@ -379,7 +395,7 @@ void main() {
           ],
         },
       );
-      await pumpLearn(tester, widevine: 'L1');
+      await pumpLesson(tester, widevine: 'L1');
 
       await tester.tap(find.text('Play'));
       await tester.pumpAndSettle();
@@ -404,7 +420,7 @@ void main() {
           ],
         },
       );
-      await pumpLearn(tester, widevine: 'L1');
+      await pumpLesson(tester, widevine: 'L1');
 
       await tester.tap(find.text('Play'));
       await tester.pump(const Duration(milliseconds: 100));
@@ -438,7 +454,7 @@ void main() {
           ],
         },
       );
-      await pumpLearn(tester, widevine: 'L1');
+      await pumpLesson(tester, widevine: 'L1');
 
       await tester.tap(find.text('Play'));
       await tester.pump(const Duration(milliseconds: 100));
@@ -470,7 +486,7 @@ void main() {
           ],
         },
       );
-      await pumpLearn(tester, widevine: 'L1');
+      await pumpLesson(tester, widevine: 'L1');
 
       await tester.tap(find.text('Play'));
       await tester.pump(const Duration(milliseconds: 100));
@@ -487,16 +503,166 @@ void main() {
     });
   });
 
-  group('Quizzes', () {
+  group('Lesson from a Live (D-132)', () {
+    setUpAll(loadNovaFonts);
+    setUp(ClearDeliveryMemory.reset);
+
+    testWidgets('a past Live plays as a Lesson: its own /lessons playback, neutral until mode A is known', (tester) async {
+      tester.view.physicalSize = const Size(1170, 2532);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      const MethodChannel drm = MethodChannel('nova/drm');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(drm, (MethodCall call) async => 'L1');
+      addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(drm, null));
+      final FakeNativePlayers players = FakeNativePlayers()..install();
+      addTearDown(players.uninstall);
+      final FakeBackend backend = FakeBackend(<String, FakeResponse>{
+        'POST /lessons/1025/playback': FakeResponse(200, <String, Object?>{'data': _authorization()}),
+      });
+      final AppState app = installFixtureApp(learning: LearningStore(fakeApi(backend)));
+      final Course course = HomeData.popularCourses.firstWhere((Course c) => c.owned);
+
+      Future<void> open() async {
+        await tester.pumpWidget(AppScope(
+          state: app,
+          child: MaterialApp(
+            theme: NovaTheme.light,
+            home: LessonScreen(course: ValueNotifier<Course>(course), index: 4),
+          ),
+        ));
+        await tester.pumpAndSettle();
+      }
+
+      await open();
+      expect(find.text('Live — energy exercises, BAC style'), findsOneWidget);
+      expect(find.text('Recorded during the live class'), findsOneWidget);
+      expect(find.text('Lesson 5 of 5'), findsOneWidget);
+      // Mode unknown: nothing speaks of protection (D-077).
+      expect(find.text('Play'), findsOneWidget);
+      expect(find.text('Protected lesson'), findsNothing);
+
+      await tester.tap(find.text('Play'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+      // The Lesson's own authorization, never a Live replay endpoint.
+      expect(backend.requests.map((FakeRequest r) => r.path), contains('/lessons/1025/playback'));
+      expect(backend.requests.where((FakeRequest r) => r.path.startsWith('/lives')), isEmpty);
+      expect(players.created.single['manifest'], 'https://cdn.test/v/manifest.mpd?token=abc');
+      // The server answered mode A: the next visit may speak of protection.
+      expect(ClearDeliveryMemory.videoMode, 'drm_only');
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
+      await open();
+      expect(find.text('Check & play'), findsOneWidget);
+      expect(find.text('Protected lesson'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
+    });
+  });
+
+  group('Unit and Lesson pages (D-132)', () {
     setUpAll(loadNovaFonts);
 
-    testWidgets('an attempt is started, submitted and graded by the server', (tester) async {
+    testWidgets('the Unit lists its Lessons; a row opens one page with the video, the PDF and the quiz', (tester) async {
+      tester.view.physicalSize = const Size(1170, 2532);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      final FakeBackend backend = FakeBackend(<String, FakeResponse>{
+        'GET /lessons/1023/pdf-access': const FakeResponse(403, <String, Object>{
+          'error': <String, String>{'code': 'FORBIDDEN', 'message': 'This action is unauthorized.'},
+        }),
+      });
+      final AppState app = installFixtureApp(learning: LearningStore(fakeApi(backend)));
+      final Course course = HomeData.popularCourses.firstWhere((Course c) => c.owned);
+      await tester.pumpWidget(AppScope(
+        state: app,
+        child: MaterialApp(theme: NovaTheme.light, home: LearnScreen(course: course)),
+      ));
+      await tester.pumpAndSettle();
+
+      // The Unit: its progress, where to continue, then every Lesson.
+      expect(find.text('2 of 5 done'), findsOneWidget);
+      expect(find.text('Continue: Energy: the safest points'), findsOneWidget);
+      expect(find.text('Unit Lessons'), findsOneWidget);
+      for (final Lesson lesson in course.lessons) {
+        await _reveal(tester, find.text(lesson.title), 200);
+        expect(find.text(lesson.title), findsOneWidget);
+      }
+      // The past Live is one of the Lessons, marked as such.
+      expect(find.text('Live'), findsOneWidget);
+      expect(find.text('Continue here'), findsOneWidget);
+      expect(find.byType(LessonPlayer), findsNothing);
+
+      await _reveal(tester, find.text('Energy: the safest points'), -200);
+      await tester.tap(find.text('Energy: the safest points'));
+      await tester.pumpAndSettle();
+
+      // One page: 1. video, 2. PDF, 3. quiz, with the steps still to do.
+      expect(find.byType(LessonScreen), findsOneWidget);
+      expect(find.text('Lesson 3 of 5'), findsOneWidget);
+      expect(find.byType(LessonPlayer), findsOneWidget);
+      expect(find.text('Watch the video'), findsOneWidget);
+      expect(find.text('You watched 55%. The video counts as watched at 90%.'), findsOneWidget);
+      expect(find.text('To do'), findsNWidgets(3));
+      await _reveal(tester, find.text('Retake'), 200);
+      expect(find.text('Read the PDF'), findsOneWidget);
+      expect(find.text('Take the quiz'), findsOneWidget);
+      // Two attempts already, best 60 % under the 70 % pass mark.
+      expect(find.text('Best score: 60%'), findsOneWidget);
+      expect(find.text('Quiz passed, bravo!'), findsNothing);
+
+      // The PDF opens in-app, through its signed access; a refusal is explained.
+      await tester.ensureVisible(find.text('Open the PDF'));
+      await tester.tap(find.text('Open the PDF'));
+      await tester.pumpAndSettle();
+      expect(find.byType(LessonPdfScreen), findsOneWidget);
+      expect(backend.requests.map((FakeRequest r) => r.path), contains('/lessons/1023/pdf-access'));
+      expect(find.text('PDF unavailable'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+      await tester.pumpAndSettle();
+
+      // Back on the Lesson: the PDF step is ticked.
+      expect(find.byType(LessonPdfScreen), findsNothing);
+      expect(find.text('Opened. You can open it again at any time.'), findsOneWidget);
+      await _reveal(tester, find.text('Lesson 3 of 5'), -300);
+      expect(find.text('To do'), findsNWidgets(2));
+
+      // Next: a Lesson without PDF whose quiz is optional.
+      await _reveal(tester, find.text('Next lesson'), 300);
+      await tester.tap(find.text('Next lesson'));
+      await tester.pumpAndSettle();
+      expect(find.text('Lesson 4 of 5'), findsOneWidget);
+      expect(find.text('Momentum & collisions'), findsOneWidget);
+      await _reveal(tester, find.text('Start the quiz'), 300);
+      expect(find.text('No PDF for this lesson for now.'), findsOneWidget);
+      expect(find.text('Take it whenever you want, even before the video.'), findsOneWidget);
+
+      // The last Lesson is the past Live; its last button returns to the Unit.
+      await _reveal(tester, find.text('Next lesson'), 300);
+      await tester.tap(find.text('Next lesson'));
+      await tester.pumpAndSettle();
+      expect(find.text('Lesson 5 of 5'), findsOneWidget);
+      expect(find.text('Recorded during the live class'), findsOneWidget);
+      await _reveal(tester, find.text('All the lessons'), 300);
+      expect(find.text('Next lesson'), findsNothing);
+      await tester.tap(find.text('All the lessons'));
+      await tester.pumpAndSettle();
+      expect(find.byType(LessonScreen), findsNothing);
+      expect(find.byType(LearnScreen), findsOneWidget);
+      // Nothing was played or reported on the way.
+      expect(backend.requests.where((FakeRequest r) => r.path.endsWith('/playback') || r.path.endsWith('/progress')), isEmpty);
+    });
+
+    testWidgets('a quiz attempt is started, submitted and graded by the server, then the Unit follows', (tester) async {
       tester.view.physicalSize = const Size(1170, 2532);
       tester.view.devicePixelRatio = 3.0;
       addTearDown(tester.view.reset);
 
       final FakeBackend backend = FakeBackend(<String, FakeResponse>{
-        'GET /lessons/0/quiz': const FakeResponse(200, <String, Object?>{
+        'GET /lessons/41/quiz': const FakeResponse(200, <String, Object?>{
           'data': <String, Object?>{
             'id': 9,
             'required': true,
@@ -549,15 +715,31 @@ void main() {
             'retry_at': null,
           },
         }),
+        // The server completes the Lesson once its required quiz is passed.
         'GET /courses/102/progress': const FakeResponse(200, <String, Object?>{
-          'data': <String, Object?>{'course_id': 102, 'progress_percent': '75.00', 'lessons': <Object>[]},
+          'data': <String, Object?>{
+            'course_id': 102,
+            'progress_percent': '50.00',
+            'lessons': <Object>[
+              <String, Object?>{
+                'lesson_id': 41,
+                'video_progress_percent': '95.00',
+                'resume_position_seconds': 0,
+                'unlocked': true,
+                'has_quiz': true,
+                'quiz_required': true,
+                'completed': true,
+              },
+            ],
+          },
         }),
       });
       final AppState app = installFixtureApp(learning: LearningStore(fakeApi(backend)));
-      // A lesson watched past 90 % so its quiz opens.
+      // A lesson watched past 90 % whose required quiz is still to pass.
       final Course course = HomeData.popularCourses.firstWhere((Course c) => c.owned).copyWith(
         lessons: <Lesson>[
-          const Lesson(title: 'Newton', minutes: 30, watched: 95, hasQuiz: true, quizRequired: true, apiCompleted: false),
+          const Lesson(id: 41, title: 'Newton', minutes: 30, watched: 95, hasQuiz: true, quizRequired: true, apiCompleted: false),
+          const Lesson(id: 42, title: 'Energy', minutes: 20, watched: 0),
         ],
       );
 
@@ -568,9 +750,13 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Quizzes'));
+      expect(find.text('0 of 2 done'), findsOneWidget);
+
+      await tester.tap(find.text('Newton'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Required to complete the lesson'));
+      await _reveal(tester, find.text('Start the quiz'), 300);
+      expect(find.text('Pass it to complete the lesson.'), findsOneWidget);
+      await tester.tap(find.text('Start the quiz'));
       await tester.pumpAndSettle();
 
       expect(find.text('Which law links force and acceleration?'), findsOneWidget);
@@ -579,7 +765,12 @@ void main() {
       await tester.tap(find.text('Submit'));
       await tester.pumpAndSettle();
 
+      // Graded by the server: never scored on the device.
       expect(find.text('Quiz passed'), findsOneWidget);
+      expect(
+        backend.requests.where((FakeRequest r) => r.method == 'POST').map((FakeRequest r) => r.path),
+        <String>['/quizzes/9/attempts', '/quiz-attempts/77/submit'],
+      );
       final FakeRequest submit =
           backend.requests.firstWhere((FakeRequest r) => r.path == '/quiz-attempts/77/submit');
       expect(submit.data, <String, Object>{
@@ -587,6 +778,125 @@ void main() {
           <String, Object>{'question_id': 51, 'option_ids': <int>[501]},
         ],
       });
+      // A pass reloads the Unit's progress from the server.
+      expect(backend.requests.map((FakeRequest r) => r.path), contains('/courses/102/progress'));
+
+      // Behind the sheet the Lesson's steps already show the video and quiz done.
+      expect(find.text('Done'), findsNWidgets(3));
+      await tester.tap(find.descendant(of: find.byType(QuizRunnerSheet), matching: find.text('Done')));
+      await tester.pumpAndSettle();
+      expect(find.byType(QuizRunnerSheet), findsNothing);
+      await tester.tap(find.text('Keep going'));
+      await tester.pumpAndSettle();
+      expect(find.text('Quiz passed, bravo!'), findsOneWidget);
+      expect(find.text('Retake'), findsOneWidget);
+
+      // The Unit page shares the Course: the Lesson now counts as done.
+      await _reveal(tester, find.byType(BackPill), -300);
+      await tester.tap(find.byType(BackPill));
+      await tester.pumpAndSettle();
+      expect(find.byType(LessonScreen), findsNothing);
+      expect(find.text('1 of 2 done'), findsOneWidget);
+    });
+  });
+
+  group('Screen stays on while a video plays (D-133)', () {
+    setUpAll(loadNovaFonts);
+    setUp(ClearDeliveryMemory.reset);
+
+    late List<bool> keepOn;
+    const MethodChannel screen = MethodChannel('nova/screen');
+
+    setUp(() {
+      keepOn = <bool>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        screen,
+        (MethodCall call) async {
+          if (call.method == 'keepOn') keepOn.add(call.arguments as bool);
+          return null;
+        },
+      );
+    });
+
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(screen, null);
+    });
+
+    testWidgets('holders are counted: on with the first, off after the last', (tester) async {
+      final Object lesson = Object();
+      final Object stage = Object();
+      expect(ScreenAwake.held, isFalse);
+
+      ScreenAwake.hold(lesson);
+      ScreenAwake.hold(lesson); // Same holder: once.
+      ScreenAwake.hold(stage);
+      await tester.pump();
+      expect(keepOn, <bool>[true]);
+      expect(ScreenAwake.held, isTrue);
+
+      ScreenAwake.release(lesson);
+      await tester.pump();
+      expect(keepOn, <bool>[true]); // The stage still holds it.
+
+      ScreenAwake.release(stage);
+      ScreenAwake.release(stage); // Unknown holder: nothing.
+      await tester.pump();
+      expect(keepOn, <bool>[true, false]);
+      expect(ScreenAwake.held, isFalse);
+    });
+
+    testWidgets('a Lesson keeps the screen on while it plays, not after pause, end or leaving', (tester) async {
+      tester.view.physicalSize = const Size(1170, 2532);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      const MethodChannel drm = MethodChannel('nova/drm');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(drm, (MethodCall call) async => 'L1');
+      addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(drm, null));
+      final FakeNativePlayers players = FakeNativePlayers()..install();
+      addTearDown(players.uninstall);
+      final FakeBackend backend = FakeBackend(<String, FakeResponse>{
+        'POST /lessons/0/playback': FakeResponse(200, <String, Object?>{'data': _authorization()}),
+        'PUT /lessons/0/progress': const FakeResponse(200, <String, Object?>{'data': <String, Object?>{}}),
+      });
+      final AppState app = installFixtureApp(learning: LearningStore(fakeApi(backend)));
+      final Course course = HomeData.popularCourses.firstWhere((Course c) => c.owned);
+      await tester.pumpWidget(AppScope(
+        state: app,
+        child: MaterialApp(theme: NovaTheme.light, home: LessonScreen(course: ValueNotifier<Course>(course), index: 0)),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Play'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(players.created, hasLength(1));
+      expect(keepOn, isEmpty); // Authorized, not moving yet.
+
+      players.emit(<String, Object?>{'event': 'playing', 'value': true});
+      await tester.pump();
+      players.emit(<String, Object?>{'event': 'playing', 'value': true});
+      await tester.pump();
+      expect(keepOn, <bool>[true]);
+
+      players.emit(<String, Object?>{'event': 'playing', 'value': false});
+      await tester.pump();
+      expect(keepOn, <bool>[true, false]);
+
+      players.emit(<String, Object?>{'event': 'playing', 'value': true});
+      await tester.pump();
+      players.emit(<String, Object?>{'event': 'state', 'state': 'ended'});
+      await tester.pump();
+      expect(keepOn, <bool>[true, false, true, false]);
+
+      // Leaving the Lesson while it plays lets the phone sleep again.
+      players.emit(<String, Object?>{'event': 'playing', 'value': true});
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
+      expect(keepOn, <bool>[true, false, true, false, true, false]);
+      expect(ScreenAwake.held, isFalse);
     });
   });
 }

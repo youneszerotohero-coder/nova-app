@@ -6,6 +6,8 @@ import 'package:nova_mobile/core/state/app_state.dart';
 import 'package:nova_mobile/core/theme/nova_colors.dart';
 import 'package:nova_mobile/core/theme/nova_theme.dart';
 import 'package:nova_mobile/core/widgets/notification_banner.dart';
+import 'package:nova_mobile/core/widgets/nova_bottom_bar.dart';
+import 'package:nova_mobile/core/widgets/nova_scene_image.dart';
 import 'package:nova_mobile/data/account_store.dart';
 import 'package:nova_mobile/data/catalog_store.dart';
 import 'package:nova_mobile/data/commerce_store.dart';
@@ -13,7 +15,11 @@ import 'package:nova_mobile/data/learning_store.dart';
 import 'package:nova_mobile/data/models.dart';
 import 'package:nova_mobile/data/session_store.dart';
 import 'package:nova_mobile/features/account/notifications_screen.dart';
-import 'package:nova_mobile/features/explore/explore_screen.dart';
+import 'package:nova_mobile/features/learning/learn_screen.dart';
+import 'package:nova_mobile/features/learning/lesson_screen.dart';
+import 'package:nova_mobile/features/learning/live_room_screen.dart';
+import 'package:nova_mobile/features/learning/my_learning_screen.dart';
+import 'package:nova_mobile/features/shell/student_top_bar.dart';
 import 'package:nova_mobile/main.dart';
 
 import 'fixtures/fake_api.dart';
@@ -72,6 +78,14 @@ List<Map<String, Object?>> _notices(int from, int to) => <Map<String, Object?>>[
           createdAt: DateTime.utc(2026, 9, 26, 8).subtract(Duration(minutes: i)).toIso8601String(),
         ),
     ];
+
+/// Pumps two seconds of frames: the Student home has a looping live pulse,
+/// so it never "settles".
+Future<void> _frames(WidgetTester tester) async {
+  for (int i = 0; i < 20; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+}
 
 void main() {
   setUpAll(loadNovaFonts);
@@ -158,10 +172,12 @@ void main() {
         NovaLang.fr: ('Live annulé', 'Limits a été annulé.'),
         NovaLang.ar: ('أُلغيت الحصة المباشرة', 'تم إلغاء Limits.'),
       }),
+      // D-132: the recording became a Lesson; the English message is the
+      // stored one older apps parse.
       'live_replay_ready': (live, {
-        NovaLang.en: ('Replay available', 'Limits is ready to watch.'),
-        NovaLang.fr: ('Replay disponible', 'Limits est prêt à être visionné.'),
-        NovaLang.ar: ('التسجيل متاح', 'تسجيل Limits جاهز للمشاهدة.'),
+        NovaLang.en: ('New lesson in your Unit', 'Limits is ready to watch.'),
+        NovaLang.fr: ('Nouvelle leçon dans ton unité', 'Limits est maintenant une leçon de ton unité.'),
+        NovaLang.ar: ('درس جديد في الوحدة', 'لايف «Limits» راهو درس في الوحدة تاعك.'),
       }),
       'lesson_published': (<String, Object?>{'course_id': 3, 'lesson_title': 'Derivatives'}, {
         NovaLang.en: ('New Lesson published', 'Derivatives is now available.'),
@@ -400,7 +416,7 @@ void main() {
       tester.view.devicePixelRatio = 3.0;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(const NovaApp());
-      await tester.pumpAndSettle();
+      await _frames(tester);
     }
 
     final Map<String, Object?> started = _payload(
@@ -434,14 +450,14 @@ void main() {
       expect(state.account.notifications.where((AppNotification n) => n.id == 'live-started-12'), hasLength(1));
 
       // The rest of the screen stays usable while the banner shows.
-      await tester.tap(find.bySemanticsLabel('Explore'));
+      await tester.tap(find.descendant(of: find.byType(NovaBottomBar), matching: find.text('My lessons')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
-      expect(find.byType(ExploreScreen), findsOneWidget);
+      expect(find.byType(MyLearningScreen), findsOneWidget);
       expect(find.text('Live started'), findsOneWidget);
 
       await tester.pump(const Duration(seconds: 3));
-      await tester.pumpAndSettle();
+      await _frames(tester);
       expect(find.text('Live started'), findsNothing);
     });
 
@@ -463,7 +479,7 @@ void main() {
       final AppNotification arrived = state.account.notifications.first;
 
       await tester.tap(find.text('Points credited'));
-      await tester.pumpAndSettle();
+      await _frames(tester);
       expect(state.account.notifications.first.read, isTrue);
       expect(state.unreadCount, unread);
       expect(find.text('Points credited'), findsNothing);
@@ -495,7 +511,127 @@ void main() {
       expect(tester.getCenter(icon).dx, greaterThan(tester.getCenter(title).dx));
 
       await tester.pump(const Duration(seconds: 4));
+      await _frames(tester);
+      expect(find.text('بدأت الحصة المباشرة'), findsNothing);
+    });
+  });
+
+  group('Notifications that open a Lesson (D-132)', () {
+    final List<Course> owned = HomeData.popularCourses.where((Course c) => c.owned).toList();
+
+    /// The list with [payload] only; a tap opens it as the Student would.
+    Future<AppState> tapInList(WidgetTester tester, Map<String, Object?> payload, String title, {List<LiveSession> lives = HomeData.lives}) async {
+      tester.view.physicalSize = const Size(1170, 2532);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      final AppState state = installFixtureApp(
+        account: AccountStore.seeded(notifications: <AppNotification>[_parse(payload)], ledger: const <PointsEntry>[], balance: 0),
+        learning: LearningStore.seeded(owned: owned, lives: lives),
+      );
+      await tester.pumpWidget(AppScope(
+        state: state,
+        child: MaterialApp(theme: NovaTheme.light, home: const Scaffold(body: NotificationsScreen())),
+      ));
       await tester.pumpAndSettle();
+      expect(state.account.notifications.single.read, isFalse);
+      await tester.tap(find.text(title));
+      await tester.pumpAndSettle();
+      return state;
+    }
+
+    testWidgets('a replay-ready notification opens the Lesson the Live became, over its Unit', (tester) async {
+      final AppState state = await tapInList(
+        tester,
+        _payload(
+          'replay-301',
+          'live_replay_ready',
+          title: 'New lesson in your Unit',
+          message: 'Energy exercises is ready to watch.',
+          data: <String, Object?>{
+            'entity_type': 'LiveSession',
+            'entity_id': 301,
+            'live_title': 'Energy exercises',
+            'lesson_id': 1025,
+            'course_id': 102,
+            'course_slug': 'physics-mechanics',
+          },
+          liveId: 301,
+          url: '/learn/physics-mechanics/lessons/1025',
+        ),
+        'New lesson in your Unit',
+      );
+
+      expect(state.account.notifications.single.read, isTrue);
+      expect(find.byType(LiveRoomScreen), findsNothing);
+      expect(find.byType(LessonScreen), findsOneWidget);
+      expect(find.text('Lesson 5 of 5'), findsOneWidget);
+      expect(find.text('Live — energy exercises, BAC style'), findsOneWidget);
+      expect(find.text('Recorded during the live class'), findsOneWidget);
+
+      // Under it, the Unit's list of Lessons.
+      await tester.tap(find.byType(BackPill));
+      await tester.pumpAndSettle();
+      expect(find.byType(LearnScreen), findsOneWidget);
+      expect(find.text('Unit Lessons'), findsOneWidget);
+    });
+
+    testWidgets('a new-lesson notification opens that Lesson', (tester) async {
+      await tapInList(
+        tester,
+        _payload(
+          'lesson-1023',
+          'lesson_published',
+          title: 'New Lesson published',
+          message: 'Energy: the safest points is now available.',
+          data: <String, Object?>{
+            'entity_type': 'Lesson',
+            'entity_id': 1023,
+            'course_id': 102,
+            'lesson_title': 'Energy: the safest points',
+          },
+          url: '/learn/physics-mechanics',
+        ),
+        'New Lesson published',
+      );
+
+      expect(find.byType(LessonScreen), findsOneWidget);
+      expect(find.text('Lesson 3 of 5'), findsOneWidget);
+      expect(find.text('Energy: the safest points'), findsOneWidget);
+    });
+
+    testWidgets('an older replay notification without its lesson finds it through the Live', (tester) async {
+      await tapInList(
+        tester,
+        _payload(
+          'replay-302',
+          'live_replay_ready',
+          title: 'Replay available',
+          message: 'Energy questions is ready to watch.',
+          data: <String, Object?>{'entity_type': 'LiveSession', 'entity_id': 302, 'live_title': 'Energy questions'},
+          liveId: 302,
+          url: '/live/302',
+        ),
+        'New lesson in your Unit',
+        lives: const <LiveSession>[
+          LiveSession(
+            id: 302,
+            title: 'Energy questions: the safest points',
+            course: 'Physics — Mechanics Masterclass',
+            courseSlug: 'physics-mechanics',
+            teacher: 'Amel Khaldi',
+            subject: 'Physics',
+            status: LiveStatus.replay,
+            rawStatus: 'ended',
+            attendees: 0,
+            scene: NovaScene.sand,
+            lessonId: 1025,
+          ),
+        ],
+      );
+
+      expect(find.byType(LiveRoomScreen), findsNothing);
+      expect(find.byType(LessonScreen), findsOneWidget);
+      expect(find.text('Lesson 5 of 5'), findsOneWidget);
     });
   });
 

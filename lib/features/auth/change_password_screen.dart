@@ -217,7 +217,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                         : Text(
                             context.tr('auth.savePassword'),
                             style: TextStyle(
-                              fontFamily: 'Inter',
+                              fontFamily: 'Geist',
                               fontWeight: FontWeight.w700,
                               fontSize: 15.5,
                               color: NovaColors.textOnDark,
@@ -233,7 +233,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                     child: Text(
                       context.tr('settings.signOut'),
                       style: TextStyle(
-                        fontFamily: 'Inter',
+                        fontFamily: 'Geist',
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
                         color: NovaColors.textMuted,

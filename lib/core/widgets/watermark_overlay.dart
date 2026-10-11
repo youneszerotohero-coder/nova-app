@@ -73,7 +73,7 @@ class _WatermarkOverlayState extends State<WatermarkOverlay> {
             ].join('\n'),
             textAlign: TextAlign.start,
             style: TextStyle(
-              fontFamily: 'Inter',
+              fontFamily: 'Geist',
               fontWeight: FontWeight.w700,
               fontSize: 11,
               height: 1.35,
