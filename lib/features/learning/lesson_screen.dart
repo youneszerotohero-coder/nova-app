@@ -249,7 +249,7 @@ class _LessonScreenState extends State<LessonScreen> {
                   child: Row(
                     children: [
                       if (videoDone) ...[
-                        const Icon(Icons.check_circle_outline_rounded, size: 18, color: NovaColors.onlineGreen),
+                        Icon(Icons.check_circle_outline_rounded, size: 18, color: NovaColors.onlineGreen),
                         const SizedBox(width: 8),
                       ],
                       Expanded(

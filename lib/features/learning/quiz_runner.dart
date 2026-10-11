@@ -236,7 +236,7 @@ class _QuizRunnerSheetState extends State<QuizRunnerSheet> {
                       value: value,
                       minHeight: 6,
                       backgroundColor: NovaColors.borderOnLight,
-                      valueColor: const AlwaysStoppedAnimation<Color>(NovaColors.accent),
+                      valueColor: AlwaysStoppedAnimation<Color>(NovaColors.accent),
                     ),
                   ),
                 ),
@@ -557,7 +557,7 @@ class _OptionTile extends StatelessWidget {
                     ? const Icon(Icons.check_rounded,
                         size: 16, color: Colors.white)
                     : showState && wrong
-                        ? const Icon(Icons.close_rounded,
+                        ? Icon(Icons.close_rounded,
                             size: 15, color: NovaColors.heartRed)
                         : Text(
                             letter,

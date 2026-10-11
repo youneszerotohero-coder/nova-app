@@ -133,7 +133,7 @@ class _MissedNote extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(color: NovaColors.accentMist, borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.play_arrow_rounded, color: NovaColors.accent),
+              child: Icon(Icons.play_arrow_rounded, color: NovaColors.accent),
             ),
             const SizedBox(width: 12),
             Expanded(

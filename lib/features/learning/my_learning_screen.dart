@@ -166,7 +166,7 @@ class UnitProgressCard extends StatelessWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Padding(
+                          Padding(
                             padding: EdgeInsets.only(top: 2),
                             child: Icon(Icons.play_arrow_rounded, size: 16, color: NovaColors.accent),
                           ),

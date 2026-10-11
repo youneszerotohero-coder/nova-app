@@ -55,7 +55,7 @@ abstract final class NovaTheme {
   static ThemeData get dark => _base(NovaColors.ink950, NovaColors.textOnDark);
 
   static ThemeData _base(Color scaffold, Color foreground) {
-    final ColorScheme scheme = ColorScheme.light(
+    final ColorScheme scheme = (NovaColors.current.isDark ? ColorScheme.dark : ColorScheme.light)(
       primary: NovaColors.accent,
       onPrimary: Colors.white,
       secondary: NovaColors.yellow,
@@ -76,7 +76,7 @@ abstract final class NovaTheme {
         selectionColor: NovaColors.accent.withValues(alpha: 0.22),
         selectionHandleColor: NovaColors.accent,
       ),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(color: NovaColors.accent),
+      progressIndicatorTheme: ProgressIndicatorThemeData(color: NovaColors.accent),
       scaffoldBackgroundColor: scaffold,
       textTheme: NovaTypography.textTheme,
       splashFactory: InkSparkle.splashFactory,

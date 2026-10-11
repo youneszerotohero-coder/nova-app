@@ -50,7 +50,7 @@ class NovaPageHeader extends StatelessWidget {
   final IconData? watermark;
 
   /// The band's colours as a plain gradient, for small blue surfaces.
-  static const LinearGradient gradient = LinearGradient(
+  static LinearGradient gradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [Color(0xFF3F72EA), NovaColors.accent, Color(0xFF173FA8)],

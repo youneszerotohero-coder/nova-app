@@ -141,7 +141,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.logout_rounded,
                     size: 18,
                     color: NovaColors.heartRed,
@@ -149,7 +149,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(width: 9),
                   Text(
                     context.tr('settings.signOut'),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Geist',
                       fontWeight: FontWeight.w700,
                       fontSize: 14.5,

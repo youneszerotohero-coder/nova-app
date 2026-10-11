@@ -218,7 +218,7 @@ class _MenuHeader extends StatelessWidget {
         18,
         20,
       ),
-      decoration: const BoxDecoration(gradient: NovaPageHeader.gradient),
+      decoration: BoxDecoration(gradient: NovaPageHeader.gradient),
       child: Stack(
         children: [
           const Positioned.fill(

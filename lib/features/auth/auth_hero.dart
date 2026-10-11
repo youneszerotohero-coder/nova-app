@@ -110,7 +110,7 @@ class AuthModeSwitch extends StatelessWidget {
                     TextSpan(text: '${signIn ? context.tr('auth.newHere') : context.tr('auth.haveAccount')} '),
                     TextSpan(
                       text: signIn ? context.tr('auth.tabRegister') : context.tr('auth.signIn'),
-                      style: const TextStyle(fontWeight: FontWeight.w800, color: NovaColors.accent),
+                      style: TextStyle(fontWeight: FontWeight.w800, color: NovaColors.accent),
                     ),
                   ],
                 ),

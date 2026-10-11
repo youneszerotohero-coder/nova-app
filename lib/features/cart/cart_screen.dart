@@ -71,7 +71,7 @@ class CartScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.info_outline_rounded,
                     size: 15,
                     color: NovaColors.accentDeep,
@@ -323,7 +323,7 @@ class _CartRow extends StatelessWidget {
           color: NovaColors.heartRed.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(NovaDimens.radiusTile),
         ),
-        child: const Icon(
+        child: Icon(
           Icons.delete_outline_rounded,
           color: NovaColors.heartRed,
         ),
@@ -474,7 +474,7 @@ class _CartRow extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.delete_outline_rounded,
                             size: 15,
                             color: NovaColors.heartRed,
@@ -482,7 +482,7 @@ class _CartRow extends StatelessWidget {
                           const SizedBox(width: 5),
                           Text(
                             context.tr('cart.remove'),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'Geist',
                               fontWeight: FontWeight.w700,
                               fontSize: 11.5,

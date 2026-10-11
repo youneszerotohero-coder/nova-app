@@ -234,7 +234,7 @@ class _GuestChoiceState extends State<_GuestChoice> with SingleTickerProviderSta
                   ],
                 );
               },
-              child: const Icon(Icons.explore_rounded, size: 26, color: NovaColors.accent),
+              child: Icon(Icons.explore_rounded, size: 26, color: NovaColors.accent),
             ),
           ),
           const SizedBox(height: 12),

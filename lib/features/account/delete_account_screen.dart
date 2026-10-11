@@ -93,7 +93,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
                           child: Container(
                             width: 6,
                             height: 6,
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               color: NovaColors.heartRed,
                               shape: BoxShape.circle,
                             ),

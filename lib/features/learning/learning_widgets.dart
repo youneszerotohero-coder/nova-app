@@ -134,7 +134,7 @@ class PercentRing extends StatelessWidget {
     super.key,
     required this.percent,
     this.size = 44,
-    this.color = NovaColors.accent,
+    this.color,
     this.track,
     this.textColor,
     this.stroke,
@@ -142,7 +142,8 @@ class PercentRing extends StatelessWidget {
 
   final int percent;
   final double size;
-  final Color color;
+  /// Defaults to the theme's blue.
+  final Color? color;
   final Color? track;
   final Color? textColor;
   final double? stroke;
@@ -155,7 +156,7 @@ class PercentRing extends StatelessWidget {
       curve: Curves.easeOutCubic,
       builder: (BuildContext context, double value, _) => CustomPaint(
         size: Size.square(size),
-        painter: _RingPainter(value: value, color: color, track: track ?? NovaColors.borderOnLight, stroke: stroke ?? size * 0.1),
+        painter: _RingPainter(value: value, color: color ?? NovaColors.accent, track: track ?? NovaColors.borderOnLight, stroke: stroke ?? size * 0.1),
         child: SizedBox(
           width: size,
           height: size,

@@ -67,13 +67,14 @@ class ProgressBar extends StatelessWidget {
     required this.percent,
     this.height = 7,
     this.trackColor,
-    this.color = NovaColors.accent,
+    this.color,
   });
 
   final int percent;
   final double height;
   final Color? trackColor;
-  final Color color;
+  /// Defaults to the theme's blue.
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +88,7 @@ class ProgressBar extends StatelessWidget {
           value: value,
           minHeight: height,
           backgroundColor: trackColor ?? NovaColors.borderOnLight,
-          valueColor: AlwaysStoppedAnimation<Color>(color),
+          valueColor: AlwaysStoppedAnimation<Color>(color ?? NovaColors.accent),
         ),
       ),
     );

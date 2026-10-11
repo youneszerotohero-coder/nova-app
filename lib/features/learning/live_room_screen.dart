@@ -488,7 +488,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
                 Row(
                   children: [
                     if (isLive)
-                      const Pulse(
+                      Pulse(
                         child: Icon(Icons.circle_rounded, size: 9, color: NovaColors.heartRed),
                       ),
                     if (isLive) const SizedBox(width: 7),

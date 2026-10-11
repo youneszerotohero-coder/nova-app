@@ -16,13 +16,14 @@ class SuccessBurst extends StatefulWidget {
   const SuccessBurst({
     super.key,
     this.size = 128,
-    this.color = NovaColors.onlineGreen,
+    this.color,
     this.confetti = true,
     this.onComplete,
   });
 
   final double size;
-  final Color color;
+  /// Defaults to the theme's live green.
+  final Color? color;
 
   /// Disable for quieter confirmations (a queued receipt, say).
   final bool confetti;
@@ -68,7 +69,7 @@ class _SuccessBurstState extends State<SuccessBurst>
           builder: (BuildContext context, _) => CustomPaint(
             painter: _BurstPainter(
               t: _controller.value,
-              color: widget.color,
+              color: widget.color ?? NovaColors.onlineGreen,
               badgeSize: widget.size,
               confetti: widget.confetti,
             ),
@@ -92,7 +93,7 @@ class _Fleck {
 
 final List<_Fleck> _flecks = List<_Fleck>.generate(16, (int i) {
   final math.Random random = math.Random(i * 7 + 3);
-  const List<Color> palette = [
+  List<Color> palette = [
     NovaColors.accent,
     NovaColors.gold,
     NovaColors.badgeOrange,

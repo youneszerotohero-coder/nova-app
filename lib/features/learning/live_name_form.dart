@@ -135,7 +135,7 @@ class _LiveNameFormState extends State<LiveNameForm> {
               Text(
                 _error!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontFamily: 'Geist', fontSize: 12, color: NovaColors.heartRed),
+                style: TextStyle(fontFamily: 'Geist', fontSize: 12, color: NovaColors.heartRed),
               ),
             ],
             const SizedBox(height: 16),

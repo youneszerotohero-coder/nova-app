@@ -55,7 +55,7 @@ class SectionHeader extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 2),
-                    const Icon(
+                    Icon(
                       Icons.chevron_right_rounded,
                       size: 17,
                       color: NovaColors.accent,

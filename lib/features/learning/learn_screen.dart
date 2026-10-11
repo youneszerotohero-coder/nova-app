@@ -231,7 +231,7 @@ class LessonRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(15),
               ),
               child: done
-                  ? const Icon(Icons.check_rounded, size: 26, color: NovaColors.onlineGreen)
+                  ? Icon(Icons.check_rounded, size: 26, color: NovaColors.onlineGreen)
                   : watched > 0
                       ? PercentRing(percent: watched, size: 42, stroke: 4)
                       : Text(

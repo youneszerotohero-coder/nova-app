@@ -370,7 +370,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.verified_rounded,
+            Icon(Icons.verified_rounded,
                 size: 20, color: NovaColors.accentDeep),
             const SizedBox(width: 10),
             Expanded(
@@ -427,7 +427,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
             const SizedBox(height: 6),
             Row(
               children: [
-                const Icon(Icons.layers_rounded, size: 16, color: NovaColors.accentDeep),
+                Icon(Icons.layers_rounded, size: 16, color: NovaColors.accentDeep),
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
@@ -453,7 +453,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
               padding: const EdgeInsets.only(bottom: 7),
               child: Row(
                 children: [
-                  const Icon(Icons.check_rounded,
+                  Icon(Icons.check_rounded,
                       size: 17, color: NovaColors.accent),
                   const SizedBox(width: 8),
                   Expanded(

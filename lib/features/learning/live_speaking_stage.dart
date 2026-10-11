@@ -185,12 +185,12 @@ class _LiveSpeakingStageState extends State<LiveSpeakingStage> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.volume_up_rounded, size: 18, color: NovaColors.ink950),
+                Icon(Icons.volume_up_rounded, size: 18, color: NovaColors.ink950),
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
                     context.tr('live.tapToHear'),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Geist',
                       fontWeight: FontWeight.w700,
                       fontSize: 12.5,

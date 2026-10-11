@@ -253,7 +253,7 @@ class _LiveNowBar extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.play_circle_fill_rounded, size: 34, color: NovaColors.accent),
+              Icon(Icons.play_circle_fill_rounded, size: 34, color: NovaColors.accent),
             ],
           ),
         ),

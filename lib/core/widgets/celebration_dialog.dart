@@ -16,7 +16,7 @@ Future<void> showNovaCelebration(
   required String title,
   required String message,
   required String actionLabel,
-  Color color = NovaColors.onlineGreen,
+  Color? color,
 }) {
   return showGeneralDialog<void>(
     context: context,
@@ -47,7 +47,7 @@ Future<void> showNovaCelebration(
       title: title,
       message: message,
       actionLabel: actionLabel,
-      color: color,
+      color: color ?? NovaColors.onlineGreen,
     ),
   );
 }

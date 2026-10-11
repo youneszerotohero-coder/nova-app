@@ -792,7 +792,7 @@ class _RegisterScreenState extends State<RegisterScreen>
     if (_phoneVerified) {
       body = Row(
         children: [
-          const Icon(Icons.verified_rounded, size: 19, color: NovaColors.accentDeep),
+          Icon(Icons.verified_rounded, size: 19, color: NovaColors.accentDeep),
           const SizedBox(width: 9),
           Expanded(
             child: Text(
@@ -863,7 +863,7 @@ class _RegisterScreenState extends State<RegisterScreen>
             ],
           ),
           if (_codeBusy)
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(top: 10),
               child: Center(
                 child: SizedBox(
@@ -1014,7 +1014,7 @@ class _RegisterScreenState extends State<RegisterScreen>
           ),
           child: Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.verified_user_rounded,
                 size: 18,
                 color: NovaColors.accentDeep,

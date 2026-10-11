@@ -1464,7 +1464,7 @@ class _OrbitPainter extends CustomPainter {
         ..shader = SweepGradient(
           startAngle: angle,
           endAngle: angle + 2.1,
-          colors: const [NovaColors.accentLight, NovaColors.accentDeep],
+          colors: [NovaColors.accentLight, NovaColors.accentDeep],
         ).createShader(Rect.fromCircle(center: center, radius: radius)),
     );
   }
