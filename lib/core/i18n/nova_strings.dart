@@ -1793,6 +1793,20 @@ const Map<String, Map<String, String>> K = {
   'account.title': {'en': 'My *account*', 'fr': 'Mon *compte*', 'ar': '*حسابي*'},
   'account.lead': {'en': 'Your orders, your points, your notifications and your settings.', 'fr': 'Vos commandes, vos points, vos notifications et vos paramètres.', 'ar': 'الطلبات، النقاط، الإشعارات والإعدادات تاعك.'},
   'account.schoolManaged': {'en': 'School-managed', 'fr': 'Gérée par l’école', 'ar': 'المدرسة تسيّرو'},
+
+  // D-134: "continue without an account" (App Store 5.1.1(v)); account features ask to sign in.
+  'gateway.guestTag': {'en': 'I just want to look around', 'fr': 'Je veux juste regarder', 'ar': 'نحب نشوف برك'},
+  'gateway.guestText': {'en': 'See the units, offers and teachers without an account. You create one when you want to buy or study.', 'fr': 'Parcourez les unités, les offres et les enseignants sans compte. Vous en créerez un pour acheter ou étudier.', 'ar': 'شوف الوحدات والعروض والأساتذة بلا حساب. تدير حساب كي تحب تشري ولا تقرا.'},
+  'gateway.guestCta': {'en': 'Continue without an account', 'fr': 'Continuer sans compte', 'ar': 'كمّل بلا حساب'},
+  'guest.message': {'en': 'Sign in or create your account to use this part of NOVA. Units and offers can be seen without an account.', 'fr': 'Connectez-vous ou créez votre compte pour utiliser cette partie de NOVA. Les unités et les offres se consultent sans compte.', 'ar': 'ادخل لحسابك ولا دير حساب باش تستعمل هاد الجزء من نوفا. الوحدات والعروض تتشافو بلا حساب.'},
+  'guest.lessons': {'en': 'Your lessons', 'fr': 'Vos leçons', 'ar': 'دروسك'},
+  'guest.lives': {'en': 'Your live classes', 'fr': 'Vos lives', 'ar': 'اللايفات تاعك'},
+  'guest.cart': {'en': 'Your cart', 'fr': 'Votre panier', 'ar': 'السلة تاعك'},
+  'guest.account': {'en': 'Your account', 'fr': 'Votre compte', 'ar': 'حسابك'},
+  'guest.signIn': {'en': 'Sign in', 'fr': 'Connexion', 'ar': 'دخول'},
+  'guest.eyebrow': {'en': 'Browsing without an account', 'fr': 'Visite sans compte', 'ar': 'راك تشوف بلا حساب'},
+  'guest.homeTitle': {'en': 'Hello! *Discover* NOVA', 'fr': 'Bonjour ! *Découvrez* NOVA', 'ar': 'أهلا! *اكتشف* نوفا'},
+  'guest.homeText': {'en': 'Look at the units and offers of your level. Create your account when you are ready.', 'fr': 'Regardez les unités et les offres de votre niveau. Créez votre compte quand vous êtes prêt.', 'ar': 'شوف الوحدات والعروض تاع المستوى تاعك. دير حسابك كي تكون واجد.'},
 };
 
 extension NovaTr on BuildContext {

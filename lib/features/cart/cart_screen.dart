@@ -215,6 +215,7 @@ class _CheckoutBar extends StatelessWidget {
                         fontFamily: 'Geist',
                         fontWeight: FontWeight.w700,
                         fontSize: 9.5,
+                        height: 1.2,
                         color: NovaColors.textMutedOnDark,
                       ),
                     ),
@@ -437,9 +438,13 @@ class _CartRow extends StatelessWidget {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Text(
-                    formatDaPrice(item.price),
-                    style: NovaTypography.textTheme.titleMedium,
+                  Flexible(
+                    child: Text(
+                      formatDaPrice(item.price),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: NovaTypography.textTheme.titleMedium,
+                    ),
                   ),
                   if (item.compareAtPrice > item.price) ...[
                     const SizedBox(width: 8),
@@ -451,6 +456,7 @@ class _CartRow extends StatelessWidget {
                       ),
                     ),
                   ],
+                  const SizedBox(width: 8),
                   const Spacer(),
                   PressableScale(
                     onTap: () => _remove(context),

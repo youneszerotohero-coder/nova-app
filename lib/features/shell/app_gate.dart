@@ -18,7 +18,8 @@ import 'splash_screen.dart';
 ///
 /// D-133: the launch animation plays once while the stored session loads; a
 /// Student still signed in goes straight to their space, anyone else to the
-/// "I have an account / I'm new" gateway. There are no public pages.
+/// "I have an account / I'm new" gateway. D-134: the gateway's "continue
+/// without an account" opens the Student space read-only for a visitor.
 class AppGate extends StatefulWidget {
   const AppGate({super.key});
 
@@ -46,9 +47,10 @@ class _AppGateState extends State<AppGate> {
 
   @override
   Widget build(BuildContext context) {
-    final SessionStore session = AppScope.of(context).session;
+    final AppState app = AppScope.of(context);
+    final SessionStore session = app.session;
     final bool splash = session.status == SessionStatus.booting || _introDone != true;
-    final Object key = splash ? 'splash' : (session.status, session.nextRequiredStep);
+    final Object key = splash ? 'splash' : (session.status, session.nextRequiredStep, app.guest);
     if (_lastKey != null && _lastKey != key) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) Navigator.of(context).popUntil((Route<dynamic> r) => r.isFirst);
@@ -66,7 +68,8 @@ class _AppGateState extends State<AppGate> {
             : switch (session.status) {
                 SessionStatus.booting => const NovaSplash(),
                 SessionStatus.offline => const _Offline(),
-                SessionStatus.signedOut => const AuthGatewayScreen(),
+                // D-134: "continue without an account" browses read-only.
+                SessionStatus.signedOut => app.guest ? const ShellScreen() : const AuthGatewayScreen(),
                 SessionStatus.signedIn => switch (session.nextRequiredStep) {
                     'password_change' => const ChangePasswordScreen(),
                     // D-079: an account without a valid mobile, before onboarding.

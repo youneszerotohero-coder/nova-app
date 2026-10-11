@@ -14,6 +14,7 @@ import '../../data/session_store.dart';
 import '../api/nova_api.dart';
 import '../realtime/reverb_client.dart';
 import '../theme/nova_colors.dart';
+import 'account_intent.dart';
 
 export '../../data/commerce_store.dart' show CartItem;
 
@@ -139,6 +140,21 @@ class AppState extends ChangeNotifier {
 
   bool get darkMode => _darkMode;
 
+  /// D-134: "continue without an account" on the first screen; the app is
+  /// browsed read-only until the visitor signs in (not remembered).
+  bool _guest = false;
+  bool get guest => _guest && !session.signedIn;
+
+  void browseAsGuest(bool value) {
+    if (_guest == value) return;
+    _guest = value;
+    notifyListeners();
+  }
+
+  /// What a visitor asked for before signing in; the Student space carries
+  /// it out once signed in (D-127, D-134).
+  AccountIntent? pendingIntent;
+
   NovaLang get lang => _lang;
 
   /// Starts the app: the Student's saved language, then the public
@@ -235,6 +251,8 @@ class AppState extends ChangeNotifier {
       _listenRealtime();
       _watchSession();
     } else {
+      // Signed out: the first screen again, not the visitor's browsing.
+      _guest = false;
       _stopSessionWatch();
       for (final VoidCallback stop in _channels) {
         stop();

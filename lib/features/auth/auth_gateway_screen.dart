@@ -13,9 +13,10 @@ import '../../core/widgets/pressable_scale.dart';
 import '../shell/student_top_bar.dart';
 import 'auth_routes.dart';
 
-/// D-133: the app has no public pages. Signed out, it opens on the website's
-/// `/start` question — "I already have an account" or "I'm new here" — with
-/// the same wording, then sign-in or registration.
+/// D-133: signed out, the app opens on the website's `/start` question —
+/// "I already have an account" or "I'm new here" — with the same wording,
+/// then sign-in or registration. D-134: a third choice, "continue without an
+/// account", opens the catalogue read-only (App Store 5.1.1(v)).
 class AuthGatewayScreen extends StatelessWidget {
   const AuthGatewayScreen({super.key});
 
@@ -88,9 +89,15 @@ class AuthGatewayScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 14),
+                // D-134 (App Store 5.1.1(v)): browsing needs no account.
                 Entrance(
                   delay: const Duration(milliseconds: 340),
+                  child: _GuestChoice(onTap: () => AppScope.of(context).browseAsGuest(true)),
+                ),
+                const SizedBox(height: 22),
+                Entrance(
+                  delay: const Duration(milliseconds: 420),
                   child: _PostIt(text: context.tr('gateway.hint')),
                 ),
               ],
@@ -144,6 +151,107 @@ class _Choice extends StatelessWidget {
           Text(text, style: NovaTypography.muted(NovaTypography.textTheme.bodyMedium!)),
           const SizedBox(height: 16),
           button,
+        ],
+      ),
+    );
+  }
+}
+
+/// The visitor's way in: a glass card on the band whose compass swings
+/// while a yellow ring pulses out of it, three times, then rests.
+class _GuestChoice extends StatefulWidget {
+  const _GuestChoice({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  State<_GuestChoice> createState() => _GuestChoiceState();
+}
+
+class _GuestChoiceState extends State<_GuestChoice> with SingleTickerProviderStateMixin {
+  late final AnimationController _loop = AnimationController(vsync: this, duration: const Duration(milliseconds: 2400));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _loop.stop();
+    } else if (!_loop.isAnimating && _loop.value == 0) {
+      // Three turns to catch the eye, then it rests.
+      _loop.repeat(count: 3);
+    }
+  }
+
+  @override
+  void dispose() {
+    _loop.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(NovaDimens.radiusTile),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: AnimatedBuilder(
+              animation: _loop,
+              builder: (BuildContext context, Widget? child) {
+                final double t = _loop.value;
+                return Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
+                  children: [
+                    Transform.scale(
+                      scale: 1 + 0.45 * t,
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(color: NovaColors.yellow.withValues(alpha: 0.9 * (1 - t)), width: 2),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
+                      child: Transform.rotate(
+                        angle: math.sin(t * 2 * math.pi) * 0.35,
+                        child: child,
+                      ),
+                    ),
+                  ],
+                );
+              },
+              child: const Icon(Icons.explore_rounded, size: 26, color: NovaColors.accent),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(context.tr('gateway.guestTag'), style: NovaTypography.textTheme.headlineSmall!.copyWith(color: Colors.white)),
+          const SizedBox(height: 6),
+          Text(
+            context.tr('gateway.guestText'),
+            style: NovaTypography.textTheme.bodyMedium!.copyWith(color: Colors.white.withValues(alpha: 0.86)),
+          ),
+          const SizedBox(height: 16),
+          NovaButton(
+            label: context.tr('gateway.guestCta'),
+            variant: NovaButtonVariant.onBlueGhost,
+            chipIcon: Icons.arrow_forward_rounded,
+            expand: true,
+            onTap: widget.onTap,
+          ),
         ],
       ),
     );

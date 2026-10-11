@@ -10,6 +10,7 @@ import '../../core/widgets/motion.dart';
 import '../../core/widgets/nova_page_header.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../data/models.dart';
+import '../auth/auth_routes.dart';
 import '../detail/course_detail_screen.dart';
 import '../explore/explore_screen.dart';
 import '../learning/live_room_screen.dart';
@@ -36,29 +37,41 @@ class HomeScreen extends StatelessWidget {
     final LiveSession? liveNow = app.learning.lives.where((LiveSession l) => l.status == LiveStatus.live).firstOrNull;
     final bool owns = app.learning.owned.isNotEmpty;
     final String forward = Directionality.of(context) == TextDirection.rtl ? '←' : '→';
+    // D-134: a visitor browsing without an account.
+    final bool guest = !app.session.signedIn;
 
     return RefreshIndicator(
-      onRefresh: () => Future.wait(<Future<void>>[app.catalog.load(), app.refreshAccount()]),
+      onRefresh: () => Future.wait(<Future<void>>[app.catalog.load(), if (!guest) app.refreshAccount()]),
       child: ListView(
         padding: const EdgeInsets.only(bottom: 130),
         children: [
           NovaPageHeader(
             showBack: false,
-            kicker: _today(context),
-            title: student == null || student.firstName.isEmpty
-                ? context.tr('home.greetingGeneric')
-                : context.trf('home.greeting', {'name': student.firstName}),
-            lead: context.tr('home.lead'),
+            kicker: guest ? context.tr('guest.eyebrow') : _today(context),
+            title: guest
+                ? context.tr('guest.homeTitle')
+                : student == null || student.firstName.isEmpty
+                    ? context.tr('home.greetingGeneric')
+                    : context.trf('home.greeting', {'name': student.firstName}),
+            lead: context.tr(guest ? 'guest.homeText' : 'home.lead'),
             bottom: Wrap(
               spacing: 10,
               runSpacing: 10,
               children: [
-                NovaButton(
-                  label: context.tr('home.continue'),
-                  variant: NovaButtonVariant.yellow,
-                  chipIcon: Icons.arrow_forward_rounded,
-                  onTap: () => ShellNav.maybeOf(context)?.select(ShellScreen.units),
-                ),
+                if (guest)
+                  NovaButton(
+                    label: context.tr('gateway.registerCta'),
+                    variant: NovaButtonVariant.yellow,
+                    chipIcon: Icons.arrow_forward_rounded,
+                    onTap: () => openRegistration(context),
+                  )
+                else
+                  NovaButton(
+                    label: context.tr('home.continue'),
+                    variant: NovaButtonVariant.yellow,
+                    chipIcon: Icons.arrow_forward_rounded,
+                    onTap: () => ShellNav.maybeOf(context)?.select(ShellScreen.units),
+                  ),
                 NovaButton(
                   label: context.tr('home.seeOffers'),
                   variant: NovaButtonVariant.onBlueGhost,

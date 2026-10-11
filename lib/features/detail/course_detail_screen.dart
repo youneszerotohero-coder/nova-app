@@ -20,6 +20,7 @@ import '../../core/api/api_exception.dart';
 import '../../core/widgets/nova_toast.dart';
 import '../learning/open_course.dart';
 import 'pack_picker.dart';
+import '../auth/require_account.dart';
 
 /// Course detail (and Offer detail via `.pack`): hero, description,
 /// curriculum accordion, purchase card with the add-to-cart / buy-now
@@ -122,6 +123,8 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   Future<void> _buyNow() => _buyItem(_kind, _productId);
 
   Future<bool> _addItem(String kind, int id) async {
+    // A visitor signs in first, then lands in the cart with this item (D-134).
+    if (!requireAccount(context, intent: AddToCart(kind, id))) return false;
     if (_app.contains('$kind:$id')) return true;
     setState(() => _busy = true);
     try {
@@ -169,6 +172,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
 
   /// Free Courses are never sold (D-054): the Student joins them.
   Future<void> _joinFree() async {
+    if (!requireAccount(context, intent: OpenCourse(_course!))) return;
     setState(() => _busy = true);
     try {
       await _app.learning.enrollFree(_course!);
@@ -253,7 +257,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   }
 
   void _openCourse() {
-    openOwnedCourse(context, _course!);
+    if (requireAccount(context, intent: OpenCourse(_course!))) openOwnedCourse(context, _course!);
   }
 
   List<String> _courseStats() {

@@ -7,6 +7,7 @@ import '../../core/theme/nova_typography.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../account/notifications_screen.dart';
 import '../account/settings_screen.dart';
+import '../auth/require_account.dart';
 
 /// Lets a tab page switch tabs or open the menu (the shell provides it).
 class ShellNav extends InheritedWidget {
@@ -44,7 +45,16 @@ class StudentTopBar extends StatelessWidget {
         children: [
           if (showBack)
             const BackPill()
-          else ...[
+          else if (!app.session.signedIn) ...[
+            // D-134: a visitor has no initials nor notifications: sign in.
+            _SignInPill(onTap: () => requireAccount(context)),
+            const SizedBox(width: 8),
+            _Square(
+              semanticLabel: context.tr('menu.darkMode'),
+              onTap: () => app.setDarkMode(!app.darkMode),
+              child: Icon(app.darkMode ? Icons.dark_mode_outlined : Icons.light_mode_outlined, size: 20, color: NovaColors.textStrong),
+            ),
+          ] else ...[
             _Square(
               semanticLabel: context.tr('topbar.settings'),
               color: NovaColors.accent,
@@ -85,6 +95,45 @@ class StudentTopBar extends StatelessWidget {
     final List<String> words = name.trim().split(RegExp(r'\s+')).where((String w) => w.isNotEmpty).toList();
     if (words.isEmpty) return 'N';
     return words.take(2).map((String w) => w.substring(0, 1).toUpperCase()).join();
+  }
+}
+
+/// A visitor's way to their account, where the Student's initials stand.
+class _SignInPill extends StatelessWidget {
+  const _SignInPill({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      pressedScale: 0.94,
+      semanticLabel: context.tr('guest.signIn'),
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(color: NovaColors.accent, borderRadius: BorderRadius.circular(13)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.login_rounded, size: 18, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(
+              context.tr('guest.signIn'),
+              style: const TextStyle(
+                fontFamily: NovaTypography.display,
+                fontFamilyFallback: NovaTypography.fallback,
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
