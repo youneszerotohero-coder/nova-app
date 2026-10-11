@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/nova_colors.dart';
 import '../theme/nova_dimens.dart';
 import '../theme/nova_typography.dart';
-import 'hue_card.dart';
-import 'nova_decor.dart';
+import 'hero_style.dart';
 import 'nova_page_header.dart';
 import 'pressable_scale.dart';
 
@@ -91,7 +90,8 @@ class NovaCard extends StatelessWidget {
   }
 }
 
-/// A card that leads with a hue-tinted icon tile and a title row.
+/// The website's `.dashboardCard` with its heading (`CardHeading`): an
+/// optional blue kicker (14 px Baloo 800) over the ink title; no icon tile.
 class NovaSectionCard extends StatelessWidget {
   const NovaSectionCard({
     super.key,
@@ -101,38 +101,66 @@ class NovaSectionCard extends StatelessWidget {
     this.hue = NovaHue.sky,
     this.subtitle,
     this.trailing,
+    this.kicker,
   });
 
+  /// Kept for callers; the website's card heading has no icon.
   final IconData icon;
   final String title;
   final Widget child;
+
+  /// Kept for callers; the card is neutral whatever the hue.
   final NovaHue hue;
   final String? subtitle;
   final Widget? trailing;
 
+  /// The blue line above the title (`.dashboardCardHeading span`).
+  final String? kicker;
+
   @override
   Widget build(BuildContext context) {
     return NovaCard(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              IconTile(icon: icon, hue: hue, size: 40),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: NovaTypography.textTheme.titleMedium),
+                    if (kicker != null) ...[
+                      Text(
+                        kicker!,
+                        style: TextStyle(
+                          fontFamily: NovaTypography.display,
+                          fontFamilyFallback: NovaTypography.fallback,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          height: 1.3,
+                          color: NovaColors.accent,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: NovaTypography.display,
+                        fontFamilyFallback: NovaTypography.fallback,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 19,
+                        height: 1.3,
+                        color: NovaColors.textStrong,
+                      ),
+                    ),
                     if (subtitle != null) ...[
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Text(
                         subtitle!,
-                        style: NovaTypography.muted(
-                          NovaTypography.textTheme.bodySmall!,
-                        ),
+                        style: NovaTypography.textTheme.bodySmall!.copyWith(color: NovaColors.textBody),
                       ),
                     ],
                   ],
@@ -141,7 +169,7 @@ class NovaSectionCard extends StatelessWidget {
               ?trailing,
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           child,
         ],
       ),
@@ -149,7 +177,8 @@ class NovaSectionCard extends StatelessWidget {
   }
 }
 
-/// Friendly empty state (cart, results, notifications...).
+/// Friendly empty state (cart, results, notifications...): the website's
+/// `HxEmpty` with a blue `.hxBtn` as its action.
 class EmptyState extends StatelessWidget {
   const EmptyState({
     super.key,
@@ -164,6 +193,8 @@ class EmptyState extends StatelessWidget {
   final IconData icon;
   final String title;
   final String message;
+
+  /// The tile's tone: [NovaHue.rose] for an error, blue otherwise.
   final NovaHue hue;
   final String? actionLabel;
   final VoidCallback? onAction;
@@ -172,66 +203,15 @@ class EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 96,
-              height: 96,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  NovaDecor(color: hue.solid, opacity: 0.35, seed: 2),
-                  Container(
-                    width: 72,
-                    height: 72,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: hue.surfaceStrong,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(icon, size: 30, color: hue.onSurface),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(title, style: NovaTypography.textTheme.titleLarge),
-            const SizedBox(height: 6),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: NovaTypography.muted(NovaTypography.textTheme.bodyMedium!),
-            ),
-            if (actionLabel != null) ...[
-              const SizedBox(height: 18),
-              PressableScale(
-                onTap: onAction,
-                semanticLabel: actionLabel,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 22,
-                    vertical: 14,
-                  ),
-                  decoration: BoxDecoration(
-                    color: NovaColors.ink950,
-                    borderRadius: BorderRadius.circular(100),
-                    boxShadow: NovaDimens.shadowSoft,
-                  ),
-                  child: Text(
-                    actionLabel!,
-                    style: const TextStyle(
-                      fontFamily: 'Geist',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13.5,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: HeroEmpty(
+          icon: icon,
+          title: title,
+          message: message,
+          tone: hue,
+          action: actionLabel == null
+              ? null
+              : NovaButton(label: actionLabel!, chipIcon: Icons.arrow_forward_rounded, onTap: onAction),
         ),
       ),
     );

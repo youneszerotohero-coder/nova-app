@@ -6,12 +6,10 @@ import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../data/session_store.dart';
 import '../../core/i18n/nova_strings.dart';
-import '../../core/theme/nova_typography.dart';
-import '../../core/widgets/hero_style.dart';
 import '../../core/widgets/motion.dart';
-import '../../core/widgets/pressable_scale.dart';
 import 'auth_hero.dart';
 import 'forgot_password_screen.dart';
+import 'otp_widgets.dart';
 import 'register_screen.dart';
 
 /// Split auth screen: brand panel + phone/password sign-in, with the
@@ -106,51 +104,49 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final SessionStore session = AppScope.of(context).session;
+    // The website centres the sign-in form on the phone's height
+    // (`.authPageLogin .authPanel`); a short screen scrolls instead.
     return Scaffold(
-      body: ListView(
-        padding: const EdgeInsets.only(bottom: 24),
-        children: [
-          AuthHero(
-            showBack: widget.showBack,
-            title: context.tr('auth.welcomeBack'),
-            subtitle: context.tr('auth.signInSubtitle'),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 26, 24, 0),
+      backgroundColor: NovaColors.paperCard,
+      body: CustomScrollView(
+        slivers: [
+          SliverFillRemaining(
+            hasScrollBody: false,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (AppScope.of(context).session.endedReason ==
-                    ApiException.sessionReplaced)
-                  _Banner(text: context.tr('err.sessionReplaced')),
-                if (AppScope.of(context).session.endedReason == SessionStore.accountDeleted)
-                  _Banner(text: context.tr('deleteAccount.done'), icon: Icons.check_circle_rounded),
-                if (_passwordReset)
-                  _Banner(text: context.tr('auth.passwordResetDone'), icon: Icons.check_circle_rounded),
-                ...stagger(_fields()),
-                if (_error != null) _Banner(text: _error!, error: true),
-                const SizedBox(height: 8),
-                NovaButton(
-                  label: context.tr('auth.signIn'),
-                  chipIcon: Icons.arrow_forward_rounded,
-                  expand: true,
-                  loading: _busy,
-                  onTap: _submit,
+                AuthHeader(showBack: widget.showBack),
+                const Spacer(),
+                AuthHero(
+                  header: false,
+                  title: context.tr('auth.welcomeBack'),
+                  subtitle: context.tr('auth.signInSubtitle'),
                 ),
-                const SizedBox(height: 16),
-                Center(
-                  child: PressableScale(
-                    onTap: _openForgotPassword,
-                    semanticLabel: 'Forgot password',
-                    child: Text(
-                      context.tr('auth.forgot'),
-                      style: NovaTypography.textTheme.labelLarge!.copyWith(color: NovaColors.accent),
-                    ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 24, 18, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (session.endedReason == ApiException.sessionReplaced) AuthMessage(context.tr('err.sessionReplaced')),
+                      if (session.endedReason == SessionStore.accountDeleted) AuthNotice(context.tr('deleteAccount.done')),
+                      if (_passwordReset) AuthNotice(context.tr('auth.passwordResetDone')),
+                      ...stagger(_fields()),
+                      // `.manualResetNote`: the link under the password.
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: AuthTextAction(label: context.tr('auth.forgot'), onTap: _openForgotPassword),
+                      ),
+                      const SizedBox(height: 14),
+                      if (_error != null) AuthMessage(_error!),
+                      AuthSubmitButton(label: context.tr('auth.signIn'), busy: _busy, onTap: _submit),
+                      const SizedBox(height: 12),
+                      // The website's line under the form: "New to Nova? Create an account".
+                      AuthModeSwitch(signIn: true, onSwitch: _openRegister),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 22),
-                // The website's line under the form: "New to Nova? Create an account".
-                AuthModeSwitch(signIn: true, onSwitch: _openRegister),
+                const Spacer(),
               ],
             ),
           ),
@@ -161,149 +157,27 @@ class _LoginScreenState extends State<LoginScreen> {
 
   List<Widget> _fields() {
     return [
-      _AuthField(
+      AuthTextField(
         controller: _phone,
-        icon: Icons.phone_rounded,
+        icon: Icons.phone_outlined,
         label: context.tr('auth.phoneLabel'),
         hint: '05 xx xx xx xx',
         keyboard: TextInputType.phone,
         action: TextInputAction.next,
       ),
-      _AuthField(
+      AuthTextField(
         controller: _password,
         icon: Icons.lock_outline_rounded,
         label: context.tr('auth.password'),
-        hint: '••••••••',
+        hint: context.tr('auth.passwordHint'),
         obscure: _obscure,
         action: TextInputAction.done,
         onSubmitted: (_) => _submit(),
-        trailing: PressableScale(
-          onTap: () => setState(() => _obscure = !_obscure),
-          semanticLabel: 'Show password',
-          child: Icon(
-            _obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-            size: 20,
-            color: NovaColors.textMuted,
-          ),
+        trailing: PasswordVisibilityToggle(
+          obscure: _obscure,
+          onToggle: () => setState(() => _obscure = !_obscure),
         ),
       ),
     ];
-  }
-}
-
-/// Shared styled auth input.
-class _AuthField extends StatelessWidget {
-  const _AuthField({
-    required this.controller,
-    required this.icon,
-    required this.label,
-    required this.hint,
-    this.obscure = false,
-    this.keyboard,
-    this.trailing,
-    this.action,
-    this.onSubmitted,
-  });
-
-  final TextEditingController controller;
-  final TextInputAction? action;
-  final ValueChanged<String>? onSubmitted;
-  final IconData icon;
-  final String label;
-  final String hint;
-  final bool obscure;
-  final TextInputType? keyboard;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: NovaTypography.textTheme.labelLarge),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: NovaColors.paperCard,
-              borderRadius: BorderRadius.circular(17),
-              border: Border.all(
-color: NovaColors.textStrong.withValues(alpha: 0.14), width: 1.5),
-            ),
-            child: Row(
-              children: [
-                Icon(icon, size: 20, color: NovaColors.textMuted),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    obscureText: obscure,
-                    textInputAction: action,
-                    onSubmitted: onSubmitted,
-                    autocorrect: false,
-                    keyboardType: keyboard,
-                    style: NovaTypography.textTheme.bodyMedium,
-                    decoration: InputDecoration(
-                      hintText: hint,
-                      hintStyle: NovaTypography.muted(
-                        NovaTypography.textTheme.bodyMedium!,
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                ),
-                ?trailing,
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Inline notice under the header: a replaced session or a sign-in
-/// error, in the app's own words.
-class _Banner extends StatelessWidget {
-  const _Banner({required this.text, this.error = false, this.icon});
-
-  final String text;
-  final bool error;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final NovaHue hue = error ? NovaHue.rose : NovaHue.butter;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: hue.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: hue.solid.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            icon ?? (error ? Icons.error_outline_rounded : Icons.devices_other_rounded),
-            size: 18,
-            color: hue.onSurface,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: NovaTypography.textTheme.bodySmall!.copyWith(
-                color: hue.onSurface,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

@@ -40,18 +40,26 @@ class AuthGatewayScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 26),
-                Entrance(child: HeroEyebrow(context.tr('gateway.eyebrow'))),
-                const SizedBox(height: 8),
+                // `.gatewayHeading`: centred, as on the website.
+                Entrance(child: Center(child: HeroEyebrow(context.tr('gateway.eyebrow')))),
+                const SizedBox(height: 12),
                 Entrance(
                   delay: const Duration(milliseconds: 60),
-                  child: HeroTitle(context.tr('gateway.title'), size: 33),
+                  child: HeroTitle(context.tr('gateway.title'), size: 32, textAlign: TextAlign.center),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Entrance(
                   delay: const Duration(milliseconds: 120),
                   child: Text(
                     context.tr('gateway.subtitle'),
-                    style: NovaTypography.textTheme.bodyLarge!.copyWith(color: Colors.white.withValues(alpha: 0.88)),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontFamily: NovaTypography.body,
+                      fontFamilyFallback: NovaTypography.fallback,
+                      fontSize: 17,
+                      height: 1.6,
+                      color: Color(0xDBFFFFFF),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 22),
@@ -63,12 +71,7 @@ class AuthGatewayScreen extends StatelessWidget {
                     iconColor: NovaColors.yellowInk,
                     tag: context.tr('gateway.loginTag'),
                     text: context.tr('gateway.loginText'),
-                    button: NovaButton(
-                      label: context.tr('gateway.loginCta'),
-                      chipIcon: Icons.arrow_forward_rounded,
-                      expand: true,
-                      onTap: () => openSignIn(context),
-                    ),
+                    button: _ChoiceCta(label: context.tr('gateway.loginCta'), onTap: () => openSignIn(context)),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -76,17 +79,11 @@ class AuthGatewayScreen extends StatelessWidget {
                   delay: const Duration(milliseconds: 260),
                   child: _Choice(
                     icon: Icons.person_add_alt_1_rounded,
-                    iconBackground: NovaColors.accentMist,
-                    iconColor: NovaColors.accent,
+                    iconBackground: const Color(0xFFE9F0FF),
+                    iconColor: NovaColors.blue,
                     tag: context.tr('gateway.registerTag'),
                     text: context.tr('gateway.registerText'),
-                    button: NovaButton(
-                      label: context.tr('gateway.registerCta'),
-                      variant: NovaButtonVariant.ghost,
-                      chipIcon: Icons.arrow_forward_rounded,
-                      expand: true,
-                      onTap: () => openRegistration(context),
-                    ),
+                    button: _ChoiceCta(label: context.tr('gateway.registerCta'), ghost: true, onTap: () => openRegistration(context)),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -110,6 +107,8 @@ class AuthGatewayScreen extends StatelessWidget {
   }
 }
 
+/// `.gatewayChoice`: a white card (white in dark mode too), its tilted icon
+/// tile, the answer, one line and the way in.
 class _Choice extends StatelessWidget {
   const _Choice({
     required this.icon,
@@ -130,28 +129,100 @@ class _Choice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: NovaColors.paperCard,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(NovaDimens.radiusTile),
-        boxShadow: const [BoxShadow(offset: Offset(0, 22), blurRadius: 40, spreadRadius: -22, color: Color(0x8C071649))],
+        boxShadow: const [BoxShadow(offset: Offset(0, 30), blurRadius: 60, spreadRadius: -34, color: Color(0xBF061450))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(color: iconBackground, borderRadius: BorderRadius.circular(15)),
-            child: Icon(icon, size: 24, color: iconColor),
+          Transform.rotate(
+            angle: -6 * math.pi / 180,
+            child: Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: iconBackground,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: const [BoxShadow(offset: Offset(0, 10), blurRadius: 18, spreadRadius: -12, color: Color(0x800A0E16))],
+              ),
+              child: Icon(icon, size: 21, color: iconColor),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            tag,
+            style: const TextStyle(
+              fontFamily: NovaTypography.display,
+              fontFamilyFallback: NovaTypography.fallback,
+              fontWeight: FontWeight.w800,
+              fontSize: 19,
+              height: 1.25,
+              color: NovaColors.ink,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            text,
+            style: const TextStyle(
+              fontFamily: NovaTypography.body,
+              fontFamilyFallback: NovaTypography.fallback,
+              fontSize: 15.5,
+              height: 1.5,
+              color: Color(0xFF46506A),
+            ),
           ),
           const SizedBox(height: 12),
-          Text(tag, style: NovaTypography.textTheme.headlineSmall),
-          const SizedBox(height: 6),
-          Text(text, style: NovaTypography.muted(NovaTypography.textTheme.bodyMedium!)),
-          const SizedBox(height: 16),
           button,
         ],
+      ),
+    );
+  }
+}
+
+/// `.gatewayChoiceCta`: the blue way in (or the outlined one), the label
+/// and its arrow.
+class _ChoiceCta extends StatelessWidget {
+  const _ChoiceCta({required this.label, required this.onTap, this.ghost = false});
+
+  final String label;
+  final VoidCallback onTap;
+  final bool ghost;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color ink = ghost ? NovaColors.ink : Colors.white;
+    return PressableScale(
+      onTap: onTap,
+      pressedScale: 0.98,
+      semanticLabel: label,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 52),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: ghost ? Colors.transparent : NovaColors.blue,
+          borderRadius: BorderRadius.circular(NovaDimens.radiusControl),
+          border: ghost ? Border.all(color: const Color(0x2E121A33), width: 1.5) : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: NovaTypography.display,
+                fontFamilyFallback: NovaTypography.fallback,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                color: ink,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Icon(Icons.arrow_forward_rounded, size: 18, color: ink),
+          ],
+        ),
       ),
     );
   }

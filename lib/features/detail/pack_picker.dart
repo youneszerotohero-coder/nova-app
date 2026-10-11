@@ -4,9 +4,9 @@ import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../core/theme/nova_typography.dart';
-import '../../core/utils/format_price.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../data/models.dart';
+import '../home/widgets/nova_product_card.dart';
 
 /// D-091: the Packs containing a Unit sold through Packs only, cheapest
 /// first; the one picked is added to the cart ([buy] false) or bought.
@@ -32,23 +32,31 @@ class _PackPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppState app = AppScope.of(context);
+    // `.nvModal.nvPicker` on phones: a bottom sheet with its grab bar.
     return Container(
-      margin: const EdgeInsets.all(10),
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 16 + MediaQuery.paddingOf(context).bottom),
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 20 + MediaQuery.paddingOf(context).bottom),
       constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.8),
       decoration: BoxDecoration(
         color: NovaColors.paperCard,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(context.tr('detail.choosePackTitle'), style: NovaTypography.textTheme.titleMedium),
+          Center(
+            child: Container(
+              width: 42,
+              height: 5,
+              margin: const EdgeInsets.only(bottom: 14),
+              decoration: BoxDecoration(color: NovaColors.borderOnLight, borderRadius: BorderRadius.circular(5)),
+            ),
+          ),
+          Text(context.tr('detail.choosePackTitle'), style: NovaTypography.textTheme.headlineSmall),
           const SizedBox(height: 4),
           Text(
             context.tr('detail.choosePackHint'),
-            style: NovaTypography.muted(NovaTypography.textTheme.bodySmall!),
+            style: NovaTypography.textTheme.bodyMedium!.copyWith(color: NovaColors.textBody),
           ),
           const SizedBox(height: 14),
           Flexible(
@@ -114,10 +122,10 @@ class _PackOption extends StatelessWidget {
       pressedScale: 0.98,
       semanticLabel: pack.title,
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsetsDirectional.fromSTEB(16, 14, 14, 14),
         decoration: BoxDecoration(
-          color: NovaColors.subtleFill,
-          borderRadius: BorderRadius.circular(18),
+          color: NovaColors.paperPublic,
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(color: inCart ? NovaColors.accent : NovaColors.borderOnLight),
         ),
         child: Row(
@@ -144,11 +152,21 @@ class _PackOption extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(formatDaPrice(pack.price), style: NovaTypography.textTheme.titleSmall),
-                const SizedBox(height: 3),
                 Text(
-                  context.tr(buy ? 'detail.buyNow' : 'detail.addToCart'),
-                  style: NovaTypography.textTheme.labelMedium!.copyWith(color: NovaColors.accentDeep),
+                  NovaProductCard.formatCardPrice(pack.price),
+                  style: NovaTypography.textTheme.headlineSmall!.copyWith(fontSize: 19.5, height: 1.1),
+                ),
+                const SizedBox(height: 6),
+                // `.nvPickerAction`: the sky pill.
+                Container(
+                  height: 34,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: NovaColors.skyStrong, borderRadius: BorderRadius.circular(100)),
+                  child: Text(
+                    context.tr(buy ? 'detail.buyNow' : 'detail.addToCart'),
+                    style: NovaTypography.textTheme.labelMedium!.copyWith(color: const Color(0xFF0B1A2A)),
+                  ),
                 ),
               ],
             ),

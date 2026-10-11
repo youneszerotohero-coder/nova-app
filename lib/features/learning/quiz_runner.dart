@@ -8,6 +8,7 @@ import '../../core/theme/nova_typography.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/widgets/celebration_dialog.dart';
 import '../../core/widgets/nova_toast.dart';
+import '../../core/widgets/hero_style.dart';
 import '../../core/widgets/page_scaffold.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../core/widgets/progress_ring.dart';
@@ -448,38 +449,12 @@ class _BottomAction extends StatelessWidget {
               hint,
               style: hintIsError
                   ? NovaTypography.textTheme.bodySmall!.copyWith(color: NovaColors.heartRed)
-                  : NovaTypography.muted(NovaTypography.textTheme.bodySmall!),
+                  : NovaTypography.textTheme.bodySmall!.copyWith(color: NovaColors.textBody),
             ),
           ),
           const SizedBox(width: 12),
-          PressableScale(
-            onTap: onTap,
-            semanticLabel: label,
-            child: Container(
-              height: 50,
-              padding: const EdgeInsets.symmetric(horizontal: 22),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: onTap == null ? NovaColors.veilOnDark : NovaColors.ink950,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: busy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
-                    )
-                  : Text(
-                      label,
-                      style: const TextStyle(
-                        fontFamily: 'Geist',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                        color: NovaColors.textOnDark,
-                      ),
-                    ),
-            ),
-          ),
+          // The website's blue `.hxBtn`.
+          NovaButton(label: label, onTap: onTap, loading: busy, trailingIcon: Icons.arrow_forward_rounded),
         ],
       ),
     );

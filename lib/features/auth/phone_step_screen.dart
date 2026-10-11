@@ -5,10 +5,9 @@ import '../../core/api/api_exception.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
-import '../../core/theme/nova_typography.dart';
 import '../../core/utils/phone.dart';
-import '../../core/widgets/pressable_scale.dart';
 import 'auth_hero.dart';
+import 'otp_widgets.dart';
 
 /// Required step for an account without a valid mobile (D-079): the
 /// backend answers `PHONE_REQUIRED` everywhere until the Student enters
@@ -72,8 +71,8 @@ class _PhoneStepScreenState extends State<PhoneStepScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String? fieldError = _fieldError;
     return Scaffold(
+      backgroundColor: NovaColors.paperCard,
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
@@ -82,129 +81,30 @@ class _PhoneStepScreenState extends State<PhoneStepScreen> {
             subtitle: context.tr('phone.desc'),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 26, 24, 0),
+            padding: const EdgeInsets.fromLTRB(18, 24, 18, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  context.tr('auth.phoneLabel'),
-                  style: NovaTypography.textTheme.labelMedium,
+                AuthTextField(
+                  controller: _phone,
+                  icon: Icons.phone_outlined,
+                  label: context.tr('auth.phoneLabel'),
+                  hint: '05 xx xx xx xx',
+                  keyboard: TextInputType.phone,
+                  action: TextInputAction.done,
+                  error: _fieldError,
+                  onChanged: (_) {
+                    if (_taken) setState(() => _taken = false);
+                  },
+                  onSubmitted: (_) => _submit(),
                 ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: NovaColors.paperCard,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: fieldError == null && !_taken
-                          ? NovaColors.borderOnLight
-                          : NovaHue.rose.solid.withValues(alpha: 0.6),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.phone_rounded,
-                        size: 19,
-                        color: NovaColors.textMuted,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: _phone,
-                          keyboardType: TextInputType.phone,
-                          textInputAction: TextInputAction.done,
-                          autocorrect: false,
-                          onChanged: (_) {
-                            if (_taken) setState(() => _taken = false);
-                          },
-                          onSubmitted: (_) => _submit(),
-                          style: NovaTypography.textTheme.bodyMedium,
-                          decoration: InputDecoration(
-                            hintText: '05 xx xx xx xx',
-                            hintStyle: NovaTypography.muted(
-                              NovaTypography.textTheme.bodyMedium!,
-                            ),
-                            border: InputBorder.none,
-                            contentPadding:
-                                const EdgeInsets.symmetric(vertical: 15),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (fieldError != null)
-                  Padding(
-                    padding: const EdgeInsetsDirectional.only(top: 6, start: 4),
-                    child: Text(
-                      fieldError,
-                      style: NovaTypography.textTheme.labelSmall!.copyWith(
-                        color: NovaHue.rose.onSurface,
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 16),
-                if (_taken || _error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: Text(
-                      _taken ? context.tr('phone.taken') : _error!,
-                      style: NovaTypography.textTheme.bodySmall!.copyWith(
-                        color: NovaHue.rose.onSurface,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                PressableScale(
-                  onTap: _busy ? null : _submit,
-                  pressedScale: 0.97,
-                  semanticLabel: context.tr('phone.save'),
-                  child: Container(
-                    height: 58,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: NovaColors.ink950,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    child: _busy
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.6,
-                              color: NovaColors.textOnDark,
-                            ),
-                          )
-                        : Text(
-                            context.tr('phone.save'),
-                            style: TextStyle(
-                              fontFamily: 'Geist',
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15.5,
-                              color: NovaColors.textOnDark,
-                            ),
-                          ),
-                  ),
-                ),
-                const SizedBox(height: 14),
+                if (_taken || _error != null) AuthMessage(_taken ? context.tr('phone.taken') : _error!),
+                AuthSubmitButton(label: context.tr('phone.save'), busy: _busy, onTap: _submit),
+                const SizedBox(height: 10),
                 Center(
-                  child: PressableScale(
+                  child: AuthTextAction(
+                    label: context.tr('settings.signOut'),
                     onTap: () => AppScope.of(context).session.logout(),
-                    semanticLabel: 'Sign out',
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Text(
-                        context.tr('settings.signOut'),
-                        style: TextStyle(
-                          fontFamily: 'Geist',
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                          color: NovaColors.textMuted,
-                        ),
-                      ),
-                    ),
                   ),
                 ),
               ],

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/i18n/nova_strings.dart';
 import '../../core/theme/nova_colors.dart';
+import '../../core/theme/nova_dimens.dart';
 import '../../core/theme/nova_typography.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../data/otp.dart';
@@ -44,7 +45,7 @@ mixin ResendCountdown<T extends StatefulWidget> on State<T> {
 }
 
 /// D-096: the Student chooses how the code arrives, SMS (default) or
-/// WhatsApp.
+/// WhatsApp (`.otpChannelChoice`).
 class OtpChannelChoice extends StatelessWidget {
   const OtpChannelChoice({
     super.key,
@@ -60,11 +61,11 @@ class OtpChannelChoice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
+      padding: const EdgeInsets.only(bottom: 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(context.tr('otp.channelLabel'), style: NovaTypography.textTheme.labelMedium),
+          Text(context.tr('otp.channelLabel'), style: authLabelStyle),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -82,6 +83,7 @@ class OtpChannelChoice extends StatelessWidget {
   Widget _option(BuildContext context, OtpChannel channel) {
     final bool selected = channel == value;
     final String label = otpChannelName(context, channel);
+    final Color ink = selected ? NovaColors.accent : NovaColors.textStrong;
     return Semantics(
       selected: selected,
       inMutuallyExclusiveGroup: true,
@@ -90,33 +92,21 @@ class OtpChannelChoice extends StatelessWidget {
         semanticLabel: label,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          height: 48,
+          height: 50,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: selected ? NovaColors.accentMist : NovaColors.paperCard,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: selected ? NovaColors.accent : NovaColors.borderOnLight,
-              width: selected ? 1.6 : 1,
-            ),
+            border: Border.all(color: selected ? NovaColors.accent : NovaColors.lineStrong, width: 1.5),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                channel == OtpChannel.whatsapp ? Icons.chat_rounded : Icons.sms_outlined,
-                size: 18,
-                color: selected ? NovaColors.accentDeep : NovaColors.textMuted,
-              ),
+              Icon(channel == OtpChannel.whatsapp ? Icons.chat_outlined : Icons.sms_outlined, size: 17, color: ink),
               const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontFamily: 'Geist',
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13.5,
-                  color: selected ? NovaColors.accentDeep : NovaColors.textMuted,
-                ),
+              Flexible(
+                child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _baloo(16, ink, weight: FontWeight.w700)),
               ),
             ],
           ),
@@ -125,6 +115,123 @@ class OtpChannelChoice extends StatelessWidget {
     );
   }
 }
+
+TextStyle _baloo(double size, Color color, {FontWeight weight = FontWeight.w800, double height = 1.3}) => TextStyle(
+      fontFamily: NovaTypography.display,
+      fontFamilyFallback: NovaTypography.fallback,
+      fontWeight: weight,
+      fontSize: size,
+      height: height,
+      color: color,
+    );
+
+TextStyle _body(double size, Color color, {FontWeight weight = FontWeight.w400, double height = 1.5}) => TextStyle(
+      fontFamily: NovaTypography.body,
+      fontFamilyFallback: NovaTypography.fallback,
+      fontWeight: weight,
+      fontSize: size,
+      height: height,
+      color: color,
+    );
+
+/// `.authForm label > span`: the field label, Baloo 16 / 700 in ink.
+TextStyle get authLabelStyle => _baloo(16, NovaColors.textStrong, weight: FontWeight.w700);
+
+/// The text typed in an auth field and its placeholder.
+TextStyle get authInputStyle => _body(16, NovaColors.textStrong);
+TextStyle get authHintStyle => _body(16, NovaColors.textMuted);
+
+/// `.authForm label`: the label, then the 56 px field (1.5 px
+/// `--hx-line-strong`, radius 16, the icon at the start) that turns blue with
+/// a `--hx-blue-soft` ring when focused and danger-tinted when invalid, then
+/// the field error.
+class AuthFieldFrame extends StatefulWidget {
+  const AuthFieldFrame({
+    super.key,
+    required this.label,
+    required this.child,
+    this.icon,
+    this.trailing,
+    this.error,
+    this.enabled = true,
+  });
+
+  final String label;
+  final Widget child;
+  final IconData? icon;
+  final Widget? trailing;
+  final String? error;
+  final bool enabled;
+
+  @override
+  State<AuthFieldFrame> createState() => _AuthFieldFrameState();
+}
+
+class _AuthFieldFrameState extends State<AuthFieldFrame> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool invalid = widget.error != null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(widget.label, style: authLabelStyle),
+          const SizedBox(height: 8),
+          Focus(
+            canRequestFocus: false,
+            skipTraversal: true,
+            onFocusChange: (bool focused) => setState(() => _focused = focused),
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 200),
+              opacity: widget.enabled ? 1 : 0.55,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                constraints: const BoxConstraints(minHeight: 56),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: invalid ? NovaColors.dangerBg : NovaColors.paperCard,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: invalid ? NovaColors.heartRed : (_focused ? NovaColors.accent : NovaColors.lineStrong),
+                    width: 1.5,
+                  ),
+                  boxShadow: _focused ? [BoxShadow(spreadRadius: 4, color: NovaColors.accentMist)] : null,
+                ),
+                child: Row(
+                  children: [
+                    if (widget.icon != null) ...[
+                      Icon(widget.icon, size: 17, color: NovaColors.textMuted),
+                      const SizedBox(width: 10),
+                    ],
+                    Expanded(child: widget.child),
+                    ?widget.trailing,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (invalid)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(top: 6),
+              child: Text(widget.error!, style: _body(14, NovaColors.heartRed, weight: FontWeight.w600)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The bare input inside an [AuthFieldFrame].
+InputDecoration authInputDecoration(String hint) => InputDecoration(
+      hintText: hint,
+      hintStyle: authHintStyle,
+      border: InputBorder.none,
+      isCollapsed: true,
+      contentPadding: const EdgeInsets.symmetric(vertical: 16),
+    );
 
 /// Labelled auth input with its field error underneath.
 class AuthTextField extends StatelessWidget {
@@ -142,6 +249,8 @@ class AuthTextField extends StatelessWidget {
     this.error,
     this.enabled = true,
     this.onSubmitted,
+    this.onChanged,
+    this.action,
   });
 
   /// The 6-digit code input.
@@ -155,7 +264,7 @@ class AuthTextField extends StatelessWidget {
       AuthTextField(
         key: key,
         controller: controller,
-        icon: Icons.password_rounded,
+        icon: Icons.lock_outline_rounded,
         label: label,
         hint: '••••••',
         keyboard: TextInputType.number,
@@ -180,69 +289,36 @@ class AuthTextField extends StatelessWidget {
   final String? error;
   final bool enabled;
   final ValueChanged<String>? onSubmitted;
+  final ValueChanged<String>? onChanged;
+  final TextInputAction? action;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: NovaTypography.textTheme.labelLarge),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: NovaColors.paperCard,
-              borderRadius: BorderRadius.circular(17),
-              border: Border.all(
-                color: error == null
-                    ? NovaColors.textStrong.withValues(alpha: 0.14)
-                    : NovaHue.rose.solid.withValues(alpha: 0.6),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(icon, size: 19, color: NovaColors.textMuted),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    enabled: enabled,
-                    obscureText: obscure,
-                    autocorrect: false,
-                    keyboardType: keyboard,
-                    inputFormatters: formatters,
-                    autofillHints: autofill == null ? null : <String>[autofill!],
-                    onSubmitted: onSubmitted,
-                    style: NovaTypography.textTheme.bodyMedium,
-                    decoration: InputDecoration(
-                      hintText: hint,
-                      hintStyle: NovaTypography.muted(NovaTypography.textTheme.bodyMedium!),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 15),
-                    ),
-                  ),
-                ),
-                ?trailing,
-              ],
-            ),
-          ),
-          if (error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6, left: 4),
-              child: Text(
-                error!,
-                style: NovaTypography.textTheme.labelSmall!.copyWith(color: NovaHue.rose.onSurface),
-              ),
-            ),
-        ],
+    return AuthFieldFrame(
+      label: label,
+      icon: icon,
+      trailing: trailing,
+      error: error,
+      enabled: enabled,
+      child: TextField(
+        controller: controller,
+        enabled: enabled,
+        obscureText: obscure,
+        autocorrect: false,
+        keyboardType: keyboard,
+        textInputAction: action,
+        inputFormatters: formatters,
+        autofillHints: autofill == null ? null : <String>[autofill!],
+        onSubmitted: onSubmitted,
+        onChanged: onChanged,
+        style: authInputStyle,
+        decoration: authInputDecoration(hint),
       ),
     );
   }
 }
 
-/// The eye toggle of a password field.
+/// The eye of a password field: blue, a 44 px target.
 class PasswordVisibilityToggle extends StatelessWidget {
   const PasswordVisibilityToggle({super.key, required this.obscure, required this.onToggle});
 
@@ -254,16 +330,21 @@ class PasswordVisibilityToggle extends StatelessWidget {
     return PressableScale(
       onTap: onToggle,
       semanticLabel: 'Show password',
-      child: Icon(
-        obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-        size: 20,
-        color: NovaColors.textMuted,
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: Icon(
+          obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+          size: 18,
+          color: NovaColors.accent,
+        ),
       ),
     );
   }
 }
 
-/// The dark full-width pill of the auth screens, with a spinner while busy.
+/// `.authSubmit`: the full-width blue button, 56 high, radius 17, 17 px
+/// Baloo 800 and the arrow, with its blue shadow; a spinner while busy.
 class AuthSubmitButton extends StatelessWidget {
   const AuthSubmitButton({super.key, required this.label, required this.busy, required this.onTap});
 
@@ -275,36 +356,79 @@ class AuthSubmitButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return PressableScale(
       onTap: busy ? null : onTap,
-      pressedScale: 0.97,
+      pressedScale: 0.98,
       semanticLabel: label,
       child: Container(
-        height: 56,
+        constraints: const BoxConstraints(minHeight: 56),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: NovaColors.ink950,
-          borderRadius: BorderRadius.circular(100),
+          color: NovaColors.accent,
+          borderRadius: BorderRadius.circular(NovaDimens.radiusControl),
+          boxShadow: busy ? null : const [BoxShadow(offset: Offset(0, 14), blurRadius: 26, spreadRadius: -16, color: Color(0xCC1F54D6))],
         ),
         child: busy
             ? const SizedBox(
                 width: 22,
                 height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2.6, color: NovaColors.textOnDark),
+                child: CircularProgressIndicator(strokeWidth: 2.6, color: Colors.white),
               )
-            : Text(
-                label,
-                style: TextStyle(
-                  fontFamily: 'Geist',
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                  color: NovaColors.textOnDark,
-                ),
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(child: Text(label, textAlign: TextAlign.center, style: _baloo(17, Colors.white, height: 1.2))),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.white),
+                ],
               ),
       ),
     );
   }
 }
 
-/// A small accent text button ("Send a new code", "Change the number").
+/// `.authBack`: the outlined companion of [AuthSubmitButton] ("Previous",
+/// "Send the code", "Verify").
+class AuthOutlineButton extends StatelessWidget {
+  const AuthOutlineButton({super.key, required this.label, required this.onTap, this.icon});
+
+  final String label;
+  final VoidCallback? onTap;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: onTap == null ? 0.5 : 1,
+      child: PressableScale(
+        onTap: onTap,
+        pressedScale: 0.98,
+        semanticLabel: label,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 56),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: NovaColors.paperCard,
+            borderRadius: BorderRadius.circular(NovaDimens.radiusControl),
+            border: Border.all(color: NovaColors.lineStrong, width: 1.5),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[Icon(icon, size: 16, color: NovaColors.textStrong), const SizedBox(width: 8)],
+              Flexible(
+                child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: _baloo(16, NovaColors.textStrong, height: 1.2)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// `.authLinkButton`: a blue Baloo 800 link ("Send a new code", "Change
+/// the number"), grey while it cannot be used.
 class AuthTextAction extends StatelessWidget {
   const AuthTextAction({super.key, required this.label, required this.onTap});
 
@@ -317,22 +441,15 @@ class AuthTextAction extends StatelessWidget {
       onTap: onTap,
       semanticLabel: label,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontFamily: 'Geist',
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-            color: onTap == null ? NovaColors.textMuted : NovaColors.accentDeep,
-          ),
-        ),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(label, style: _baloo(15, onTap == null ? NovaColors.textMuted : NovaColors.accent)),
       ),
     );
   }
 }
 
-/// An error (rose) or status (accent) line under a form.
+/// An error under a form (`.authError`: `--hx-danger-bg`, the danger text,
+/// radius 14), or a status line (`.manualResetNote`, ink-2).
 class AuthMessage extends StatelessWidget {
   const AuthMessage(this.text, {super.key, this.error = true});
 
@@ -342,16 +459,68 @@ class AuthMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: 18),
       child: Semantics(
         liveRegion: true,
-        child: Text(
-          text,
-          style: NovaTypography.textTheme.bodySmall!.copyWith(
-            color: error ? NovaHue.rose.onSurface : NovaColors.accentDeep,
-            fontWeight: FontWeight.w600,
-          ),
+        child: error
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+                decoration: BoxDecoration(color: NovaColors.dangerBg, borderRadius: BorderRadius.circular(14)),
+                child: Text(text, style: _body(15, NovaColors.heartRed, weight: FontWeight.w600)),
+              )
+            : Text(text, style: _body(15, NovaColors.textBody, height: 1.55)),
+      ),
+    );
+  }
+}
+
+/// `.authNotice`: a success line (`--hx-success-bg`) with its check.
+class AuthNotice extends StatelessWidget {
+  const AuthNotice(this.text, {super.key, this.icon = Icons.check_rounded});
+
+  final String text;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+        decoration: BoxDecoration(color: NovaColors.liveBg, borderRadius: BorderRadius.circular(14)),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: NovaColors.onlineGreen),
+            const SizedBox(width: 8),
+            Expanded(child: Text(text, style: _body(15, NovaColors.onlineGreen, weight: FontWeight.w600))),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+/// `.authGroup legend`: a blue group title on the hairline that opens it.
+class AuthGroupLegend extends StatelessWidget {
+  const AuthGroupLegend(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      // The legend sits on the line, on the page's surface.
+      child: Stack(
+        alignment: AlignmentDirectional.centerStart,
+        children: [
+          Positioned.fill(child: Center(child: Container(height: 1, color: NovaColors.borderOnLight))),
+          Container(
+            color: NovaColors.paperCard,
+            padding: const EdgeInsetsDirectional.only(end: 10),
+            child: Text(text, style: _baloo(15, NovaColors.accent)),
+          ),
+        ],
       ),
     );
   }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'nova_dimens.dart';
+
 /// Theme-dependent tones: the website's `hero.css` tokens and their `.dark`
 /// values (D-134: the blue family, the status tones, the product card and
 /// the bottom bar change in dark mode too, as on the website).
@@ -123,71 +125,61 @@ class NovaPalette {
   );
 }
 
-/// The card hue family: every colourful surface in the app resolves
-/// through one of these, so a card, its icon tile, its chips and its
-/// shadow always agree — and all of them flip together in dark mode.
+/// The tone a surface carries. The website has no pastel family: a card is
+/// the neutral `--hx-surface`, and colour only means something — blue (the
+/// default), or a status tone with its `--hx-*-bg` (`.hxSticker--live`,
+/// `--danger`, `--quiz`). [mint], [rose] and [butter] are those statuses;
+/// every other hue is the blue. No gradients, no coloured shadows (D-134).
 enum NovaHue {
-  // The website's tones (hero.css): royal blue, sky, yellow, live green,
-  // quiz amber, danger red, ink. Kept as a family so a card, its icon tile
-  // and its chips always agree.
-  sky(Color(0xFF1F54D6), Color(0xFF4FACF0)),
-  lilac(Color(0xFF2F86DA), Color(0xFF9FD8FF)),
-  peach(Color(0xFFA8740A), Color(0xFFFFD54A)),
-  mint(Color(0xFF1F9A58), Color(0xFF4FD1A5)),
-  butter(Color(0xFFA8740A), Color(0xFFFFD54A)),
-  rose(Color(0xFFCF3434), Color(0xFFFF8A8A)),
-  ink(Color(0xFF121A33), Color(0xFF2E3A66));
+  sky,
+  lilac,
+  peach,
 
-  const NovaHue(this.solid, this.bright);
+  /// `--hx-live` / `--hx-success`.
+  mint,
 
-  /// The saturated hue: icons, numbers, active pills.
-  final Color solid;
+  /// `--hx-quiz` / `--hx-warning`.
+  butter,
 
-  /// Its lighter partner, used for gradients and glows.
-  final Color bright;
+  /// `--hx-danger`.
+  rose,
+  ink;
 
-  /// Pastel card fill on light paper, deep wash on dark paper.
-  Color get surface => NovaColors.current.isDark
-      ? Color.lerp(NovaColors.paperCard, solid, 0.15)!
-      : Color.lerp(Colors.white, solid, 0.11)!;
+  /// The tone: icons, numbers, active pills.
+  Color get solid => switch (this) {
+        mint => NovaColors.onlineGreen,
+        butter => NovaColors.badgeOrange,
+        rose => NovaColors.heartRed,
+        _ => NovaColors.accent,
+      };
 
-  /// A touch stronger than [surface] — nested tiles inside a hue card.
-  Color get surfaceStrong => NovaColors.current.isDark
-      ? Color.lerp(NovaColors.paperCard, solid, 0.26)!
-      : Color.lerp(Colors.white, solid, 0.2)!;
+  /// Kept for callers of the old gradient partner: the same tone.
+  Color get bright => solid;
 
-  /// Readable hue-tinted text/icon colour on [surface].
-  Color get onSurface => NovaColors.current.isDark
-      ? Color.lerp(solid, Colors.white, 0.55)!
-      : Color.lerp(solid, const Color(0xFF121A33), 0.16)!;
+  /// A card on any hue is the website's neutral surface.
+  Color get surface => NovaColors.paperCard;
 
-  LinearGradient get gradient => LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [bright, solid],
-      );
+  /// Icon tiles and chips: the tone's background (`--hx-blue-soft`,
+  /// `--hx-live-bg`…).
+  Color get surfaceStrong => switch (this) {
+        mint => NovaColors.liveBg,
+        butter => NovaColors.quizBg,
+        rose => NovaColors.dangerBg,
+        _ => NovaColors.accentMist,
+      };
 
-  /// Coloured drop shadow so cards glow in their own hue instead of
-  /// all sharing one grey.
-  List<BoxShadow> get shadow => [
-        BoxShadow(
-          offset: const Offset(0, 16),
-          blurRadius: 34,
-          spreadRadius: -16,
-          color: solid.withValues(alpha: NovaColors.current.isDark ? 0.5 : 0.4),
-        ),
-      ];
+  /// Text and icons on [surfaceStrong]: the tone itself.
+  Color get onSurface => solid;
 
-  /// Deterministic hue for a piece of content (subject, teacher…), so
-  /// the same course keeps the same colour everywhere in the app.
-  static NovaHue of(String seed) {
-    final int hash = seed.toLowerCase().codeUnits.fold(
-          7,
-          (int acc, int code) => (acc * 31 + code) & 0xFFFF,
-        );
-    const List<NovaHue> wheel = [lilac, peach, mint, sky, butter, rose];
-    return wheel[hash % wheel.length];
-  }
+  /// Flat: the website paints no hue gradients.
+  LinearGradient get gradient => LinearGradient(colors: [solid, solid]);
+
+  /// The neutral `--hx-shadow`, whatever the hue.
+  List<BoxShadow> get shadow => NovaDimens.shadowCard;
+
+  /// The website gives subjects and teachers no colour of their own: every
+  /// seed is the blue (kept so callers stay unchanged).
+  static NovaHue of(String seed) => sky;
 }
 
 /// Nova palette = the website's hero tokens (D-125, `website-front/src/hero.css`):

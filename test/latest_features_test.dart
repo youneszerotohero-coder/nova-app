@@ -590,6 +590,38 @@ void main() {
       expect(Navigator.of(tester.element(find.byType(ShellScreen))).canPop(), isFalse);
     });
 
+    testWidgets('a visitor\'s menu holds Home and the catalogue, then "Sign in" and "Create my account" (D-134)', (tester) async {
+      final FakeBackend backend = FakeBackend(<String, FakeResponse>{
+        'GET /auth/me': _error(401, 'UNAUTHENTICATED', 'Authentication is required.'),
+      });
+      final SessionStore session = SessionStore(fakeApi(backend));
+      await tester.runAsync(session.boot);
+      await _pump(tester, _install(session), const AppGate());
+      await tester.tap(find.text('Continue without an account'));
+      await _frames(tester);
+
+      // The top bar: the theme and "Sign in" where the bell and initials stand.
+      final Finder bar = find.byType(StudentTopBar);
+      expect(find.descendant(of: bar, matching: find.bySemanticsLabel(RegExp('^Notifications'))), findsNothing);
+      expect(find.descendant(of: bar, matching: find.text('Sign in')), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Menu'));
+      await _frames(tester);
+      for (final String label in <String>['Overview', 'Units', 'Offers', 'Teachers', 'Sign in', 'Create my account']) {
+        expect(find.text(label), findsWidgets, reason: label);
+      }
+      // Nothing that needs an account.
+      for (final String label in <String>['My units', 'Orders', 'Wallet & rewards', 'Settings', 'Sign out']) {
+        expect(find.text(label), findsNothing, reason: label);
+      }
+
+      // "Sign in" opens the sign-in screen over the visit.
+      await tester.tap(find.text('Sign in').last);
+      await _frames(tester);
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(backend.requests.where(studentSpace), isEmpty);
+    });
+
     testWidgets('a Student still signed in goes straight to their space', (tester) async {
       final SessionStore session = SessionStore.seeded(StudentProfile.fromUser(user()), user: user());
       await tester.pumpWidget(AppScope(
@@ -748,11 +780,12 @@ void main() {
     testWidgets('with several Packs the Student picks the one added to the cart', (tester) async {
       final FakeBackend backend = await pumpDetail(tester, <Object>[annual, term]);
 
-      expect(find.text('In Offers from'), findsOneWidget);
-      expect(find.text('Sold within 2 Packs'), findsOneWidget);
+      // The band's buy row, the buy card and the sticky bar (D-134).
+      expect(find.text('In Offers from'), findsNWidgets(3));
+      expect(find.text('Sold within 2 Offers'), findsNWidgets(2));
 
-      await _tap(tester, 'Add the Pack');
-      expect(find.text('Choose a Pack'), findsOneWidget);
+      await _tap(tester, 'Add the Offer to cart');
+      expect(find.text('Choose an Offer'), findsOneWidget);
       expect(backend.requests.where((FakeRequest r) => r.path == '/cart/items'), isEmpty);
 
       await _tap(tester, 'Physics — First Trimester');
@@ -791,8 +824,8 @@ void main() {
       await _frames(tester);
 
       // A visitor: sign-in first, nothing reaches the cart yet.
-      await tester.ensureVisible(find.text('Add the Pack').last);
-      await tester.tap(find.text('Add the Pack').last);
+      await tester.ensureVisible(find.text('Add the Offer to cart').last);
+      await tester.tap(find.text('Add the Offer to cart').last);
       await _frames(tester);
       expect(find.byType(LoginScreen), findsOneWidget);
       expect(backend.requests.where((FakeRequest r) => r.path == '/cart/items'), isEmpty);
@@ -812,17 +845,19 @@ void main() {
 
     testWidgets('with one Pack it is added at once; without any nothing is sold', (tester) async {
       final FakeBackend backend = await pumpDetail(tester, <Object>[term]);
-      expect(find.text('Sold within the Pack Physics — First Trimester'), findsOneWidget);
+      expect(find.text('Sold within the Offer Physics — First Trimester'), findsNWidgets(2));
 
-      await _tap(tester, 'Add the Pack');
-      expect(find.text('Choose a Pack'), findsNothing);
+      await _tap(tester, 'Add the Offer to cart');
+      expect(find.text('Choose an Offer'), findsNothing);
       expect(_body(_sent(backend, 'POST', '/cart/items')), <String, Object?>{'offer_id': 11});
     });
 
     testWidgets('without a Pack on sale the Unit cannot be bought', (tester) async {
       await pumpDetail(tester, const <Object>[]);
-      expect(find.text('Available through offers only'), findsOneWidget);
-      expect(find.text('Add the Pack'), findsNothing);
+      // The band and the buy card say so; the sticky bar leads to the Offers.
+      expect(find.text('Available through Offers only'), findsNWidgets(2));
+      expect(find.text('See the Offers'), findsOneWidget);
+      expect(find.text('Add the Offer to cart'), findsNothing);
       expect(find.text('Buy now'), findsNothing);
     });
   });

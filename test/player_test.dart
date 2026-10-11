@@ -697,7 +697,10 @@ void main() {
       // The PDF opens in-app, through its signed access; a refusal is explained.
       await tester.ensureVisible(find.text('Open the PDF'));
       await tester.tap(find.text('Open the PDF'));
-      await tester.pumpAndSettle();
+      // The refusal's empty state turns its orbit (as the website's): frames, not settle.
+      for (int i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
       expect(find.byType(LessonPdfScreen), findsOneWidget);
       expect(backend.requests.map((FakeRequest r) => r.path), contains('/lessons/1023/pdf-access'));
       expect(find.text('PDF unavailable'), findsOneWidget);

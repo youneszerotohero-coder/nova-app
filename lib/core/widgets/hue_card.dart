@@ -3,26 +3,25 @@ import 'package:flutter/material.dart';
 import '../theme/nova_colors.dart';
 import '../theme/nova_dimens.dart';
 import '../theme/nova_typography.dart';
+import 'hero_style.dart';
 import 'motion.dart';
-import 'nova_decor.dart';
 import 'pressable_scale.dart';
 
 /// How a [HueCard] carries its colour.
 enum HueCardStyle {
-  /// Pastel tint on paper — the everyday card.
+  /// The website's neutral card (`.hxCard` / `.dashboardCard`).
   soft,
 
-  /// Saturated gradient — heroes and the one thing per screen that
-  /// should shout.
+  /// The blue card (`.hxCard--blue`): the band's colours, white text.
   filled,
 
-  /// Deep navy — premium/featured rows, the counterpoint to pastels.
+  /// The navy catalogue card (`.novaCard`).
   dark,
 }
 
-/// The card every colourful surface in the app is built from: one hue,
-/// one style, optional sticker decor, and a foreground colour that is
-/// always readable on the fill it chose.
+/// A card in the website's styles whatever hue it is given (D-134): the
+/// neutral surface with its hairline and `--hx-shadow`, the blue card, or
+/// the navy card. No pastel fills, gradients or coloured shadows.
 class HueCard extends StatelessWidget {
   const HueCard({
     super.key,
@@ -30,7 +29,7 @@ class HueCard extends StatelessWidget {
     this.hue = NovaHue.sky,
     this.style = HueCardStyle.soft,
     this.padding = const EdgeInsets.all(18),
-    this.radius = NovaDimens.radiusCard,
+    this.radius = NovaDimens.radiusTile,
     this.onTap,
     this.decorSeed,
     this.height,
@@ -38,13 +37,15 @@ class HueCard extends StatelessWidget {
   });
 
   final Widget child;
+
+  /// Kept for callers; the website's cards carry no hue.
   final NovaHue hue;
   final HueCardStyle style;
   final EdgeInsetsGeometry padding;
   final double radius;
   final VoidCallback? onTap;
 
-  /// Paints sticker doodles behind the content when set.
+  /// Kept for callers; the website's cards carry no doodles.
   final int? decorSeed;
   final double? height;
   final String? semanticLabel;
@@ -58,21 +59,24 @@ class HueCard extends StatelessWidget {
 
   /// The quieter second-level colour on the same fill.
   static Color mutedOf(HueCardStyle style) => switch (style) {
-        HueCardStyle.soft => NovaColors.textMuted,
-        HueCardStyle.filled => Colors.white.withValues(alpha: 0.78),
+        HueCardStyle.soft => NovaColors.textBody,
+        HueCardStyle.filled => const Color(0xD6FFFFFF),
         HueCardStyle.dark => NovaColors.textMutedOnDark,
       };
 
   @override
   Widget build(BuildContext context) {
-    final bool isSoft = style == HueCardStyle.soft;
-    final Color decorColor = isSoft ? hue.solid : Colors.white;
-    final double decorOpacity = switch (style) {
-      HueCardStyle.soft => 0.14,
-      HueCardStyle.filled => 0.22,
-      HueCardStyle.dark => 0.1,
+    final BorderRadius corners = BorderRadius.circular(radius);
+    final BoxDecoration decoration = switch (style) {
+      HueCardStyle.soft => BoxDecoration(
+          color: NovaColors.paperCard,
+          borderRadius: corners,
+          border: Border.all(color: NovaColors.borderOnLight),
+          boxShadow: NovaDimens.shadowCard,
+        ),
+      HueCardStyle.filled => HeroBandDecoration.of(radius: corners),
+      HueCardStyle.dark => BoxDecoration(color: NovaColors.ink900, borderRadius: corners, boxShadow: NovaDimens.shadowCard),
     };
-
     return PressableScale(
       onTap: onTap,
       pressedScale: onTap == null ? 1 : 0.98,
@@ -80,40 +84,17 @@ class HueCard extends StatelessWidget {
       child: Container(
         height: height,
         clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: switch (style) {
-            HueCardStyle.soft => hue.surface,
-            HueCardStyle.filled => null,
-            HueCardStyle.dark => NovaColors.ink950,
-          },
-          gradient: style == HueCardStyle.filled ? hue.gradient : null,
-          borderRadius: BorderRadius.circular(radius),
-          border: isSoft
-              ? Border.all(color: hue.solid.withValues(alpha: 0.16))
-              : null,
-          boxShadow:
-              style == HueCardStyle.soft ? NovaDimens.shadowSoft : hue.shadow,
-        ),
-        child: Stack(
-          fit: StackFit.passthrough,
-          children: [
-            if (decorSeed != null)
-              Positioned.fill(
-                child: NovaDecor(
-                  color: decorColor,
-                  opacity: decorOpacity,
-                  seed: decorSeed!,
-                ),
-              ),
-            Padding(padding: padding, child: child),
-          ],
-        ),
+        decoration: decoration,
+        padding: padding,
+        child: child,
       ),
     );
   }
 }
 
-/// The rounded-square icon tile that heads cards, rows and stats.
+/// The rounded-square icon tile (`.hxSticker > i`): `--hx-blue-soft` with
+/// the blue glyph, or a status tone on its background ([NovaHue.mint] live,
+/// [NovaHue.rose] danger, [NovaHue.butter] quiz).
 class IconTile extends StatelessWidget {
   const IconTile({
     super.key,
@@ -128,20 +109,26 @@ class IconTile extends StatelessWidget {
   final NovaHue hue;
   final double size;
 
-  /// Solid hue fill with a white glyph, instead of the pastel tint.
+  /// The solid tile: blue with a white glyph, or yellow with its ink for
+  /// [NovaHue.butter] (the website's yellow tiles).
   final bool filled;
 
-  /// Sitting on a dark or filled card, where the pastel tint would
-  /// disappear — renders as a frosted white tile.
+  /// On the blue band or a dark card: a frosted white tile.
   final bool onDark;
 
   @override
   Widget build(BuildContext context) {
+    final bool yellow = filled && hue == NovaHue.butter;
     final Color background = onDark
-        ? Colors.white.withValues(alpha: 0.16)
-        : (filled ? hue.solid : hue.surfaceStrong);
-    final Color glyph =
-        onDark || filled ? Colors.white : hue.onSurface;
+        ? const Color(0x29FFFFFF)
+        : filled
+            ? (yellow ? NovaColors.yellow : hue.solid)
+            : hue.surfaceStrong;
+    final Color glyph = onDark
+        ? Colors.white
+        : filled
+            ? (yellow ? NovaColors.yellowInk : Colors.white)
+            : hue.solid;
 
     return Container(
       width: size,
@@ -149,15 +136,15 @@ class IconTile extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(size * 0.34),
+        borderRadius: BorderRadius.circular(size * 0.32),
       ),
       child: Icon(icon, size: size * 0.46, color: glyph),
     );
   }
 }
 
-/// Pastel metric tile: icon + label on top, a big counted-up number
-/// underneath. Two or three fit across a phone.
+/// A metric on the neutral card: icon tile and label on top, the counted-up
+/// number underneath. Two or three fit across a phone.
 class StatTile extends StatelessWidget {
   const StatTile({
     super.key,
@@ -181,15 +168,14 @@ class StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextStyle valueStyle = TextStyle(
-      fontFamily: 'BalooBhaijaan2',
-      fontWeight: FontWeight.w700,
+      fontFamily: NovaTypography.display,
+      fontWeight: FontWeight.w800,
       fontSize: 30,
       height: 1,
       color: NovaColors.textStrong,
     );
 
     return HueCard(
-      hue: hue,
       onTap: onTap,
       semanticLabel: '$label $value',
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 15),
@@ -207,9 +193,7 @@ class StatTile extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: NovaTypography.textTheme.labelMedium!.copyWith(
-                    color: hue.onSurface,
-                  ),
+                  style: NovaTypography.textTheme.labelMedium!.copyWith(color: NovaColors.textBody),
                 ),
               ),
             ],
@@ -224,7 +208,8 @@ class StatTile extends StatelessWidget {
   }
 }
 
-/// The circular arrow affordance from the reference cards.
+/// A round arrow button: the surface with an ink glyph, or the blue with a
+/// white one when a [gradient] was asked for (the website has no gradients).
 class RoundArrowButton extends StatelessWidget {
   const RoundArrowButton({
     super.key,
@@ -241,12 +226,15 @@ class RoundArrowButton extends StatelessWidget {
   final double size;
   final Color? background;
   final Color? foreground;
+
+  /// Kept for callers: any gradient renders as the flat blue.
   final Gradient? gradient;
   final VoidCallback? onTap;
   final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
+    final bool blue = gradient != null;
     return PressableScale(
       onTap: onTap,
       pressedScale: onTap == null ? 1 : 0.9,
@@ -256,14 +244,14 @@ class RoundArrowButton extends StatelessWidget {
         height: size,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: gradient == null ? (background ?? Colors.white) : null,
-          gradient: gradient,
+          color: blue ? NovaColors.accent : (background ?? NovaColors.paperCard),
           shape: BoxShape.circle,
+          border: blue || background != null ? null : Border.all(color: NovaColors.borderOnLight),
         ),
         child: Icon(
           icon,
           size: size * 0.42,
-          color: foreground ?? NovaColors.ink950,
+          color: foreground ?? (blue ? Colors.white : NovaColors.textStrong),
         ),
       ),
     );

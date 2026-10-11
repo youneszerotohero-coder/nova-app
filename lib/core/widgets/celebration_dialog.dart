@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/nova_colors.dart';
 import '../theme/nova_dimens.dart';
 import '../theme/nova_typography.dart';
-import 'nova_decor.dart';
-import 'pressable_scale.dart';
+import 'hero_style.dart';
 import 'success_burst.dart';
 
 /// Celebrates a milestone worth stopping for — a passed quiz, a
@@ -71,68 +70,48 @@ class _CelebrationCard extends StatelessWidget {
       child: Material(
         type: MaterialType.transparency,
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 32),
-          padding: const EdgeInsets.fromLTRB(24, 10, 24, 22),
+          margin: const EdgeInsets.symmetric(horizontal: 28),
+          padding: const EdgeInsets.fromLTRB(22, 10, 22, 22),
           decoration: BoxDecoration(
             color: NovaColors.paperCard,
-            borderRadius: BorderRadius.circular(NovaDimens.radiusCardLarge),
-            boxShadow: NovaDimens.shadowFloating,
+            borderRadius: BorderRadius.circular(NovaDimens.radiusTile),
+            border: Border.all(color: NovaColors.borderOnLight),
+            boxShadow: NovaDimens.shadowLift,
           ),
-          child: Stack(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Positioned.fill(
-                child: NovaDecor(color: color, opacity: 0.1, seed: 2),
+              // The burst paints past its slot, so the card
+              // reserves less height than the canvas it draws on.
+              SizedBox(
+                height: 122,
+                child: OverflowBox(
+                  maxWidth: 220,
+                  maxHeight: 220,
+                  child: SuccessBurst(size: 92, color: color),
+                ),
               ),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // The burst paints past its slot, so the card
-                  // reserves less height than the canvas it draws on.
-                  SizedBox(
-                    height: 122,
-                    child: OverflowBox(
-                      maxWidth: 220,
-                      maxHeight: 220,
-                      child: SuccessBurst(size: 92, color: color),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: NovaTypography.textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    message,
-                    textAlign: TextAlign.center,
-                    style: NovaTypography.muted(
-                      NovaTypography.textTheme.bodySmall!,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  PressableScale(
-                    onTap: () => Navigator.of(context).pop(),
-                    pressedScale: 0.96,
-                    semanticLabel: actionLabel,
-                    child: Container(
-                      height: 50,
-                      width: double.infinity,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: NovaColors.ink950,
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                      child: Text(
-                        actionLabel,
-                        style: NovaTypography.textTheme.labelLarge!.copyWith(
-                          color: NovaColors.textOnDark,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 10),
+              HeroTitle(title, onBlue: false, size: 20, textAlign: TextAlign.center),
+              const SizedBox(height: 10),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: NovaTypography.body,
+                  fontFamilyFallback: NovaTypography.fallback,
+                  fontSize: 15,
+                  height: 1.6,
+                  color: NovaColors.textBody,
+                ),
+              ),
+              const SizedBox(height: 20),
+              // `HxSuccess`'s action: the blue `.hxBtn` with its chip.
+              NovaButton(
+                label: actionLabel,
+                chipIcon: Icons.arrow_forward_rounded,
+                expand: true,
+                onTap: () => Navigator.of(context).pop(),
               ),
             ],
           ),

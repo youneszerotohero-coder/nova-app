@@ -9,7 +9,6 @@ import '../../core/api/nova_api.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
-import '../../core/theme/nova_dimens.dart';
 import '../../core/theme/nova_typography.dart';
 import '../../core/utils/phone.dart';
 import '../../core/widgets/motion.dart';
@@ -440,11 +439,13 @@ class _RegisterScreenState extends State<RegisterScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: NovaColors.paperCard,
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
           AuthHero(
             showBack: !widget.onboarding,
+            top: widget.onboarding ? null : _steps(),
             title: context.tr(
               widget.onboarding ? 'auth.onboardingTitle' : 'auth.createAccount',
             ),
@@ -453,52 +454,45 @@ class _RegisterScreenState extends State<RegisterScreen>
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 26, 24, 0),
+            padding: const EdgeInsets.fromLTRB(18, 24, 18, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (!widget.onboarding) _steps(),
                 ...stagger(
                   _form(),
                   step: const Duration(milliseconds: 45),
                 ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: Text(
-                      _error!,
-                      style: NovaTypography.textTheme.bodySmall!.copyWith(
-                        color: NovaHue.rose.onSurface,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
+                if (_error != null) AuthMessage(_error!),
                 if (_phoneTaken) _phoneTakenNotice(),
-                const SizedBox(height: 10),
                 if (!widget.onboarding && _step == 0)
-                  _primaryButton(label: context.tr('auth.nextStep'), onTap: _next, semantic: 'Next step')
+                  AuthSubmitButton(label: context.tr('auth.nextStep'), busy: false, onTap: _next)
                 else
                   Row(
                     children: [
+                      // `.authStepActions`: "Previous" takes .42 of the row.
                       if (!widget.onboarding) ...[
-                        _secondaryButton(
-                          label: context.tr('auth.previous'),
-                          onTap: _busy ? null : () => setState(() => _step = 0),
+                        Expanded(
+                          flex: 42,
+                          child: AuthOutlineButton(
+                            label: context.tr('auth.previous'),
+                            icon: Icons.arrow_back_rounded,
+                            onTap: _busy ? null : () => setState(() => _step = 0),
+                          ),
                         ),
                         const SizedBox(width: 10),
                       ],
                       Expanded(
-                        child: _primaryButton(
+                        flex: 100,
+                        child: AuthSubmitButton(
                           label: context.tr(widget.onboarding ? 'auth.saveDetails' : 'auth.createSpace'),
-                          onTap: _busy ? null : _submit,
                           busy: _busy,
-                          semantic: widget.onboarding ? 'Save my details' : 'Create account',
+                          onTap: _submit,
                         ),
                       ),
                     ],
                   ),
                 if (!widget.onboarding) ...[
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 12),
                   // The website's line under the form: "Already have an account? Sign in".
                   AuthModeSwitch(
                     signIn: false,
@@ -510,20 +504,11 @@ class _RegisterScreenState extends State<RegisterScreen>
                   ),
                 ],
                 if (widget.onboarding) ...[
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
                   Center(
-                    child: PressableScale(
+                    child: AuthTextAction(
+                      label: context.tr('settings.signOut'),
                       onTap: () => AppScope.of(context).session.logout(),
-                      semanticLabel: 'Sign out',
-                      child: Text(
-                        context.tr('settings.signOut'),
-                        style: TextStyle(
-                          fontFamily: 'Geist',
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                          color: NovaColors.textMuted,
-                        ),
-                      ),
                     ),
                   ),
                 ],
@@ -535,175 +520,96 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  /// "1 Account — 2 School details", the step done shows a check.
+  /// `.authSteps`: "1 Account — 2 School details"; the active tile is blue,
+  /// turned −6° in its `--hx-blue-soft` ring, the step done shows a check.
   Widget _steps() {
     Widget step(int index, String key) {
       final bool active = _step == index;
       final bool done = _step > index;
-      final Color color = active || done ? NovaColors.accentDeep : NovaColors.textMuted;
-      return Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              height: 4,
-              decoration: BoxDecoration(
-                color: active || done ? NovaColors.accent : NovaColors.accentMist,
-                borderRadius: BorderRadius.circular(4),
+      final Color ink = done ? NovaColors.onlineGreen : (active ? NovaColors.textStrong : NovaColors.textMuted);
+      final Widget tile = Container(
+        width: 34,
+        height: 34,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: done ? NovaColors.liveBg : (active ? NovaColors.accent : NovaColors.paperRaised),
+          borderRadius: BorderRadius.circular(11),
+          boxShadow: active ? [BoxShadow(spreadRadius: 5, color: NovaColors.accentMist)] : null,
+        ),
+        child: done
+            ? Icon(Icons.check_rounded, size: 14, color: NovaColors.onlineGreen)
+            : Text(
+                '${index + 1}',
+                style: TextStyle(
+                  fontFamily: NovaTypography.display,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                  height: 1,
+                  color: active ? Colors.white : NovaColors.textMuted,
+                ),
+              ),
+      );
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          active ? Transform.rotate(angle: -0.105, child: tile) : tile,
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              context.tr(key),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: NovaTypography.display,
+                fontFamilyFallback: NovaTypography.fallback,
+                fontWeight: FontWeight.w800,
+                fontSize: 14,
+                color: ink,
               ),
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                done
-                    ? Icon(Icons.check_circle_rounded, size: 16, color: color)
-                    : Text(
-                        '${index + 1}',
-                        style: TextStyle(fontFamily: 'Geist', fontWeight: FontWeight.w800, fontSize: 13, color: color),
-                      ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    context.tr(key),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontFamily: 'Geist', fontWeight: FontWeight.w700, fontSize: 12.5, color: color),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Row(
-        children: [
-          step(0, 'auth.stepAccount'),
-          const SizedBox(width: 12),
-          step(1, 'auth.stepSchool'),
-        ],
-      ),
-    );
-  }
-
-  Widget _primaryButton({
-    required String label,
-    required VoidCallback? onTap,
-    required String semantic,
-    bool busy = false,
-  }) {
-    return PressableScale(
-      onTap: onTap,
-      pressedScale: 0.97,
-      semanticLabel: semantic,
-      // The website's main button: royal blue, 17 px corners, arrow chip.
-      child: Container(
-        height: 56,
-        padding: const EdgeInsetsDirectional.only(start: 20, end: 6),
-        decoration: BoxDecoration(
-          color: NovaColors.accent,
-          borderRadius: BorderRadius.circular(NovaDimens.radiusControl),
-        ),
-        child: busy
-            ? const Center(
-                child: SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.6, color: Colors.white),
-                ),
-              )
-            : Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      label,
-                      textAlign: TextAlign.center,
-                      style: NovaTypography.textTheme.labelLarge!.copyWith(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
-                    ),
-                  ),
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(color: NovaColors.yellow, borderRadius: BorderRadius.circular(12)),
-                    child: const Icon(Icons.arrow_forward_rounded, size: 19, color: NovaColors.yellowInk),
-                  ),
-                ],
-              ),
-      ),
-    );
-  }
-
-  Widget _secondaryButton({required String label, required VoidCallback? onTap}) {
-    return PressableScale(
-      onTap: onTap,
-      pressedScale: 0.97,
-      semanticLabel: label,
-      child: Container(
-        height: 58,
-        padding: const EdgeInsets.symmetric(horizontal: 22),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(NovaDimens.radiusControl),
-          border: Border.all(color: NovaColors.textStrong.withValues(alpha: 0.18), width: 1.5),
-        ),
-        child: Text(
-          label,
-          style: NovaTypography.textTheme.labelLarge!.copyWith(fontSize: 15.5, fontWeight: FontWeight.w800),
-        ),
-      ),
-    );
-  }
-
-  /// A pill of the phone verification: filled for the main action.
-  Widget _codeButton({required String label, required VoidCallback? onTap, bool filled = false}) {
-    final bool enabled = onTap != null;
-    return PressableScale(
-      onTap: onTap,
-      pressedScale: 0.97,
-      semanticLabel: label,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 150),
-        opacity: enabled ? 1 : 0.5,
-        child: Container(
-          height: 46,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: filled ? NovaColors.accent : Colors.white,
-            borderRadius: BorderRadius.circular(100),
-            border: filled ? null : Border.all(color: NovaColors.accent.withValues(alpha: 0.45)),
-          ),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'Geist',
-              fontWeight: FontWeight.w700,
-              fontSize: 13.5,
-              color: filled ? Colors.white : NovaColors.accentDeep,
-            ),
+    return Row(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Flexible(child: step(0, 'auth.stepAccount')),
+              const SizedBox(width: 6),
+              Container(width: 10, height: 3, decoration: BoxDecoration(color: NovaColors.lineStrong, borderRadius: BorderRadius.circular(3))),
+            ],
           ),
         ),
-      ),
+        const SizedBox(width: 20),
+        Expanded(child: Align(alignment: AlignmentDirectional.centerStart, child: step(1, 'auth.stepSchool'))),
+      ],
     );
   }
+
+  /// The outlined buttons of the phone code (`.authBack` in
+  /// `.authStepActions`).
+  Widget _codeButton({required String label, required VoidCallback? onTap}) => AuthOutlineButton(label: label, onTap: onTap);
 
   /// D-122: the checkbox, with the terms and the privacy policy opening
   /// the website's pages.
   Widget _termsAcceptance() {
-    final TextStyle base = NovaTypography.textTheme.bodySmall!.copyWith(color: NovaColors.textStrong, height: 1.4);
+    final TextStyle base = TextStyle(
+      fontFamily: NovaTypography.body,
+      fontFamilyFallback: NovaTypography.fallback,
+      fontSize: 15,
+      height: 1.55,
+      color: NovaColors.textBody,
+    );
     final TextStyle link = base.copyWith(
-      color: NovaColors.accentDeep,
-      fontWeight: FontWeight.w700,
-      decoration: TextDecoration.underline,
-      decorationColor: NovaColors.accentDeep,
+      fontFamily: NovaTypography.display,
+      color: NovaColors.accent,
+      fontWeight: FontWeight.w800,
     );
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: 18),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -713,6 +619,7 @@ class _RegisterScreenState extends State<RegisterScreen>
             child: Checkbox(
               value: _acceptedTerms,
               activeColor: NovaColors.accent,
+              side: BorderSide(color: NovaColors.lineStrong, width: 1.5),
               onChanged: (bool? value) => setState(() {
                 _acceptedTerms = value ?? false;
                 if (_acceptedTerms && _error == context.tr('auth.termsRequired')) _error = null;
@@ -722,7 +629,7 @@ class _RegisterScreenState extends State<RegisterScreen>
           const SizedBox(width: 6),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(top: 6),
+              padding: const EdgeInsets.only(top: 4),
               child: Text.rich(
                 TextSpan(
                   style: base,
@@ -742,157 +649,153 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  /// The website's "sign in instead" notice; the action goes back to the
-  /// sign-in screen with the number typed here.
+  /// The website's "sign in instead" error (`.authError.authLoadError`);
+  /// its button goes back to the sign-in screen with the number typed here.
   Widget _phoneTakenNotice() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            context.tr('auth.phoneTaken'),
-            style: NovaTypography.textTheme.bodySmall!.copyWith(
-              color: NovaHue.rose.onSurface,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 10),
-          PressableScale(
-            onTap: () => Navigator.of(context).maybePop<String>(_phone.text.trim()),
-            semanticLabel: 'Sign in with this number',
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
-              decoration: BoxDecoration(
-                color: NovaColors.accent,
-                borderRadius: BorderRadius.circular(100),
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+        decoration: BoxDecoration(color: NovaColors.dangerBg, borderRadius: BorderRadius.circular(14)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.tr('auth.phoneTaken'),
+              style: TextStyle(
+                fontFamily: NovaTypography.body,
+                fontFamilyFallback: NovaTypography.fallback,
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+                height: 1.5,
+                color: NovaColors.heartRed,
               ),
-              child: Text(
-                context.tr('auth.signInInstead'),
-                style: TextStyle(
-                  fontFamily: 'Geist',
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12.5,
-                  color: Colors.white,
+            ),
+            const SizedBox(height: 10),
+            PressableScale(
+              onTap: () => Navigator.of(context).maybePop<String>(_phone.text.trim()),
+              semanticLabel: 'Sign in with this number',
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 44),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: NovaColors.heartRed),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      context.tr('auth.signInInstead'),
+                      style: TextStyle(
+                        fontFamily: NovaTypography.display,
+                        fontFamilyFallback: NovaTypography.fallback,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        color: NovaColors.heartRed,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  /// D-093/D-096: the channel, "send the code", then the 6-digit code,
-  /// for the number typed above; another number needs a new code.
-  Widget _phoneVerification() {
+  /// D-093/D-096 (`RegisterPhoneVerification`): the channel, "send the
+  /// code", then the 6-digit code, for the number typed above; another
+  /// number needs a new code.
+  List<Widget> _phoneVerification() {
     final String phone = _phone.text.trim();
     final bool codeSent = _challengeId.isNotEmpty && _challengePhone == phone;
-    final Widget body;
-    if (_phoneVerified) {
-      body = Row(
-        children: [
-          Icon(Icons.verified_rounded, size: 19, color: NovaColors.accentDeep),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Text(
-              context.tr('auth.phoneVerified'),
-              style: NovaTypography.textTheme.bodySmall!.copyWith(
-                color: NovaColors.accentDeep,
-                fontWeight: FontWeight.w700,
+    if (_phoneVerified) return <Widget>[AuthNotice(context.tr('auth.phoneVerified'))];
+    return <Widget>[
+      AuthGroupLegend(context.tr('auth.verifyPhone')),
+      AuthMessage(
+        codeSent
+            ? context.trf('auth.verifyCodeSent', <String, String>{
+                'phone': '\u2066$phone\u2069',
+                'channel': otpChannelName(context, _channel),
+              })
+            : context.trf('auth.verifyPhoneDesc', <String, String>{
+                'phone': '\u2066${phone.isEmpty ? '05xxxxxxxx' : phone}\u2069',
+              }),
+        error: false,
+      ),
+      if (codeSent)
+        AuthTextField.code(
+          controller: _code,
+          label: context.tr('otp.codeLabel'),
+          onSubmitted: (_) => _verifyCode(),
+        )
+      else
+        OtpChannelChoice(
+          value: _channel,
+          enabled: !_codeBusy,
+          onChanged: (OtpChannel channel) => setState(() => _channel = channel),
+        ),
+      if (_codeError != null) AuthMessage(_codeError!),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 18),
+        child: Row(
+          children: [
+            Expanded(
+              child: _codeButton(
+                label: resendLabel(
+                  context,
+                  resendIn,
+                  idleKey: codeSent ? 'otp.resend' : 'otp.sendCode',
+                ),
+                onTap: _codeBusy || resendIn > 0 ? null : _sendCode,
               ),
             ),
-          ),
-        ],
-      );
-    } else {
-      body = Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(context.tr('auth.verifyPhone'), style: NovaTypography.textTheme.titleSmall),
-          const SizedBox(height: 4),
-          Text(
-            codeSent
-                ? context.trf('auth.verifyCodeSent', <String, String>{
-                    'phone': '\u2066$phone\u2069',
-                    'channel': otpChannelName(context, _channel),
-                  })
-                : context.trf('auth.verifyPhoneDesc', <String, String>{
-                    'phone': '\u2066${phone.isEmpty ? '05xxxxxxxx' : phone}\u2069',
-                  }),
-            style: NovaTypography.muted(NovaTypography.textTheme.bodySmall!),
-          ),
-          const SizedBox(height: 12),
-          if (codeSent)
-            AuthTextField.code(
-              controller: _code,
-              label: context.tr('otp.codeLabel'),
-              onSubmitted: (_) => _verifyCode(),
-            )
-          else
-            OtpChannelChoice(
-              value: _channel,
-              enabled: !_codeBusy,
-              onChanged: (OtpChannel channel) => setState(() => _channel = channel),
-            ),
-          if (_codeError != null) AuthMessage(_codeError!),
-          const SizedBox(height: 4),
-          Row(
-            children: [
+            if (codeSent) ...[
+              const SizedBox(width: 10),
               Expanded(
                 child: _codeButton(
-                  label: resendLabel(
-                    context,
-                    resendIn,
-                    idleKey: codeSent ? 'otp.resend' : 'otp.sendCode',
-                  ),
-                  filled: !codeSent,
-                  onTap: _codeBusy || resendIn > 0 ? null : _sendCode,
+                  label: context.tr('otp.verify'),
+                  onTap: _codeBusy ? null : _verifyCode,
                 ),
               ),
-              if (codeSent) ...[
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _codeButton(
-                    label: context.tr('otp.verify'),
-                    filled: true,
-                    onTap: _codeBusy ? null : _verifyCode,
-                  ),
-                ),
-              ],
             ],
-          ),
-          if (_codeBusy)
-            Padding(
-              padding: EdgeInsets.only(top: 10),
-              child: Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: NovaColors.accentDeep),
-                ),
-              ),
-            ),
-        ],
-      );
-    }
-    return Container(
-      margin: const EdgeInsets.only(bottom: 15),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: NovaColors.accentMist,
-        borderRadius: BorderRadius.circular(16),
+          ],
+        ),
       ),
-      child: body,
-    );
+      if (_codeBusy)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 18),
+          child: Center(
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: NovaColors.accent),
+            ),
+          ),
+        ),
+    ];
   }
 
   List<Widget> _form() {
-    if (widget.onboarding) return <Widget>[..._nameFields(), ..._schoolFields()];
-    if (_step == 0) return <Widget>[..._nameFields(), ..._phoneAndPassword()];
+    if (widget.onboarding) {
+      return <Widget>[
+        AuthGroupLegend(context.tr('auth.groupPersonal')),
+        ..._nameFields(),
+        ..._schoolFields(),
+      ];
+    }
+    if (_step == 0) {
+      return <Widget>[
+        AuthGroupLegend(context.tr('auth.groupPersonal')),
+        ..._nameFields(),
+        ..._phoneAndPassword(),
+      ];
+    }
     return <Widget>[
       ..._schoolFields(),
-      if (_verificationRequired) _phoneVerification(),
+      if (_verificationRequired) ..._phoneVerification(),
       _termsAcceptance(),
     ];
   }
@@ -902,13 +805,15 @@ class _RegisterScreenState extends State<RegisterScreen>
       _Field(
         controller: _first,
         label: context.tr('auth.firstName'),
-        hint: 'Ines',
+        hint: '',
+        icon: Icons.person_outline_rounded,
         error: _fieldErrors['first_name'],
       ),
       _Field(
         controller: _last,
         label: context.tr('auth.lastName'),
-        hint: 'Benali',
+        hint: '',
+        icon: Icons.person_outline_rounded,
         error: _fieldErrors['last_name'],
       ),
     ];
@@ -919,7 +824,7 @@ class _RegisterScreenState extends State<RegisterScreen>
     return [
         _Field(
           controller: _phone,
-          label: context.tr('settings.phone'),
+          label: context.tr('auth.phoneLabel'),
           // D-081: exactly as typed at sign-in, 05XXXXXXXX.
           hint: '05xxxxxxxx',
           keyboard: TextInputType.number,
@@ -927,20 +832,22 @@ class _RegisterScreenState extends State<RegisterScreen>
             FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(10),
           ],
-          icon: Icons.phone_rounded,
+          icon: Icons.phone_outlined,
           error: _fieldErrors['phone'],
         ),
+        AuthGroupLegend(context.tr('auth.groupSecure')),
         ..._passwordFields(),
     ];
   }
 
   List<Widget> _schoolFields() {
     return [
+      AuthGroupLegend(context.tr('auth.groupAcademic')),
       RefPickerField(
         label: context.tr('auth.level'),
         value: _level,
         options: _levels,
-        icon: Icons.school_rounded,
+        icon: Icons.school_outlined,
         error: _fieldErrors['level_id'],
         onChanged: (RefItem? value) => setState(() {
           _level = value;
@@ -952,17 +859,18 @@ class _RegisterScreenState extends State<RegisterScreen>
         label: context.tr('settings.track'),
         value: _track,
         options: _levelTracks,
-        icon: Icons.account_tree_rounded,
+        icon: Icons.school_outlined,
         enabled: _trackEnabled,
         emptyHint: _trackEnabled ? null : context.tr('auth.trackNotRequired'),
         error: _fieldErrors['track_id'],
         onChanged: (RefItem? value) => setState(() => _track = value),
       ),
+      AuthGroupLegend(context.tr('auth.groupLocation')),
       RefPickerField(
         label: context.tr('settings.wilaya'),
         value: _wilaya,
         options: _wilayas,
-        icon: Icons.location_city_rounded,
+        icon: Icons.location_on_outlined,
         error: _fieldErrors['wilaya_id'],
         onChanged: _pickWilaya,
       ),
@@ -970,7 +878,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         label: context.tr('settings.commune'),
         value: _commune,
         options: _communes,
-        icon: Icons.home_work_rounded,
+        icon: Icons.location_on_outlined,
         enabled: _wilaya != null,
         emptyHint: _wilaya == null ? context.tr('auth.pickWilaya') : null,
         error: _fieldErrors['commune_id'],
@@ -980,6 +888,10 @@ class _RegisterScreenState extends State<RegisterScreen>
   }
 
   List<Widget> _passwordFields() {
+    final Widget eye = PasswordVisibilityToggle(
+      obscure: _obscure,
+      onToggle: () => setState(() => _obscure = !_obscure),
+    );
     return [
         _Field(
           controller: _password,
@@ -988,49 +900,18 @@ class _RegisterScreenState extends State<RegisterScreen>
           icon: Icons.lock_outline_rounded,
           obscure: _obscure,
           error: _fieldErrors['password'],
-          trailing: PressableScale(
-            onTap: () => setState(() => _obscure = !_obscure),
-            semanticLabel: 'Show password',
-            child: Icon(
-              _obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-              size: 20,
-              color: NovaColors.textMuted,
-            ),
-          ),
+          trailing: eye,
         ),
         _Field(
           controller: _confirm,
           label: context.tr('auth.confirmPassword'),
-          hint: '••••••••',
+          hint: context.tr('auth.passwordHint'),
           icon: Icons.lock_outline_rounded,
           obscure: _obscure,
           error: _fieldErrors['password_confirmation'],
+          trailing: eye,
         ),
-        Container(
-          padding: const EdgeInsets.all(13),
-          decoration: BoxDecoration(
-            color: NovaColors.accentMist,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.verified_user_rounded,
-                size: 18,
-                color: NovaColors.accentDeep,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  context.tr('auth.oneSession'),
-                  style: NovaTypography.textTheme.bodySmall!.copyWith(
-                    color: NovaColors.accentDeep,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+        AuthMessage(context.tr('auth.oneSession'), error: false),
     ];
   }
 }
@@ -1062,79 +943,26 @@ class _Field extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: NovaTypography.textTheme.labelLarge),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: NovaColors.paperCard,
-              borderRadius: BorderRadius.circular(17),
-              border: Border.all(
-                color: error == null
-                    ? NovaColors.textStrong.withValues(alpha: 0.14)
-                    : NovaHue.rose.solid.withValues(alpha: 0.6),
-              ),
-            ),
-            child: Row(
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 19, color: NovaColors.textMuted),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    obscureText: obscure,
-                    keyboardType: keyboard,
-                    inputFormatters: formatters,
-                    autocorrect: false,
-                    style: NovaTypography.textTheme.bodyMedium,
-                    decoration: InputDecoration(
-                      hintText: hint,
-                      hintStyle: NovaTypography.muted(
-                        NovaTypography.textTheme.bodyMedium!,
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 15),
-                    ),
-                  ),
-                ),
-                ?trailing,
-              ],
-            ),
-          ),
-          if (error != null) _FieldError(error!),
-        ],
+    return AuthFieldFrame(
+      label: label,
+      icon: icon,
+      trailing: trailing,
+      error: error,
+      child: TextField(
+        controller: controller,
+        obscureText: obscure,
+        keyboardType: keyboard,
+        inputFormatters: formatters,
+        autocorrect: false,
+        style: authInputStyle,
+        decoration: authInputDecoration(hint),
       ),
     );
   }
 }
 
-class _FieldError extends StatelessWidget {
-  const _FieldError(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 6, left: 4),
-      child: Text(
-        text,
-        style: NovaTypography.textTheme.labelSmall!.copyWith(
-          color: NovaHue.rose.onSurface,
-        ),
-      ),
-    );
-  }
-}
-
-/// A labelled dropdown of reference rows (level, filière, wilaya, commune).
+/// A labelled dropdown of reference rows (level, filière, wilaya, commune),
+/// in the website's auth field (`.nvsTrigger` in `.authForm`).
 class RefPickerField extends StatelessWidget {
   const RefPickerField({
     super.key,
@@ -1159,76 +987,31 @@ class RefPickerField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: NovaTypography.textTheme.labelLarge),
-          const SizedBox(height: 8),
-          AnimatedOpacity(
-            duration: const Duration(milliseconds: 200),
-            opacity: enabled ? 1 : 0.55,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: NovaColors.paperCard,
-                borderRadius: BorderRadius.circular(17),
-                border: Border.all(
-                  color: error == null
-                      ? NovaColors.textStrong.withValues(alpha: 0.14)
-                      : NovaHue.rose.solid.withValues(alpha: 0.6),
+    return AuthFieldFrame(
+      label: label,
+      icon: icon,
+      error: error,
+      enabled: enabled,
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          value: value?.id,
+          isExpanded: true,
+          dropdownColor: NovaColors.paperCard,
+          borderRadius: BorderRadius.circular(16),
+          hint: Text(emptyHint ?? context.tr('auth.select'), style: authHintStyle),
+          icon: Icon(Icons.expand_more_rounded, size: 21, color: NovaColors.textMuted),
+          items: options
+              .map(
+                (RefItem option) => DropdownMenuItem<int>(
+                  value: option.id,
+                  child: Text(option.name, overflow: TextOverflow.ellipsis, style: authInputStyle),
                 ),
-              ),
-              child: Row(
-                children: [
-                  Icon(icon, size: 19, color: NovaColors.textMuted),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<int>(
-                        value: value?.id,
-                        isExpanded: true,
-                        borderRadius: BorderRadius.circular(16),
-                        hint: Text(
-                          emptyHint ?? context.tr('auth.select'),
-                          style: NovaTypography.muted(
-                            NovaTypography.textTheme.bodyMedium!,
-                          ),
-                        ),
-                        icon: Icon(
-                          Icons.expand_more_rounded,
-                          size: 21,
-                          color: NovaColors.textMuted,
-                        ),
-                        items: options
-                            .map(
-                              (RefItem option) => DropdownMenuItem<int>(
-                                value: option.id,
-                                child: Text(
-                                  option.name,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: NovaTypography.textTheme.bodyMedium,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: enabled
-                            ? (int? id) => onChanged(
-                                  options
-                                      .where((RefItem o) => o.id == id)
-                                      .firstOrNull,
-                                )
-                            : null,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (error != null) _FieldError(error!),
-        ],
+              )
+              .toList(),
+          onChanged: enabled
+              ? (int? id) => onChanged(options.where((RefItem o) => o.id == id).firstOrNull)
+              : null,
+        ),
       ),
     );
   }

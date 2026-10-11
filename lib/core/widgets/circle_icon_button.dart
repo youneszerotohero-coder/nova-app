@@ -4,8 +4,8 @@ import '../theme/nova_colors.dart';
 import '../theme/nova_dimens.dart';
 import 'pressable_scale.dart';
 
-/// The circular, hairline-bordered icon button used across the
-/// reference screens (menu, back, bell, camera, ...).
+/// The circular icon button: the surface with its hairline and the sticker
+/// shadow, or the blue fill when [dark].
 class CircleIconButton extends StatelessWidget {
   const CircleIconButton({
     super.key,
@@ -22,18 +22,14 @@ class CircleIconButton extends StatelessWidget {
   final double size;
   final double iconSize;
 
-  /// Renders the charcoal variant used on light screens' dark strips
-  /// and inside dark screens.
+  /// The filled variant: the website's blue `.hxBtn` with a white glyph.
   final bool dark;
   final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
-    final Color fill = dark ? NovaColors.ink900 : NovaColors.paperCard;
-    final Color border =
-        dark ? NovaColors.borderOnDark : NovaColors.borderOnLight;
-    final Color iconColor =
-        dark ? NovaColors.textOnDark : NovaColors.textStrong;
+    final Color fill = dark ? NovaColors.accent : NovaColors.paperCard;
+    final Color iconColor = dark ? Colors.white : NovaColors.textStrong;
 
     return PressableScale(
       onTap: onTap,
@@ -44,17 +40,8 @@ class CircleIconButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: fill,
           shape: BoxShape.circle,
-          border: Border.all(color: border),
-          boxShadow: dark
-              ? null
-              : const [
-                  BoxShadow(
-                    offset: Offset(0, 8),
-                    blurRadius: 20,
-                    spreadRadius: -8,
-                    color: Color(0x240A1128),
-                  ),
-                ],
+          border: dark ? null : Border.all(color: NovaColors.borderOnLight),
+          boxShadow: dark ? null : NovaDimens.shadowSticker,
         ),
         child: Icon(icon, size: iconSize, color: iconColor),
       ),

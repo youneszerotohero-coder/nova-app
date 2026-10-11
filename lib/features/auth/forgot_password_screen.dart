@@ -4,6 +4,7 @@ import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
+import '../../core/theme/nova_colors.dart';
 import '../../core/utils/phone.dart';
 import '../../data/otp.dart';
 import 'auth_hero.dart';
@@ -165,19 +166,19 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       _Step.password => context.tr('forgot.passwordSubtitle'),
     };
     return Scaffold(
+      backgroundColor: NovaColors.paperCard,
       body: AutofillGroup(
         child: ListView(
           padding: const EdgeInsets.only(bottom: 32),
           children: [
             AuthHero(showBack: true, title: title, subtitle: subtitle),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 26, 24, 0),
+              padding: const EdgeInsets.fromLTRB(18, 24, 18, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   ..._fields(),
                   if (_error != null) AuthMessage(_error!),
-                  const SizedBox(height: 4),
                   AuthSubmitButton(
                     busy: _busy,
                     label: switch (_step) {
@@ -227,7 +228,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
         _Step.phone => <Widget>[
             AuthTextField(
               controller: _phone,
-              icon: Icons.phone_rounded,
+              icon: Icons.phone_outlined,
               label: context.tr('auth.phoneLabel'),
               hint: '05 xx xx xx xx',
               keyboard: TextInputType.phone,
@@ -266,7 +267,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
               controller: _confirm,
               icon: Icons.lock_outline_rounded,
               label: context.tr('auth.confirmPassword'),
-              hint: '••••••••',
+              hint: context.tr('auth.passwordHint'),
               obscure: _obscure,
               autofill: AutofillHints.newPassword,
               error: _fieldErrors['password_confirmation'],

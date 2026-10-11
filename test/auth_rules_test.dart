@@ -208,13 +208,13 @@ void main() {
       await tester.enterText(find.byType(TextField).at(2), '0555 12 34 56');
       await tester.enterText(find.byType(TextField).at(3), 'short');
       // Step 1 (D-122): the names are missing and the password is short.
-      await tester.ensureVisible(find.text('الخطوة التالية'));
-      await tester.tap(find.text('الخطوة التالية'));
+      await tester.ensureVisible(find.text('زيد للخطوة الجاية'));
+      await tester.tap(find.text('زيد للخطوة الجاية'));
       await tester.pumpAndSettle();
 
       expect(find.text('تحقق من الحقول المشار إليها.'), findsOneWidget);
       expect(find.text('هذا الحقل مطلوب.'), findsNWidgets(2));
-      expect(find.text('الخطوة التالية'), findsOneWidget);
+      expect(find.text('زيد للخطوة الجاية'), findsOneWidget);
       expect(backend.requests.where((FakeRequest r) => r.path == '/auth/register'), isEmpty);
     });
 
@@ -312,13 +312,14 @@ void main() {
     await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
     expect(find.byType(LoginScreen), findsOneWidget);
-    // The website's sign-in: submit, "Forgot your password?", then the
-    // line to registration under the form — all without scrolling.
+    // The website's sign-in: "Forgot your password?" under the password,
+    // the submit, then the line to registration under the form — all
+    // without scrolling.
     final Rect submit = tester.getRect(find.text('Sign in'));
     final Rect forgot = tester.getRect(find.text('Forgot your password?'));
     final Rect toRegister = tester.getRect(find.byType(AuthModeSwitch));
-    expect(forgot.top, greaterThan(submit.bottom));
-    expect(toRegister.top, greaterThan(forgot.bottom));
+    expect(submit.top, greaterThan(forgot.bottom));
+    expect(toRegister.top, greaterThan(submit.bottom));
     expect(toRegister.bottom, lessThan(640));
     expect(find.text('New to Nova? Create an account', findRichText: true), findsOneWidget);
     // No "or" divider nor second create button any more.

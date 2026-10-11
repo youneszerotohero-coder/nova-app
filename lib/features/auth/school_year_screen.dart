@@ -5,7 +5,6 @@ import '../../core/api/api_exception.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
-import '../../core/widgets/pressable_scale.dart';
 import '../../data/account_store.dart';
 import '../../data/models.dart';
 import 'auth_hero.dart';
@@ -101,6 +100,7 @@ class _SchoolYearScreenState extends State<SchoolYearScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: NovaColors.paperCard,
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
@@ -109,7 +109,7 @@ class _SchoolYearScreenState extends State<SchoolYearScreen> {
             subtitle: context.tr('schoolYear.subtitle'),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 26, 24, 0),
+            padding: const EdgeInsets.fromLTRB(18, 24, 18, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -135,26 +135,16 @@ class _SchoolYearScreenState extends State<SchoolYearScreen> {
                   onChanged: (RefItem? value) => setState(() => _track = value),
                 ),
                 if (_error != null) AuthMessage(_error!),
-                const SizedBox(height: 6),
                 AuthSubmitButton(
                   label: context.tr('schoolYear.confirm'),
                   busy: _busy,
                   onTap: _confirm,
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
                 Center(
-                  child: PressableScale(
+                  child: AuthTextAction(
+                    label: context.tr('settings.signOut'),
                     onTap: () => AppScope.of(context).session.logout(),
-                    semanticLabel: 'Sign out',
-                    child: Text(
-                      context.tr('settings.signOut'),
-                      style: TextStyle(
-                        fontFamily: 'Geist',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        color: NovaColors.textMuted,
-                      ),
-                    ),
                   ),
                 ),
               ],
