@@ -195,7 +195,8 @@ class _ShellScreenState extends State<ShellScreen> {
   @override
   Widget build(BuildContext context) {
     final AppState state = AppScope.of(context);
-    final List<NovaNavItem> items = _items(context, state.itemCount);
+    // A visitor has no cart (D-134).
+    final List<NovaNavItem> items = _items(context, state.session.signedIn ? state.itemCount : 0);
 
     return ShellNav(
       select: _select,

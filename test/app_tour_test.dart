@@ -38,7 +38,7 @@ import 'nova_font_loader.dart';
 void main() {
   setUpAll(loadNovaFonts);
 
-  Future<void> shoot(WidgetTester tester, String name, Widget screen, {bool dark = false, bool scaffold = true, Duration settle = const Duration(milliseconds: 1600), SessionStore? session}) async {
+  Future<void> shoot(WidgetTester tester, String name, Widget screen, {bool dark = false, bool scaffold = true, Duration settle = const Duration(milliseconds: 1600), SessionStore? session, double height = 2532}) async {
     AppState state = installFixtureApp(lang: NovaLang.ar);
     if (session != null) {
       state = AppState.seeded(
@@ -54,7 +54,7 @@ void main() {
     if (dark) state.setDarkMode(true);
     NovaColors.current = dark ? NovaPalette.dark : NovaPalette.light;
     addTearDown(() => NovaColors.current = NovaPalette.light);
-    tester.view.physicalSize = const Size(1170, 2532);
+    tester.view.physicalSize = Size(1170, height);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
@@ -126,4 +126,20 @@ void main() {
   goldenTestWidgets('tour: offer detail', (tester) => shoot(tester, '21b_offer_detail', CourseDetailScreen.pack(pack: HomeData.featuredPacks.first), scaffold: false));
   goldenTestWidgets('tour: unit detail dark', (tester) => shoot(tester, '94_unit_detail_dark', CourseDetailScreen(course: HomeData.popularCourses.first), dark: true, scaffold: false));
   goldenTestWidgets('tour: teacher dark', (tester) => shoot(tester, '95_teacher_dark', TeacherDetailScreen(teacher: HomeData.teachers.first), dark: true, scaffold: false));
+
+  // D-134: "continue without an account" — the whole first screen, then a visitor's Home and a tab that asks to sign in.
+  Future<SessionStore> signedOut(WidgetTester tester) async {
+    final SessionStore session = SessionStore(fakeApi(FakeBackend(<String, FakeResponse>{
+      'GET /auth/me': const FakeResponse(401, <String, Object>{
+        'error': <String, String>{'code': 'UNAUTHENTICATED', 'message': 'Authentication is required.'},
+      }),
+    })));
+    await tester.runAsync(session.boot);
+    return session;
+  }
+
+  goldenTestWidgets('tour: gateway full', (tester) => shoot(tester, '04_gateway_full', const AuthGatewayScreen(), scaffold: false, height: 4500));
+  goldenTestWidgets('tour: guest home', (tester) async => shoot(tester, '05_guest_home', const ShellScreen(), scaffold: false, session: await signedOut(tester)));
+  goldenTestWidgets('tour: guest tab', (tester) async => shoot(tester, '06_guest_lessons', const ShellScreen(initialIndex: ShellScreen.units), scaffold: false, session: await signedOut(tester)));
+  goldenTestWidgets('tour: guest unit', (tester) async => shoot(tester, '07_guest_unit', CourseDetailScreen(course: HomeData.popularCourses.first), scaffold: false, session: await signedOut(tester)));
 }
