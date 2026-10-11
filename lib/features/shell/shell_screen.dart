@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
@@ -9,9 +10,15 @@ import '../../core/widgets/nova_bottom_bar.dart';
 import '../../core/widgets/nova_toast.dart';
 import '../account/notifications_screen.dart';
 import '../../data/models.dart';
-import '../account/profile_screen.dart';
+import '../account/orders_screen.dart';
+import '../account/settings_screen.dart';
+import '../account/wallet_screen.dart';
+import '../auth/auth_routes.dart';
 import '../auth/require_account.dart';
 import '../cart/cart_screen.dart';
+import '../catalog/offers_catalog_screen.dart';
+import '../catalog/teachers_screen.dart';
+import '../catalog/units_catalog_screen.dart';
 import '../detail/course_detail_screen.dart';
 import '../home/home_screen.dart';
 import '../learning/lives_screen.dart';
@@ -19,8 +26,9 @@ import '../learning/my_learning_screen.dart';
 import 'student_top_bar.dart';
 
 /// The Student space, as on the website's phone layout (D-133): the five
-/// tabs of its bottom bar — Home, My lessons, Live, Cart, Account — kept
-/// alive once visited and switched instantly, with a live cart badge.
+/// tabs of its bottom bar — Home, My lessons, Live, Cart, Account (the
+/// settings, `/account/settings`) — kept alive once visited and switched
+/// instantly, with a live cart badge, and the menu (the website's sidebar).
 /// D-134: a visitor (no account) browses Home and the catalogue; the other
 /// tabs ask to sign in, and what they asked for follows once signed in.
 class ShellScreen extends StatefulWidget {
@@ -48,6 +56,22 @@ class _ShellScreenState extends State<ShellScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _resumeIntent());
+    AppState.instance.shellTabRequest.addListener(_onTabRequest);
+  }
+
+  @override
+  void dispose() {
+    AppState.instance.shellTabRequest.removeListener(_onTabRequest);
+    super.dispose();
+  }
+
+  void _onTabRequest() {
+    final ValueNotifier<int?> request = AppState.instance.shellTabRequest;
+    final int? tab = request.value;
+    if (tab == null || !mounted) return;
+    request.value = null;
+    Navigator.of(context).popUntil((Route<dynamic> route) => route.isFirst);
+    _select(tab);
   }
 
   /// A visitor asked for something that needs an account, then signed in
@@ -105,13 +129,67 @@ class _ShellScreenState extends State<ShellScreen> {
     }
   }
 
+  /// The website's support address (`config/contact.ts`).
+  static const String _supportEmail = 'noova.elearning@gmail.com';
+
+  /// The menu = the website's Student sidebar: Learning (Overview, My units,
+  /// Lives) and Account (Orders, Wallet, Settings), help and sign out. App
+  /// only: the teachers directory. A visitor sees Home and the catalogue,
+  /// then "Sign in" and "Create my account".
   void _openMenu() {
+    final AppState app = AppScope.of(context);
+    void push(Widget page) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+    NovaMenuEntry tab(IconData icon, String key, int index) =>
+        NovaMenuEntry(icon: icon, label: context.tr(key), active: _currentIndex == index, onTap: () => _select(index));
+    final NovaMenuEntry teachers =
+        NovaMenuEntry(icon: Icons.groups_outlined, label: context.tr('menu.teachers'), onTap: () => push(const TeachersScreen()));
+
+    if (!app.session.signedIn) {
+      showNovaMenu(
+        context,
+        groups: <NovaMenuGroup>[
+          NovaMenuGroup(label: context.tr('menu.groupLearning'), entries: <NovaMenuEntry>[
+            tab(Icons.dashboard_outlined, 'menu.overview', ShellScreen.home),
+            NovaMenuEntry(icon: Icons.menu_book_outlined, label: context.tr('menu.units'), onTap: () => push(const UnitsCatalogScreen())),
+            NovaMenuEntry(icon: Icons.auto_awesome_outlined, label: context.tr('menu.offers'), onTap: () => push(const OffersCatalogScreen())),
+            teachers,
+          ]),
+        ],
+        onSignIn: () => requireAccount(context),
+        onRegister: () => openRegistration(context),
+      );
+      return;
+    }
     showNovaMenu(
       context,
-      items: _items(context, AppScope.of(context).itemCount),
-      currentIndex: _currentIndex,
-      onSelect: _select,
+      groups: <NovaMenuGroup>[
+        NovaMenuGroup(label: context.tr('menu.groupLearning'), entries: <NovaMenuEntry>[
+          tab(Icons.dashboard_outlined, 'menu.overview', ShellScreen.home),
+          tab(Icons.menu_book_outlined, 'menu.myUnits', ShellScreen.units),
+          tab(Icons.sensors_rounded, 'menu.lives', ShellScreen.lives),
+          teachers,
+        ]),
+        NovaMenuGroup(label: context.tr('menu.groupAccount'), entries: <NovaMenuEntry>[
+          NovaMenuEntry(icon: Icons.credit_card_rounded, label: context.tr('menu.orders'), onTap: () => push(const OrdersScreen())),
+          NovaMenuEntry(icon: Icons.account_balance_wallet_outlined, label: context.tr('menu.wallet'), onTap: () => push(const WalletScreen())),
+          tab(Icons.settings_outlined, 'menu.settings', ShellScreen.account),
+        ]),
+      ],
+      onHelp: _contactSupport,
+      // The same call as the settings' sign-out button.
+      onSignOut: () => app.session.logout(),
     );
+  }
+
+  /// The help row (`.sidebarSupport`): a mail to the NOVA team.
+  Future<void> _contactSupport() async {
+    bool opened = false;
+    try {
+      opened = await launchUrl(Uri.parse('mailto:$_supportEmail'), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      opened = false;
+    }
+    if (!opened && mounted) novaToast(context, _supportEmail, icon: Icons.mail_outline_rounded);
   }
 
   @override
@@ -170,7 +248,8 @@ class _ShellScreenState extends State<ShellScreen> {
       ShellScreen.units => const MyLearningScreen(),
       ShellScreen.lives => const LivesScreen(),
       ShellScreen.cart => const CartScreen(),
-      _ => const ProfileScreen(),
+      // As on the website, "Account" opens the settings (`/account/settings`).
+      _ => const SettingsScreen(),
     };
   }
 }

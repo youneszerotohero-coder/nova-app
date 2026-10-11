@@ -8,6 +8,7 @@ import '../../core/widgets/pressable_scale.dart';
 import '../account/notifications_screen.dart';
 import '../account/settings_screen.dart';
 import '../auth/require_account.dart';
+import 'shell_screen.dart';
 
 /// Lets a tab page switch tabs or open the menu (the shell provides it).
 class ShellNav extends InheritedWidget {
@@ -23,10 +24,12 @@ class ShellNav extends InheritedWidget {
   bool updateShouldNotify(ShellNav old) => old.index != index;
 }
 
-/// The website's Student top bar (`.studentTopbar`): the Student's initials
-/// (blue square → settings), the bell with its unread count and the theme
-/// switch, with the NOVA logo at the other end. A pushed page shows the
-/// "Back" pill instead of the initials.
+/// The website's Student top bar (`.studentTopbar`, `profile.tsx`), in its
+/// order: the menu button at the start (the right in Arabic), then at the
+/// end the theme switch, the bell with its unread count and the Student's
+/// initials (blue square → settings). A visitor (D-134) has no bell, and a
+/// "Sign in" pill where the initials stand. A pushed page shows the "Back"
+/// pill at the start and the NOVA logo at the end instead.
 class StudentTopBar extends StatelessWidget {
   const StudentTopBar({super.key, this.showBack = false, this.trailing});
 
@@ -37,57 +40,95 @@ class StudentTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final double top = MediaQuery.paddingOf(context).top;
+    if (showBack) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(14, top + 8, 14, 10),
+        child: Row(
+          children: [
+            const BackPill(),
+            const Spacer(),
+            trailing ?? const NovaLogoBadge(),
+          ],
+        ),
+      );
+    }
+
     final AppState app = AppScope.of(context);
     final String name = app.profile == null ? '' : '${app.profile!.firstName} ${app.profile!.lastName}';
-    return Padding(
-      padding: EdgeInsets.fromLTRB(14, MediaQuery.paddingOf(context).top + 8, 14, 10),
-      child: Row(
-        children: [
-          if (showBack)
-            const BackPill()
-          else if (!app.session.signedIn) ...[
-            // D-134: a visitor has no initials nor notifications: sign in.
-            _SignInPill(onTap: () => requireAccount(context)),
-            const SizedBox(width: 8),
-            _Square(
-              semanticLabel: context.tr('menu.darkMode'),
-              onTap: () => app.setDarkMode(!app.darkMode),
-              child: Icon(app.darkMode ? Icons.dark_mode_outlined : Icons.light_mode_outlined, size: 20, color: NovaColors.textStrong),
-            ),
-          ] else ...[
-            _Square(
-              semanticLabel: context.tr('topbar.settings'),
-              color: NovaColors.accent,
-              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen())),
-              child: Text(
-                initialsOf(name),
-                style: const TextStyle(
-                  fontFamily: NovaTypography.body,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                  color: Colors.white,
+    // `.studentTopbar`: 72 px, the surface at 90 % and a hairline under it;
+    // `.studentTopActions`: 8 px apart.
+    return Container(
+      padding: EdgeInsets.only(top: top),
+      decoration: BoxDecoration(
+        color: NovaColors.paperCard.withValues(alpha: 0.9),
+        border: Border(bottom: BorderSide(color: NovaColors.borderOnLight)),
+      ),
+      child: SizedBox(
+        height: 72,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            children: [
+              // Outside the shell (a page shown on its own) there is no menu.
+              if (ShellNav.maybeOf(context) != null) const _MenuButton(),
+              const Spacer(),
+              if (trailing != null) ...[trailing!, const SizedBox(width: 8)],
+              const _ThemeToggle(),
+              const SizedBox(width: 8),
+              if (!app.session.signedIn)
+                // D-134: a visitor has no initials nor notifications: sign in.
+                _SignInPill(onTap: () => requireAccount(context))
+              else ...[
+                _Square(
+                  semanticLabel: context.tr('topbar.notifications'),
+                  badge: app.unreadCount,
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const NotificationsScreen())),
+                  child: Icon(Icons.notifications_none_rounded, size: 20, color: NovaColors.textBody),
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            _Square(
-              semanticLabel: context.tr('topbar.notifications'),
-              badge: app.unreadCount,
-              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const NotificationsScreen())),
-              child: Icon(Icons.notifications_none_rounded, size: 21, color: NovaColors.textStrong),
-            ),
-            const SizedBox(width: 8),
-            _Square(
-              semanticLabel: context.tr('menu.darkMode'),
-              onTap: () => app.setDarkMode(!app.darkMode),
-              child: Icon(app.darkMode ? Icons.dark_mode_outlined : Icons.light_mode_outlined, size: 20, color: NovaColors.textStrong),
-            ),
-          ],
-          const Spacer(),
-          trailing ?? (ShellNav.maybeOf(context) == null || showBack ? const NovaLogoBadge() : const _MenuButton()),
-        ],
+                const SizedBox(width: 8),
+                // `.studentAvatar`: a hairline before the initials (`#e4e6e9`
+                // in both themes), 9 px from them.
+                Container(width: 1, height: 44, color: const Color(0xFFE4E6E9)),
+                const SizedBox(width: 9),
+                PressableScale(
+                  onTap: () => _openSettings(context),
+                  pressedScale: 0.92,
+                  semanticLabel: context.tr('topbar.settings'),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(color: NovaColors.accent, borderRadius: BorderRadius.circular(13)),
+                    child: Text(
+                      initialsOf(name),
+                      style: const TextStyle(
+                        fontFamily: NovaTypography.display,
+                        fontFamilyFallback: NovaTypography.fallback,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        height: 1.1,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
+  }
+
+  /// The initials lead to the settings (`/account/settings`), the Account tab.
+  static void _openSettings(BuildContext context) {
+    final ShellNav? nav = ShellNav.maybeOf(context);
+    if (nav != null) {
+      nav.select(ShellScreen.account);
+    } else {
+      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
+    }
   }
 
   /// "LB" for Lina Benali; "N" before the name is known.
@@ -137,7 +178,7 @@ class _SignInPill extends StatelessWidget {
   }
 }
 
-/// The website's menu button (`.studentMenu`), at the far end of the bar.
+/// The website's menu button (`.studentMenu`): surface-2, ink lines.
 class _MenuButton extends StatelessWidget {
   const _MenuButton();
 
@@ -147,7 +188,39 @@ class _MenuButton extends StatelessWidget {
       semanticLabel: 'Menu',
       onTap: ShellNav.maybeOf(context)?.openMenu,
       color: NovaColors.paperRaised,
-      child: Icon(Icons.menu_rounded, size: 22, color: NovaColors.textStrong),
+      child: Icon(Icons.menu_rounded, size: 20, color: NovaColors.textStrong),
+    );
+  }
+}
+
+/// `.dashboardThemeToggle` (`dark-mode.css`): white with a grey border and a
+/// dark sun, or a charcoal square with a light moon in dark mode.
+class _ThemeToggle extends StatelessWidget {
+  const _ThemeToggle();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppState app = AppScope.of(context);
+    final bool dark = app.darkMode;
+    return PressableScale(
+      onTap: () => app.setDarkMode(!dark),
+      pressedScale: 0.92,
+      semanticLabel: context.tr('menu.darkMode'),
+      child: Container(
+        width: 44,
+        height: 44,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: dark ? const Color(0xFF20242B) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: dark ? const Color(0xFF3C434D) : const Color(0xFFD8DDE3)),
+        ),
+        child: Icon(
+          dark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+          size: 18,
+          color: dark ? const Color(0xFFF5F7FA) : const Color(0xFF30343A),
+        ),
+      ),
     );
   }
 }
@@ -221,6 +294,10 @@ class NovaLogoBadge extends StatelessWidget {
   }
 }
 
+/// A 44 px square of the top bar (`.studentMenu`, `.notificationButton`):
+/// radius 13, the surface with a hairline unless [color] fills it. Its badge
+/// (`.notificationButton i`) is the danger red with a white ring, over the
+/// top end corner.
 class _Square extends StatelessWidget {
   const _Square({required this.child, required this.semanticLabel, this.onTap, this.color, this.badge = 0});
 
@@ -252,21 +329,21 @@ class _Square extends StatelessWidget {
           ),
           if (badge > 0)
             PositionedDirectional(
-              top: -5,
-              start: -5,
+              top: -6,
+              end: -6,
               child: Container(
                 constraints: const BoxConstraints(minWidth: 18),
                 height: 18,
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE5484D),
+                  color: NovaColors.heartRed,
                   borderRadius: BorderRadius.circular(100),
-                  border: Border.all(color: NovaColors.paper, width: 2),
+                  border: Border.all(color: Colors.white, width: 2),
                 ),
                 child: Text(
                   badge > 9 ? '9+' : '$badge',
-                  style: const TextStyle(fontFamily: NovaTypography.body, fontWeight: FontWeight.w800, fontSize: 9.5, color: Colors.white),
+                  style: const TextStyle(fontFamily: NovaTypography.body, fontWeight: FontWeight.w700, fontSize: 10, height: 1, color: Colors.white),
                 ),
               ),
             ),

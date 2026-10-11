@@ -1,17 +1,15 @@
-/// Formats an integer DA amount with thin-space thousands separators,
-/// e.g. 18900 -> "18 900 DA".
-///
-/// A leading left-to-right mark keeps the amount in reading order inside
-/// Arabic text; without it the digit groups flip ("DA 900 18").
+/// The website's price (`formatPrice`, data/catalog.ts: `toLocaleString('en-DZ')`
+/// + " DZD"), e.g. 18900 -> "18,900 DZD" in every language. The comma keeps the
+/// digit groups together, so Arabic text shows "DZD 18,900" as the website does.
 String formatDaPrice(int amount) {
-  final String digits = amount.toString();
-  final StringBuffer buffer = StringBuffer();
+  final String digits = amount.abs().toString();
+  final StringBuffer buffer = StringBuffer(amount < 0 ? '-' : '');
   for (int i = 0; i < digits.length; i++) {
     buffer.write(digits[i]);
     final int remaining = digits.length - 1 - i;
-    if (remaining > 0 && remaining % 3 == 0) buffer.write('\u2009');
+    if (remaining > 0 && remaining % 3 == 0) buffer.write(',');
   }
-  return '\u200E$buffer DA';
+  return '$buffer DZD';
 }
 
 /// A discount badge, e.g. 23 -> minus sign + "23%", kept in that order in Arabic.

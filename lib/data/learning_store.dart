@@ -28,6 +28,11 @@ class LearningStore extends ChangeNotifier {
   LoadState _state = LoadState.idle;
   List<Course> _owned = const <Course>[];
   Set<int> _ownedIds = <int>{};
+
+  /// `owned_offer_ids` of `/access-grants` (D-086): the Offers the Student
+  /// holds; null when the server does not send the list.
+  Set<int>? _ownedOfferIds;
+  Set<int>? get ownedOfferIds => _ownedOfferIds;
   List<LiveSession> _lives = const <LiveSession>[];
   Json _dashboard = <String, dynamic>{};
 
@@ -71,6 +76,8 @@ class LearningStore extends ChangeNotifier {
           _grantCourse(grant, progress[grant.obj('course')?.integer('id')]),
       ];
       _ownedIds = _owned.map((Course c) => c.id).toSet();
+      final Object? offerIds = bodies[0]['owned_offer_ids'];
+      _ownedOfferIds = offerIds is List ? <int>{for (final Object? id in offerIds) if (id is num) id.toInt()} : null;
       _dashboard = bodies[1].obj('data') ?? <String, dynamic>{};
       _lives = bodies[2].list('data').map(LiveSession.fromJson).toList();
       _state = LoadState.ready;
@@ -168,6 +175,7 @@ class LearningStore extends ChangeNotifier {
   void clear() {
     _owned = const <Course>[];
     _ownedIds = <int>{};
+    _ownedOfferIds = null;
     _lives = const <LiveSession>[];
     _dashboard = <String, dynamic>{};
     _state = LoadState.idle;

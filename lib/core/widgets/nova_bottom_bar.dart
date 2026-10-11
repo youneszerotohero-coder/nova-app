@@ -18,9 +18,10 @@ class NovaNavItem {
   final int badgeCount;
 }
 
-/// The website's phone bottom bar (`.studentBottomNav`): a navy pill, each
-/// destination an icon over its label, and a yellow marker that slides to
-/// the active one.
+/// The website's phone bottom bar (`.studentBottomNav`, `dashboard.css`): a
+/// navy pill (`#121A33`; `#0E1636` with a faint white ring in dark mode),
+/// each destination an icon over its label, and a yellow marker that slides
+/// to the active one.
 class NovaBottomBar extends StatelessWidget {
   const NovaBottomBar({
     super.key,

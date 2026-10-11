@@ -155,6 +155,12 @@ class AppState extends ChangeNotifier {
   /// it out once signed in (D-127, D-134).
   AccountIntent? pendingIntent;
 
+  /// A pushed page asking the Student space to show one of its tabs (e.g.
+  /// an owned Offer's "My lessons"): the shell closes the pages above it.
+  final ValueNotifier<int?> shellTabRequest = ValueNotifier<int?>(null);
+
+  void openShellTab(int tab) => shellTabRequest.value = tab;
+
   NovaLang get lang => _lang;
 
   /// Starts the app: the Student's saved language, then the public

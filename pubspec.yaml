@@ -41,6 +41,7 @@ flutter:
   assets:
     - assets/images/brand/
     - assets/images/courses/
+    - assets/images/covers/
     - assets/images/packs/
     - assets/images/people/
 

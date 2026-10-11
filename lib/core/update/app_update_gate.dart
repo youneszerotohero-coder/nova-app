@@ -6,7 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../i18n/nova_strings.dart';
 import '../theme/nova_colors.dart';
 import '../theme/nova_typography.dart';
-import '../widgets/gradient_pill_button.dart';
+import '../widgets/hero_style.dart';
 import '../widgets/pressable_scale.dart';
 import 'store_updates.dart';
 
@@ -214,12 +214,10 @@ class UpdateSheet extends StatelessWidget {
             style: NovaTypography.textTheme.bodyMedium!.copyWith(color: NovaColors.textMuted),
           ),
           const SizedBox(height: 20),
-          GradientPillButton(
+          NovaButton(
             icon: icon,
             label: action,
-            width: double.infinity,
-            height: 52,
-            semanticLabel: action,
+            expand: true,
             onTap: () => Navigator.of(context).pop(true),
           ),
           const SizedBox(height: 6),

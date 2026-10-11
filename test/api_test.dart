@@ -6,6 +6,7 @@ import 'package:nova_mobile/core/api/api_exception.dart';
 import 'package:nova_mobile/core/api/nova_api.dart';
 import 'package:nova_mobile/data/catalog_store.dart';
 import 'package:nova_mobile/data/commerce_store.dart';
+import 'package:nova_mobile/data/learning_store.dart';
 import 'package:nova_mobile/data/models.dart';
 import 'package:nova_mobile/data/session_store.dart';
 
@@ -232,6 +233,27 @@ void main() {
   });
 
   group('Production response shapes', () {
+    test('access grants keep the Offers the Student holds (D-086 owned_offer_ids)', () async {
+      FakeBackend grants(Map<String, Object?> body) => FakeBackend(<String, FakeResponse>{
+            'GET /access-grants': FakeResponse(200, body),
+            'GET /me/dashboard': const FakeResponse(200, <String, Object>{'data': <String, Object>{}}),
+            'GET /lives': const FakeResponse(200, <String, Object>{'data': <Object>[]}),
+          });
+      final LearningStore held = LearningStore(fakeApi(grants(<String, Object?>{
+        'data': <Object>[],
+        'owned_offer_ids': <int>[9, 11],
+      })));
+      await held.load();
+      expect(held.ownedOfferIds, <int>{9, 11});
+
+      // An older server without the list: the Home falls back to the paid Units rule.
+      final LearningStore older = LearningStore(fakeApi(grants(<String, Object?>{'data': <Object>[]})));
+      await older.load();
+      expect(older.ownedOfferIds, isNull);
+      held.clear();
+      expect(held.ownedOfferIds, isNull);
+    });
+
     test('courses, offers and teachers parse from real /api/v1 payloads', () async {
       final FakeBackend backend = FakeBackend(<String, FakeResponse>{
         'GET /courses': FakeResponse(200, _fixture('courses.json')),
@@ -265,6 +287,15 @@ void main() {
       expect(catalog.teacherFacets.first.photo, startsWith('https://'));
       expect(catalog.subjectFacets.map((RefItem s) => s.id), <int>[19, 5]);
       expect(catalog.subjectFacets.last.name, 'Langue anglaise');
+
+      // The Units and Offers pages each have their own filter options.
+      expect(catalog.unitFacets.levels.single.code, '3AS');
+      expect(catalog.unitFacets.tracks.map((RefItem t) => t.id), <int>[1, 2]);
+      expect((catalog.unitFacets.free, catalog.unitFacets.paid), (1, 0));
+      expect(catalog.offerFacets.types, <String>['annual', 'trimestre']);
+      expect(catalog.offerFacets.teachers.map((Teacher t) => t.id), <int>[4, 2, 3, 1]);
+      // Anonymous: no level or filière narrows the lists.
+      expect(catalog.audience, isNull);
     });
 
     test('cart items and quotes keep the server amounts', () async {

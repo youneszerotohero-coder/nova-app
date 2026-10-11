@@ -9,14 +9,16 @@ import 'package:nova_mobile/core/utils/search_text.dart';
 import 'package:nova_mobile/core/widgets/hero_style.dart';
 import 'package:nova_mobile/core/widgets/nova_bottom_bar.dart';
 import 'package:nova_mobile/core/widgets/pressable_scale.dart';
-import 'package:nova_mobile/core/widgets/subject_chip.dart';
 import 'package:nova_mobile/data/catalog_store.dart';
 import 'package:nova_mobile/data/models.dart';
-import 'package:nova_mobile/features/account/profile_screen.dart';
+import 'package:nova_mobile/features/account/orders_screen.dart';
+import 'package:nova_mobile/features/account/settings_screen.dart';
 import 'package:nova_mobile/features/cart/cart_screen.dart';
 import 'package:nova_mobile/features/detail/course_detail_screen.dart';
 import 'package:nova_mobile/features/detail/teacher_detail_screen.dart';
-import 'package:nova_mobile/features/explore/explore_screen.dart';
+import 'package:nova_mobile/features/catalog/offers_catalog_screen.dart';
+import 'package:nova_mobile/features/catalog/teachers_screen.dart';
+import 'package:nova_mobile/features/catalog/units_catalog_screen.dart';
 import 'package:nova_mobile/features/home/home_screen.dart';
 import 'package:nova_mobile/features/home/widgets/nova_product_card.dart';
 import 'package:nova_mobile/features/learning/learn_screen.dart';
@@ -31,8 +33,8 @@ import 'fixtures/fake_api.dart';
 import 'fixtures/fixture_app.dart';
 import 'fixtures/fixture_data.dart';
 
-// Public catalogue payloads in the backend's shape (list resources plus
-// their `facets`), for the Explore filters.
+// Public catalogue payloads in the backend's shape (list resources), for
+// the teacher and detail pages.
 const Map<String, Object> _maya = {'id': 4, 'first_name': 'MAYA', 'last_name': 'ARABE'};
 const Map<String, Object> _fares = {'id': 1, 'first_name': 'FARES', 'last_name': 'PHILO'};
 const Map<String, Object> _amira = {'id': 2, 'first_name': 'AMIRA', 'last_name': 'ENGLISH'};
@@ -43,21 +45,9 @@ const String _philosophyPack = 'Philosophy — First Trimester';
 const String _philosophyCourse = 'Philosophy — Essay Method';
 const String _englishCourse = 'English — Exam Skills';
 
-Map<String, Object?> _page(List<Object> data, {Map<String, Object>? facets}) => <String, Object?>{
+Map<String, Object?> _page(List<Object> data) => <String, Object?>{
       'data': data,
       'meta': <String, Object>{'current_page': 1, 'last_page': 1, 'total': data.length},
-      'facets': ?facets,
-    };
-
-Map<String, Object> _facets({
-  List<Object> teachers = const <Object>[],
-  List<Object> subjects = const <Object>[],
-}) =>
-    <String, Object>{
-      'levels': const <Object>[],
-      'subjects': subjects,
-      'teachers': teachers,
-      'tracks': const <Object>[],
     };
 
 Map<String, Object?> _course(
@@ -147,10 +137,12 @@ void main() {
 
   Finder inBar(Finder finder) => find.descendant(of: find.byType(NovaBottomBar), matching: finder);
 
-  /// The menu's panel (316 wide), docked to the reading-start edge.
+  /// The menu's panel (`.studentSidebar`, 258 wide), docked to the
+  /// reading-start edge.
   final Finder menuPanel = find.byWidgetPredicate(
-    (Widget w) => w is Container && w.constraints?.maxWidth == 316,
+    (Widget w) => w is Container && w.constraints?.maxWidth == 258,
   );
+  Finder inMenu(String text) => find.descendant(of: menuPanel, matching: find.text(text));
 
   /// The tab the Student sees: the only one that answers touches.
   Finder shown(Type screen) => find.byType(screen).hitTestable();
@@ -169,14 +161,16 @@ void main() {
     expect(find.text('Continue learning'), findsOneWidget);
     expect(find.text('See the Offers'), findsOneWidget);
 
-    // One of the Student's Lives is on: one tap from home.
+    // One of the Student's Lives is on: one tap from home, with its Unit.
+    final LiveSession live = HomeData.lives.first;
     expect(find.text('Your live class is on now'), findsOneWidget);
-    expect(find.text(HomeData.lives.first.title), findsOneWidget);
+    expect(find.text('${live.title} · ${live.course}'), findsOneWidget);
+    expect(find.text('Join live'), findsOneWidget);
 
     // Units: the Student's own first, then the others of their level.
     expect(find.text('Units'), findsOneWidget);
     expect(find.text('Your Units first, then more for your level.'), findsOneWidget);
-    expect(find.text('All Units →'), findsOneWidget);
+    expect(find.text('All Units'), findsOneWidget);
     final List<Course> courses = <Course>[
       ...HomeData.popularCourses.where((Course c) => c.owned),
       ...HomeData.popularCourses.where((Course c) => !c.owned),
@@ -185,8 +179,14 @@ void main() {
       for (final Course course in courses) tester.getRect(find.text(course.title)).left,
     ];
     expect(starts, orderedEquals(<double>[...starts]..sort()));
-    expect(find.text('Open Unit'), findsNWidgets(HomeData.popularCourses.where((Course c) => c.owned).length));
-    expect(find.text('Purchased'), findsNWidgets(HomeData.popularCourses.where((Course c) => c.owned).length));
+    final int owned = HomeData.popularCourses.where((Course c) => c.owned).length;
+    expect(find.text('Open Unit'), findsNWidgets(owned));
+    expect(find.text('Purchased'), findsNWidgets(owned));
+    expect(find.text('Unlocked'), findsNWidgets(owned));
+    // The others are catalogue cards: "N Live" tag, price, "See more".
+    expect(find.text('12 Live'), findsOneWidget);
+    expect(find.text('4,800 DZD'), findsOneWidget);
+    expect(find.text('See more'), findsNWidgets(courses.length - owned));
 
     // Offers: several Units in one purchase.
     expect(find.text('Offers'), findsOneWidget);
@@ -202,7 +202,7 @@ void main() {
     expect(find.text('Our teachers'), findsNothing);
   });
 
-  testWidgets('"Continue learning" switches to My lessons; "See the Offers" and "All Units" open Explore', (tester) async {
+  testWidgets('"Continue learning" switches to My lessons; "See the Offers" and "All Units" open the catalogues', (tester) async {
     await pumpApp(tester);
 
     await tester.tap(find.text('Continue learning'));
@@ -217,14 +217,22 @@ void main() {
 
     await tester.tap(find.text('See the Offers'));
     await frames(tester);
-    expect(find.byType(ExploreScreen), findsOneWidget);
-    await tester.tap(find.byType(BackPill));
+    expect(find.byType(OffersCatalogScreen), findsOneWidget);
+    await tester.tap(find.byType(BackPill).last);
     await frames(tester);
-    expect(find.byType(ExploreScreen), findsNothing);
+    expect(find.byType(OffersCatalogScreen), findsNothing);
 
-    await tester.tap(find.text('All Units →'));
+    await tester.tap(find.text('All Units'));
     await frames(tester);
-    expect(find.byType(ExploreScreen), findsOneWidget);
+    expect(find.byType(UnitsCatalogScreen), findsOneWidget);
+    await tester.tap(find.byType(BackPill).last);
+    await frames(tester);
+    expect(find.byType(UnitsCatalogScreen), findsNothing);
+
+    await tester.ensureVisible(find.text('All Offers'));
+    await tester.tap(find.text('All Offers'));
+    await frames(tester);
+    expect(find.byType(OffersCatalogScreen), findsOneWidget);
   });
 
   testWidgets('a card opens its Unit (owned), its page (not owned) or its Offer', (tester) async {
@@ -270,22 +278,91 @@ void main() {
     expect(second.right, lessThan(first.left));
   });
 
-  testWidgets('menu opens and switches tabs', (tester) async {
+  testWidgets('the menu is the website sidebar: Learning and Account, help, sign out', (tester) async {
     await pumpApp(tester);
-
-    await tester.tap(find.bySemanticsLabel('Menu'));
-    await frames(tester);
-
-    for (final String tab in <String>['Home', 'My lessons', 'Live', 'Cart', 'Account']) {
-      expect(find.descendant(of: menuPanel, matching: find.text(tab)), findsOneWidget);
+    Future<void> openMenu() async {
+      await tester.tap(find.bySemanticsLabel('Menu'));
+      await frames(tester);
     }
 
-    await tester.tap(find.descendant(of: menuPanel, matching: find.text('My lessons')));
-    await frames(tester);
+    await openMenu();
+    for (final String label in <String>[
+      'Learning', 'Overview', 'My units', 'Lives', 'Teachers', //
+      'Account', 'Orders', 'Wallet & rewards', 'Settings', 'Need help?', 'Talk to the Nova team', 'Sign out',
+    ]) {
+      expect(inMenu(label), findsOneWidget, reason: label);
+    }
+    // No visitor buttons for a Student.
+    expect(inMenu('Create my account'), findsNothing);
 
+    // The open page is the blue row.
+    BoxDecoration row(String label) => tester
+        .widget<Container>(find.ancestor(of: inMenu(label), matching: find.byType(Container)).first)
+        .decoration! as BoxDecoration;
+    expect(row('Overview').color, const Color(0xFF1F54D6));
+    expect(row('My units').color, Colors.transparent);
+
+    // A tab of the bar.
+    await tester.tap(inMenu('My units'));
+    await frames(tester);
     expect(menuPanel, findsNothing);
     expect(shown(MyLearningScreen), findsOneWidget);
     expect(find.descendant(of: find.byType(MyLearningScreen), matching: find.text('Physics — Mechanics Masterclass')), findsOneWidget);
+
+    // A page of its own.
+    await openMenu();
+    expect(row('My units').color, const Color(0xFF1F54D6));
+    await tester.tap(inMenu('Orders'));
+    await frames(tester);
+    expect(find.byType(OrdersScreen), findsOneWidget);
+    Navigator.of(tester.element(find.byType(OrdersScreen))).pop();
+    await frames(tester);
+
+    await openMenu();
+    await tester.tap(inMenu('Teachers'));
+    await frames(tester);
+    expect(find.byType(TeachersScreen), findsOneWidget);
+    Navigator.of(tester.element(find.byType(TeachersScreen))).pop();
+    await frames(tester);
+
+    // Settings is the Account tab, as on the website.
+    await openMenu();
+    await tester.tap(inMenu('Settings'));
+    await frames(tester);
+    expect(tester.widget<NovaBottomBar>(find.byType(NovaBottomBar)).currentIndex, ShellScreen.account);
+    expect(shown(SettingsScreen), findsOneWidget);
+
+    // Sign out ends the session, like the settings' button.
+    await openMenu();
+    await tester.tap(inMenu('Sign out'));
+    await frames(tester);
+    expect(AppState.instance.session.signedIn, isFalse);
+  });
+
+  testWidgets('the top bar reads like the website: menu at the start; theme, bell, initials at the end', (tester) async {
+    final AppState state = AppState.instance;
+    state.setLang(NovaLang.ar);
+    addTearDown(() => state.setLang(NovaLang.en));
+    await pumpApp(tester);
+
+    final Finder bar = find.byType(StudentTopBar).hitTestable().first;
+    double x(Finder finder) => tester.getCenter(find.descendant(of: bar, matching: finder).first).dx;
+    final double menu = x(find.bySemanticsLabel('Menu'));
+    final double theme = x(find.bySemanticsLabel('الوضع الداكن'));
+    // The bell's label carries its unread count.
+    final double bell = x(find.bySemanticsLabel(RegExp('^الإشعارات')));
+    final Finder initialsText = find.text(StudentTopBar.initialsOf('${HomeData.student.firstName} ${HomeData.student.lastName}'));
+    final double initials = x(initialsText);
+    // Right to left in Arabic: menu … theme, bell, initials.
+    expect(menu, greaterThan(theme));
+    expect(theme, greaterThan(bell));
+    expect(bell, greaterThan(initials));
+
+    // The initials open the settings: the Account tab.
+    await tester.tap(find.descendant(of: bar, matching: initialsText));
+    await frames(tester);
+    expect(tester.widget<NovaBottomBar>(find.byType(NovaBottomBar)).currentIndex, ShellScreen.account);
+    expect(shown(SettingsScreen), findsOneWidget);
   });
 
   testWidgets('menu docks to the right edge in Arabic', (tester) async {
@@ -304,158 +381,13 @@ void main() {
     expect(panel.left, greaterThan(0));
   });
 
-  Finder inSheet(Finder finder) =>
-      find.descendant(of: find.byType(BottomSheet), matching: finder);
-
-  /// Explore over a catalogue served by [routes] in the backend's shape,
-  /// so the filters meet real facets and backend-filtered Offers.
-  Future<FakeBackend> pumpExplore(
-    WidgetTester tester,
-    Map<String, FakeResponse> routes,
-  ) async {
-    tester.view.physicalSize = const Size(1170, 8100);
-    tester.view.devicePixelRatio = 3.0;
-    addTearDown(tester.view.reset);
-
-    final FakeBackend backend = FakeBackend(routes);
-    final CatalogStore catalog = CatalogStore(fakeApi(backend));
-    final AppState state = installFixtureApp(catalog: catalog);
-    await tester.pumpWidget(
-      AppScope(
-        state: state,
-        child: MaterialApp(
-          theme: NovaTheme.light,
-          home: const Scaffold(body: ExploreScreen()),
-        ),
-      ),
-    );
-    catalog.load();
-    await tester.pumpAndSettle();
-    return backend;
-  }
+  // The Units, Offers and Teachers catalogues (search, filters, sort) are
+  // covered by test/catalog_test.dart.
 
   List<String> offerQueries(FakeBackend backend) => backend.requests
       .where((FakeRequest r) => r.path == '/offers')
       .map((FakeRequest r) => r.query)
       .toList();
-
-  testWidgets(
-      'with no listed Course the filter rails come from the facets and a '
-      'teacher asks the backend for packs', (tester) async {
-    final FakeBackend backend = await pumpExplore(tester, <String, FakeResponse>{
-      // Production today: paid Courses are only sold inside Offers.
-      'GET /courses': FakeResponse(200, _page(const <Object>[], facets: _facets())),
-      'GET /offers': FakeResponse(
-        200,
-        _page(
-          <Object>[_offer(7, _arabicPack, _maya), _offer(6, _philosophyPack, _fares)],
-          facets: _facets(teachers: <Object>[_maya, _fares], subjects: <Object>[_english, _philosophy]),
-        ),
-      ),
-      'GET /offers?teacher_ids[]=4&per_page=50&page=1':
-          FakeResponse(200, _page(<Object>[_offer(7, _arabicPack, _maya)])),
-      'GET /teachers': FakeResponse(200, _page(const <Object>[])),
-    });
-
-    await tester.tap(find.bySemanticsLabel('Filters'));
-    await tester.pumpAndSettle();
-
-    expect(inSheet(find.text('MAYA')), findsOneWidget);
-    expect(inSheet(find.text('FARES')), findsOneWidget);
-    expect(inSheet(find.text('Langue anglaise')), findsOneWidget);
-    expect(inSheet(find.text('Philosophie')), findsOneWidget);
-    expect(find.text('Show 2 results'), findsOneWidget);
-
-    await tester.tap(inSheet(find.text('MAYA')));
-    await tester.pumpAndSettle();
-
-    // D-056: the backend decides which packs a Teacher matches.
-    expect(offerQueries(backend), contains('teacher_ids[]=4&per_page=50&page=1'));
-    expect(find.text('1 selected'), findsOneWidget);
-    await tester.tap(find.text('Show 1 result'));
-    await tester.pumpAndSettle();
-
-    expect(find.text(_arabicPack), findsOneWidget);
-    expect(find.text(_philosophyPack), findsNothing);
-  });
-
-  testWidgets(
-      'courses filter locally by teacher and subject id, packs follow the '
-      'backend, and the apply count adds both', (tester) async {
-    final FakeBackend backend = await pumpExplore(tester, <String, FakeResponse>{
-      'GET /courses': FakeResponse(
-        200,
-        _page(
-          <Object>[
-            _course(31, _philosophyCourse, _fares, _philosophy, free: true),
-            _course(32, _englishCourse, _amira, _english),
-          ],
-          facets: _facets(teachers: <Object>[_fares, _amira], subjects: <Object>[_english, _philosophy]),
-        ),
-      ),
-      'GET /offers': FakeResponse(
-        200,
-        _page(
-          <Object>[_offer(7, _arabicPack, _maya), _offer(6, _philosophyPack, _fares)],
-          facets: _facets(teachers: <Object>[_maya, _fares], subjects: <Object>[_english, _philosophy]),
-        ),
-      ),
-      'GET /offers?subject_ids[]=19&per_page=50&page=1':
-          FakeResponse(200, _page(<Object>[_offer(6, _philosophyPack, _fares)])),
-      'GET /offers?teacher_ids[]=2&subject_ids[]=19&per_page=50&page=1':
-          FakeResponse(200, _page(const <Object>[])),
-      'GET /offers?teacher_ids[]=2&per_page=50&page=1':
-          FakeResponse(200, _page(const <Object>[])),
-      'GET /teachers': FakeResponse(200, _page(const <Object>[])),
-    });
-
-    // The Explore subject rail shares its selection with the sheet.
-    await tester.tap(find.byWidgetPredicate(
-      (Widget w) => w is SubjectChip && w.label == 'Philosophie',
-    ));
-    await tester.pumpAndSettle();
-
-    expect(offerQueries(backend), contains('subject_ids[]=19&per_page=50&page=1'));
-    expect(find.text(_philosophyCourse), findsOneWidget);
-    expect(find.text(_englishCourse), findsNothing);
-    expect(find.text(_philosophyPack), findsOneWidget);
-    expect(find.text(_arabicPack), findsNothing);
-
-    await tester.tap(find.bySemanticsLabel('Filters'));
-    await tester.pumpAndSettle();
-    // Teachers of both catalogues, each once.
-    expect(inSheet(find.text('FARES')), findsOneWidget);
-    expect(inSheet(find.text('AMIRA')), findsOneWidget);
-    expect(inSheet(find.text('MAYA')), findsOneWidget);
-    expect(find.text('1 selected'), findsOneWidget);
-    expect(find.text('Show 2 results'), findsOneWidget);
-
-    // "Only free" narrows Courses only: /offers has no access filter.
-    await tester.tap(find.byType(Switch));
-    await tester.pumpAndSettle();
-    expect(find.text('Show 2 results'), findsOneWidget);
-
-    await tester.tap(inSheet(find.text('AMIRA')));
-    await tester.pumpAndSettle();
-    expect(
-      offerQueries(backend),
-      contains('teacher_ids[]=2&subject_ids[]=19&per_page=50&page=1'),
-    );
-    expect(find.text('No results match'), findsOneWidget);
-
-    // Teacher alone: AMIRA's paid Course, and no pack of hers.
-    await tester.tap(find.byType(Switch));
-    await tester.tap(inSheet(find.text('Philosophie')));
-    await tester.pumpAndSettle();
-    expect(offerQueries(backend), contains('teacher_ids[]=2&per_page=50&page=1'));
-    await tester.tap(find.text('Show 1 result'));
-    await tester.pumpAndSettle();
-
-    expect(find.text(_englishCourse), findsOneWidget);
-    expect(find.text(_philosophyCourse), findsNothing);
-    expect(find.text(_philosophyPack), findsNothing);
-    expect(find.text('No offer matches'), findsOneWidget);
-  });
 
   Map<String, FakeResponse> searchCatalog() => <String, FakeResponse>{
         'GET /courses': FakeResponse(
@@ -478,57 +410,6 @@ void main() {
         ),
         'GET /teachers': FakeResponse(200, _page(<Object>[_fares])),
       };
-
-  /// A dropdown row by its label (`pack X` / `course X`); null: any row.
-  Finder suggestion(String? label) => find.byWidgetPredicate(
-        (Widget w) =>
-            w is PressableScale &&
-            (w.semanticLabel ?? '').startsWith('Suggestion ${label ?? ''}') &&
-            (label == null || w.semanticLabel == 'Suggestion $label'),
-      );
-
-  testWidgets('search suggests matching packs and courses and opens them',
-      (tester) async {
-    await pumpExplore(tester, searchCatalog());
-
-    await tester.enterText(find.byType(TextField), 'philo');
-    await tester.pumpAndSettle();
-
-    expect(
-      suggestion('pack $_philosophyPack'),
-      findsOneWidget,
-    );
-    expect(
-      suggestion('course $_philosophyCourse'),
-      findsOneWidget,
-    );
-    expect(suggestion('pack $_arabicPack'), findsNothing);
-    expect(
-      suggestion('course $_englishCourse'),
-      findsNothing,
-    );
-
-    await tester.tap(suggestion('pack $_philosophyPack'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(CourseDetailScreen), findsOneWidget);
-    // The dropdown closed behind the pack page.
-    expect(suggestion(null), findsNothing);
-  });
-
-  testWidgets('search dropdown says when nothing matches and hides when cleared',
-      (tester) async {
-    await pumpExplore(tester, searchCatalog());
-
-    await tester.enterText(find.byType(TextField), 'zzz');
-    await tester.pumpAndSettle();
-    expect(find.text('No course or offer matches this search.'), findsOneWidget);
-
-    await tester.tap(find.bySemanticsLabel('Clear search'));
-    await tester.pumpAndSettle();
-    expect(find.text('No course or offer matches this search.'), findsNothing);
-    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, '');
-  });
 
   test('search forgives Arabic letter variants, harakat and French accents', () {
     expect(searchMatches('الأدب العربي', 'ادب'), isTrue);
@@ -569,7 +450,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(offerQueries(backend), contains('teacher_ids[]=1&per_page=50&page=1'));
-    expect(find.text('Courses by FARES PHILO'), findsOneWidget);
+    expect(find.text('Units by FARES PHILO'), findsOneWidget);
     expect(find.text(_philosophyCourse), findsOneWidget);
     expect(find.text('Offers with FARES PHILO'), findsOneWidget);
     expect(find.text(_philosophyPack), findsOneWidget);
@@ -604,13 +485,15 @@ void main() {
         ),
       ),
     );
-    // Before the detail answers, the list's course can still be bought.
-    expect(find.text('Add to cart'), findsOneWidget);
+    // Before the detail answers, the list's course can still be bought (the
+    // band's buy row and the buy card, D-134).
+    expect(find.text('Add to cart'), findsNWidgets(2));
     await tester.pumpAndSettle();
 
-    expect(find.text('Not available for your level or track'), findsNWidgets(2));
+    // The notice on the band and the sticky bar.
+    expect(find.textContaining('Not available for your level or track'), findsNWidgets(2));
     expect(
-      find.textContaining('This Course is not part of your level and track'),
+      find.textContaining('This Unit is not part of your level and track'),
       findsOneWidget,
     );
     expect(find.text('Add to cart'), findsNothing);
@@ -629,7 +512,8 @@ void main() {
       'My lessons': MyLearningScreen,
       'Live': LivesScreen,
       'Cart': CartScreen,
-      'Account': ProfileScreen,
+      // As on the website, "Account" is the settings (`/account/settings`).
+      'Account': SettingsScreen,
     };
     final List<double> centers = <double>[
       for (final String label in tabs.keys) tester.getCenter(inBar(find.text(label))).dx,
@@ -685,9 +569,159 @@ void main() {
 
     await tester.tap(inBar(find.text('حسابي')));
     await frames(tester);
-    expect(shown(ProfileScreen), findsOneWidget);
+    expect(shown(SettingsScreen), findsOneWidget);
     expect(shown(HomeScreen), findsNothing);
     expect(marker(tester).center.dx, closeTo(account, 1));
+  });
+
+  group('the website catalogue card (`.novaCard`)', () {
+    Course unit(Map<String, Object?> json, {bool owned = false}) =>
+        Course.fromJson(<String, dynamic>{'slug': 'u', 'teacher': _fares, 'subject': _philosophy, ...json}, owned: owned);
+    final Pack pack = Pack.fromJson(<String, dynamic>{
+      'id': 8,
+      'slug': 'pack-bac',
+      'title': 'Pack BAC Sciences',
+      'type': 'trimestre',
+      'price': '5000.00',
+      'courses_reference_total': '10300.00',
+      'courses': <Object>[<String, Object>{'id': 2, 'title': 'Analyse BAC'}],
+    });
+
+    Future<void> pumpCards(WidgetTester tester, List<Widget Function(BuildContext)> cards) async {
+      tester.view.physicalSize = const Size(1170, 9000);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        AppScope(
+          state: AppState.instance,
+          child: MaterialApp(
+            theme: NovaTheme.light,
+            home: Scaffold(
+              body: ListView(children: [for (final card in cards) Builder(builder: (BuildContext c) => card(c))]),
+            ),
+          ),
+        ),
+      );
+      // The Live tag's dot pulses: frames, not settle.
+      await frames(tester);
+    }
+
+    /// The arrow chip of the button that reads [label], if any.
+    Finder chipOf(String label) => find.descendant(
+          of: find.ancestor(of: find.text(label), matching: find.byType(Container)).first,
+          matching: find.byIcon(Icons.arrow_forward_rounded),
+        );
+
+    testWidgets('Units: tag, badge, price and button as on the website', (tester) async {
+      await pumpCards(tester, <Widget Function(BuildContext)>[
+        (BuildContext c) => NovaProductCard.unit(
+              c,
+              unit(<String, Object?>{'id': 1, 'title': 'SVT', 'reference_price': '0.00', 'is_free': true, 'individual_purchase_enabled': false}),
+              onTap: () {},
+            ),
+        (BuildContext c) => NovaProductCard.unit(
+              c,
+              unit(<String, Object?>{'id': 2, 'title': 'Analyse BAC', 'reference_price': '3900.00', 'planned_live_count': 4}),
+              onTap: () {},
+            ),
+        (BuildContext c) => NovaProductCard.unit(
+              c,
+              unit(<String, Object?>{'id': 3, 'title': 'Philo', 'reference_price': '2900.00', 'individual_purchase_enabled': false, 'offer_price_from': '5000.00'}),
+              onTap: () {},
+            ),
+        (BuildContext c) => NovaProductCard.unit(c, unit(<String, Object?>{'id': 4, 'title': 'Mine', 'reference_price': '3000.00'}, owned: true), onTap: () {}),
+      ]);
+
+      // A free Unit: "Free" badge and price (never the raw key), "Get it free" with its chip.
+      expect(find.text('detail.free'), findsNothing);
+      expect(find.text('Free'), findsNWidgets(2));
+      expect(find.text('Get it free'), findsOneWidget);
+      expect(chipOf('Get it free'), findsOneWidget);
+      // The tag is always there: "Recorded", or the Lives.
+      expect(find.text('Recorded'), findsNWidgets(2));
+      expect(find.text('4 Live'), findsOneWidget);
+      // A paid Unit: its price and "See more", without a chip.
+      expect(find.text('3,900 DZD'), findsOneWidget);
+      expect(find.text('See more'), findsNWidgets(2));
+      expect(chipOf('See more'), findsNothing);
+      // Sold through Offers only: the cheapest Offer.
+      expect(find.text('In Offers from'), findsOneWidget);
+      expect(find.text('5,000 DZD'), findsOneWidget);
+      // The Student's own Unit.
+      expect(find.text('Purchased'), findsOneWidget);
+      expect(find.text('Unlocked'), findsOneWidget);
+      expect(find.text('Open Unit'), findsOneWidget);
+    });
+
+    testWidgets('Offers: saving, price and former total, "Buy now"; owned and covered Offers lead to My units', (tester) async {
+      int myUnits = 0;
+      await pumpCards(tester, <Widget Function(BuildContext)>[
+        (BuildContext c) => NovaProductCard.offer(c, pack, onTap: () {}),
+        (BuildContext c) => NovaProductCard.offer(c, pack, ownership: OfferOwnership.owned, onTap: () {}, onAction: () => myUnits++),
+        (BuildContext c) => NovaProductCard.offer(c, pack, ownership: OfferOwnership.covered, onTap: () {}, onAction: () => myUnits++),
+      ]);
+
+      expect(find.text('Save 51%'), findsOneWidget);
+      expect(find.text('5,000 DZD'), findsOneWidget);
+      expect(find.text('10,300 DZD'), findsOneWidget);
+      expect(find.text('Buy now'), findsOneWidget);
+      expect(chipOf('Buy now'), findsOneWidget);
+      expect(find.text('Purchased'), findsOneWidget);
+      expect(find.text('Active'), findsOneWidget);
+      expect(find.text('Units already yours'), findsOneWidget);
+      expect(find.text('My units'), findsNWidgets(2));
+
+      await tester.tap(find.text('My units').first);
+      await tester.tap(find.text('My units').last);
+      expect(myUnits, 2);
+    });
+
+    test('prices read as on the website (en-DZ grouping, DZD)', () {
+      expect(NovaProductCard.formatCardPrice(950), '950 DZD');
+      expect(NovaProductCard.formatCardPrice(5000), '5,000 DZD');
+      expect(NovaProductCard.formatCardPrice(1234567), '1,234,567 DZD');
+    });
+  });
+
+  group('what the Home shows (website `AccountHome`)', () {
+    Course unit(int id, {bool free = false}) => Course.fromJson(<String, dynamic>{'id': id, 'title': 'U$id', 'is_free': free});
+    Pack offer(int id, List<int> units) => Pack.fromJson(<String, dynamic>{
+          'id': id,
+          'title': 'O$id',
+          'price': '1000.00',
+          'courses': <Object>[for (final int u in units) <String, Object>{'id': u, 'title': 'U$u'}],
+        });
+    final List<Course> catalogue = <Course>[for (int i = 1; i <= 12; i++) unit(i)];
+
+    test('owned Units first, then others to fill rows of three (six cards at least)', () {
+      HomeSelection home = HomeSelection.of(owned: <Course>[unit(1), unit(2)], catalogue: catalogue, offers: const <Pack>[]);
+      expect(home.ownedUnits.map((Course c) => c.id), <int>[1, 2]);
+      expect(home.otherUnits.map((Course c) => c.id), <int>[3, 4, 5, 6]);
+      expect(home.hasOffers, isFalse);
+
+      home = HomeSelection.of(owned: <Course>[unit(1), unit(2), unit(3), unit(4)], catalogue: catalogue, offers: const <Pack>[]);
+      expect(home.otherUnits, hasLength(5));
+
+      home = HomeSelection.of(owned: const <Course>[], catalogue: catalogue, offers: const <Pack>[]);
+      expect(home.otherUnits, hasLength(6));
+      expect(HomeSelection.of(owned: const <Course>[], catalogue: const <Course>[], offers: const <Pack>[]).hasUnits, isFalse);
+    });
+
+    test('an Offer is the Student\'s when held; one whose Units are all paid is covered', () {
+      final List<Course> owned = <Course>[unit(1), unit(2, free: true)];
+      final List<Pack> offers = <Pack>[offer(10, <int>[1]), offer(11, <int>[2]), offer(12, <int>[1, 3]), offer(13, <int>[5])];
+
+      // `owned_offer_ids` lists the Offers the Student holds.
+      HomeSelection home = HomeSelection.of(owned: owned, catalogue: catalogue, offers: offers, ownedOfferIds: <int>{13});
+      expect(home.ownedOffers.map((Pack p) => p.id), <int>[13]);
+      // Offer 10 holds only a paid Unit: covered; a free enrolment (11) covers nothing.
+      expect(home.otherOffers.map(((Pack, bool) e) => (e.$1.id, e.$2)), <(int, bool)>[(10, true), (11, false), (12, false)]);
+
+      // Without the list, the website's older rule: all Units paid = the Student's.
+      home = HomeSelection.of(owned: owned, catalogue: catalogue, offers: offers);
+      expect(home.ownedOffers.map((Pack p) => p.id), <int>[10]);
+      expect(home.otherOffers.map(((Pack, bool) e) => e.$1.id), <int>[11, 12, 13]);
+    });
   });
 
   testWidgets('the Unit page of a finished Unit shows every Lesson done', (tester) async {
@@ -729,35 +763,24 @@ void main() {
     expect(find.text('Video watched. Well done!'), findsOneWidget);
   });
 
-  test('DA prices use thin-space grouping', () {
-    expect(formatDaPrice(18900), '\u200e18\u2009900 DA');
-    expect(formatDaPrice(4800), '\u200e4\u2009800 DA');
-    expect(formatDaPrice(950), '\u200e950 DA');
+  test('prices are written as on the website (formatPrice)', () {
+    expect(formatDaPrice(18900), '18,900 DZD');
+    expect(formatDaPrice(4800), '4,800 DZD');
+    expect(formatDaPrice(950), '950 DZD');
   });
 
-  testWidgets('DA prices keep their reading order in Arabic', (tester) async {
-    Future<List<double>> glyphStarts(TextDirection direction) async {
-      final GlobalKey key = GlobalKey();
-      await tester.pumpWidget(
-        Directionality(
-          textDirection: direction,
-          child: Center(child: Text(formatDaPrice(4800), key: key)),
-        ),
-      );
-      final RenderParagraph paragraph =
-          tester.renderObject<RenderParagraph>(find.byKey(key));
-      // Offsets of "4", the first digit of "800", and "D".
-      return <int>[1, 3, 7]
-          .map(
-            (int i) => paragraph
-                .getOffsetForCaret(TextPosition(offset: i), Rect.zero)
-                .dx,
-          )
-          .toList();
-    }
-
-    final List<double> rtl = await glyphStarts(TextDirection.rtl);
-    expect(rtl[0], lessThan(rtl[1]));
-    expect(rtl[1], lessThan(rtl[2]));
+  testWidgets('in Arabic a price reads "DZD 4,800", the digit groups in order, as on the website', (tester) async {
+    final GlobalKey key = GlobalKey();
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.rtl,
+        child: Center(child: Text(formatDaPrice(4800), key: key)),
+      ),
+    );
+    final RenderParagraph paragraph = tester.renderObject<RenderParagraph>(find.byKey(key));
+    double left(int i) => paragraph.getBoxesForSelection(TextSelection(baseOffset: i, extentOffset: i + 1)).first.left;
+    // "4,800 DZD": "4" at 0, "8" at 2, "D" at 6.
+    expect(left(6), lessThan(left(0)));
+    expect(left(0), lessThan(left(2)));
   });
 }

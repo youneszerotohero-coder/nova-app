@@ -49,20 +49,15 @@ class NovaPageHeader extends StatelessWidget {
   /// Faint glyph in the band's corner.
   final IconData? watermark;
 
-  /// The band's colours as a plain gradient, for small blue surfaces.
-  static LinearGradient gradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color(0xFF3F72EA), NovaColors.accent, Color(0xFF173FA8)],
-  );
-
   @override
   Widget build(BuildContext context) {
     final bool showBack = this.showBack ??
         (ModalRoute.of(context)?.impliesAppBarDismissal ?? false);
 
-    // As in the website's Student space: the top bar, then the blue band as
-    // a rounded card (`.hxHead.hxBand`) with its eyebrow, title and lead.
+    // As in the website's Student space: the top bar, then (25 px under it,
+    // `.studentMain`) the blue band as a rounded card (`.hxHead.hxBand`:
+    // 26 / 20 px padding) with its eyebrow, title, lead and actions, 14 px
+    // apart (`.hxHeadCopy`; the actions 6 px more).
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -72,11 +67,12 @@ class NovaPageHeader extends StatelessWidget {
               ? null
               : Row(mainAxisSize: MainAxisSize.min, children: actions!),
         ),
+        if (!showBack) const SizedBox(height: 25),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14),
           child: Entrance(
             child: HeroBand(
-              padding: EdgeInsets.fromLTRB(22, 24, 22, bottom == null ? 26 : 20),
+              padding: const EdgeInsets.fromLTRB(20, 26, 20, 26),
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
@@ -91,21 +87,26 @@ class NovaPageHeader extends StatelessWidget {
                     children: [
                       if (kicker != null) ...[
                         HeroEyebrow(kicker!),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 14),
                       ],
                       HeroTitle(title, size: 32, maxLines: 2),
                       if (lead != null) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 14),
+                        // `.hxLead` on the band: 16 px, line-height 1.7,
+                        // `--hx-on-blue-2`.
                         Text(
                           lead!,
-                          style: NovaTypography.textTheme.bodyLarge!.copyWith(
-                            color: Colors.white.withValues(alpha: 0.86),
-                            fontWeight: FontWeight.w500,
+                          style: const TextStyle(
+                            fontFamily: NovaTypography.body,
+                            fontFamilyFallback: NovaTypography.fallback,
+                            fontSize: 16,
+                            height: 1.7,
+                            color: Color(0xD6FFFFFF),
                           ),
                         ),
                       ],
                       if (bottom != null) ...[
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 20),
                         bottom!,
                       ],
                     ],
@@ -158,12 +159,12 @@ class FrostedIconButton extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.96),
                 shape: BoxShape.circle,
-                border: Border.all(color: NovaColors.ink950.withValues(alpha: 0.08)),
+                border: Border.all(color: NovaColors.ink.withValues(alpha: 0.08)),
                 boxShadow: const [
                   BoxShadow(color: Color(0x33091224), blurRadius: 12, offset: Offset(0, 3)),
                 ],
               ),
-              child: Icon(icon, size: size * 0.46, color: NovaColors.ink950),
+              child: Icon(icon, size: size * 0.46, color: NovaColors.ink),
             ),
             if (badge > 0)
               Positioned(

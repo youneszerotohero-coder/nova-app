@@ -100,7 +100,7 @@ class _LivesScreenState extends State<LivesScreen> {
             for (int i = 0; i < shown.length; i++)
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                child: Entrance(delay: Duration(milliseconds: 60 * i), child: LiveTicket(live: shown[i])),
+                child: Entrance(delay: Duration(milliseconds: 60 * i), child: LiveTicket(live: shown[i], index: i)),
               ),
         ],
       ),
@@ -108,7 +108,8 @@ class _LivesScreenState extends State<LivesScreen> {
   }
 }
 
-/// `.livesReplayNote`: where finished Lives are now.
+/// `.livesReplayNote`: where finished Lives are now (the replay tone tile,
+/// ink-2 text, the blue "My units" link).
 class _MissedNote extends StatelessWidget {
   const _MissedNote({required this.onTap});
 
@@ -120,36 +121,36 @@ class _MissedNote extends StatelessWidget {
       onTap: onTap,
       semanticLabel: context.tr('lives.missedTitle'),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: NovaColors.paperCard,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(color: NovaColors.borderOnLight),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(color: NovaColors.accentMist, borderRadius: BorderRadius.circular(12)),
-              child: Icon(Icons.play_arrow_rounded, color: NovaColors.accent),
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(color: NovaColors.replayBg, borderRadius: BorderRadius.circular(13)),
+              child: Icon(Icons.play_arrow_rounded, color: NovaColors.replay),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(context.tr('lives.missedTitle'), style: NovaTypography.textTheme.titleMedium),
+                  Text(context.tr('lives.missedTitle'), style: NovaTypography.textTheme.titleMedium!.copyWith(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 2),
-                  Text(context.tr('lives.missedText'), style: NovaTypography.muted(NovaTypography.textTheme.bodySmall!)),
+                  Text(context.tr('lives.missedText'), style: NovaTypography.textTheme.bodyMedium!.copyWith(fontSize: 14, color: NovaColors.textBody)),
                   const SizedBox(height: 8),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.arrow_forward_rounded, size: 16, color: NovaColors.accent),
+                      Text(context.tr('tab.myCourses'), style: NovaTypography.textTheme.labelLarge!.copyWith(color: NovaColors.accent, fontWeight: FontWeight.w800)),
                       const SizedBox(width: 6),
-                      Text(context.tr('tab.myCourses'), style: NovaTypography.textTheme.labelLarge!.copyWith(color: NovaColors.accent)),
+                      Icon(Icons.arrow_forward_rounded, size: 16, color: NovaColors.accent),
                     ],
                   ),
                 ],
@@ -162,17 +163,27 @@ class _MissedNote extends StatelessWidget {
   }
 }
 
-/// The website's Live ticket: a navy card, its status chip and viewers, the
-/// day's icon, then the title, the Unit and the time.
+/// The website's Live ticket (`.liveTicket`, `LiveTicket` in `profile.tsx`):
+/// a near-black card, its status chip and viewers, the glowing round icon,
+/// then the title, the Unit in the ticket's tone and the time. A running
+/// Live is red; a coming one blue, or amber every other ticket.
 class LiveTicket extends StatelessWidget {
-  const LiveTicket({super.key, required this.live});
+  const LiveTicket({super.key, required this.live, this.index = 0});
 
   final LiveSession live;
+
+  /// Place in the list: odd tickets of coming Lives are amber.
+  final int index;
 
   @override
   Widget build(BuildContext context) {
     final bool isLive = live.status == LiveStatus.live;
     final bool canEnter = isLive || live.waitingRoomOpen;
+    final bool amber = !isLive && (index.isOdd || live.title.toLowerCase().contains('ai'));
+    // `.studentLiveCardBadge` / `.studentLiveCardActionBtn` and the accent
+    // line (`.studentLiveCardTitleAccent`) of each tone.
+    final Color tone = isLive ? const Color(0xFFEF4444) : amber ? const Color(0xFFF59E0B) : const Color(0xFF2563EB);
+    final Color accentText = isLive ? const Color(0xFFF87171) : amber ? const Color(0xFFFBBF24) : const Color(0xFF60A5FA);
     return PressableScale(
       onTap: () {
         if (canEnter) {
@@ -183,11 +194,12 @@ class LiveTicket extends StatelessWidget {
       },
       semanticLabel: live.title,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
         decoration: BoxDecoration(
-          color: const Color(0xFF0E1530),
+          color: const Color(0xFF0C121E),
           borderRadius: BorderRadius.circular(26),
-          boxShadow: const [BoxShadow(offset: Offset(0, 20), blurRadius: 40, spreadRadius: -24, color: Color(0x8C10276B))],
+          border: Border.all(color: const Color(0x14FFFFFF)),
+          boxShadow: const [BoxShadow(offset: Offset(0, 16), blurRadius: 36, color: Color(0x59000000))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -197,13 +209,14 @@ class LiveTicket extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: isLive ? const Color(0xFFE5484D) : const Color(0xFFF2A33A),
+                    color: tone,
                     borderRadius: BorderRadius.circular(10),
+                    boxShadow: [BoxShadow(offset: const Offset(0, 4), blurRadius: 16, color: tone.withValues(alpha: 0.45))],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(isLive ? Icons.sensors_rounded : Icons.event_rounded, size: 14, color: Colors.white),
+                      Icon(isLive ? Icons.sensors_rounded : amber ? Icons.schedule_rounded : Icons.event_rounded, size: 14, color: Colors.white),
                       const SizedBox(width: 5),
                       Text(
                         isLive ? context.tr('lives.onNow') : context.tr('lives.scheduled'),
@@ -230,20 +243,33 @@ class LiveTicket extends StatelessWidget {
             const SizedBox(height: 18),
             Center(
               child: Container(
-                width: 56,
-                height: 56,
+                width: 64,
+                height: 64,
                 decoration: BoxDecoration(
-                  color: isLive ? const Color(0xFFE5484D) : const Color(0xFFF2A33A),
+                  color: tone,
                   shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(blurRadius: 22, color: (isLive ? const Color(0xFFE5484D) : const Color(0xFFF2A33A)).withValues(alpha: 0.45))],
+                  boxShadow: [
+                    BoxShadow(blurRadius: 32, color: tone.withValues(alpha: 0.65)),
+                    BoxShadow(blurRadius: 64, color: tone.withValues(alpha: 0.25)),
+                  ],
                 ),
-                child: Icon(isLive ? Icons.play_arrow_rounded : Icons.calendar_month_rounded, size: 28, color: Colors.white),
+                child: Icon(isLive ? Icons.sensors_rounded : Icons.calendar_month_rounded, size: 28, color: Colors.white),
               ),
             ),
             const SizedBox(height: 18),
-            Text(live.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: NovaTypography.textTheme.titleLarge!.copyWith(color: Colors.white)),
-            const SizedBox(height: 2),
-            Text(live.course, maxLines: 1, overflow: TextOverflow.ellipsis, style: NovaTypography.textTheme.titleMedium!.copyWith(color: NovaColors.yellow)),
+            Text(
+              live.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: NovaTypography.textTheme.titleLarge!.copyWith(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800, height: 1.18),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              live.course,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: NovaTypography.textTheme.titleLarge!.copyWith(color: accentText, fontSize: 22, fontWeight: FontWeight.w800, height: 1.18),
+            ),
             if (live.scheduledLabel != null) ...[
               const SizedBox(height: 8),
               Row(

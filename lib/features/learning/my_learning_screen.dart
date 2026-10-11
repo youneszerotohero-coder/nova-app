@@ -11,13 +11,15 @@ import '../../core/widgets/nova_page_header.dart';
 import '../../core/widgets/nova_scene_image.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../data/models.dart';
-import '../explore/explore_screen.dart';
+import '../catalog/offers_catalog_screen.dart';
+import '../catalog/units_catalog_screen.dart';
 import 'learning_widgets.dart';
 import 'open_course.dart';
 
-/// "My lessons" tab, the website's My units (D-132): a short "how it works"
-/// strip, then one card per Unit with its progress, the next Lesson and one
-/// big button that opens it (video, PDF and quiz on one page).
+/// "My lessons" tab, the website's My units (D-132): the band with its two
+/// ways to the catalogue (Units, Offers), a short "how it works" strip, then
+/// one card per Unit with its progress, the next Lesson and one big button
+/// that opens it (video, PDF and quiz on one page).
 class MyLearningScreen extends StatelessWidget {
   const MyLearningScreen({super.key});
 
@@ -36,6 +38,26 @@ class MyLearningScreen extends StatelessWidget {
             kicker: context.tr('units.eyebrow'),
             title: context.tr('units.title'),
             lead: context.tr('units.lead'),
+            bottom: Row(
+              children: [
+                Expanded(
+                  child: _DiscoveryButton(
+                    label: context.tr('units.getCourse'),
+                    icon: Icons.menu_book_outlined,
+                    dark: true,
+                    onTap: () => _push(context, const UnitsCatalogScreen()),
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: _DiscoveryButton(
+                    label: context.tr('units.getPack'),
+                    icon: Icons.auto_awesome_outlined,
+                    onTap: () => _push(context, const OffersCatalogScreen()),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           HowToStrip(
@@ -56,7 +78,7 @@ class MyLearningScreen extends StatelessWidget {
                 action: NovaButton(
                   label: context.tr('units.browse'),
                   chipIcon: Icons.arrow_forward_rounded,
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const Scaffold(body: ExploreScreen()))),
+                  onTap: () => _push(context, const UnitsCatalogScreen()),
                 ),
               ),
             )
@@ -70,6 +92,79 @@ class MyLearningScreen extends StatelessWidget {
                 ),
               ),
         ],
+      ),
+    );
+  }
+
+  static void _push(BuildContext context, Widget page) =>
+      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+}
+
+/// `.courseDiscoveryActions` on phones: two equal buttons, 46 px high,
+/// radius 12: "See the Units" dark (with the blue chip) and "See the
+/// Offers" white.
+class _DiscoveryButton extends StatelessWidget {
+  const _DiscoveryButton({required this.label, required this.icon, required this.onTap, this.dark = false});
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool dark;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color ink = dark ? Colors.white : const Color(0xFF4F5963);
+    return PressableScale(
+      onTap: onTap,
+      pressedScale: 0.96,
+      semanticLabel: label,
+      child: Container(
+        height: 46,
+        padding: EdgeInsetsDirectional.fromSTEB(14, 0, dark ? 6 : 14, 0),
+        decoration: BoxDecoration(
+          color: dark ? const Color(0xFF27292D) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: dark ? const Color(0xFF27292D) : const Color(0xFFDCE2E6)),
+          boxShadow: const [BoxShadow(offset: Offset(0, 8), blurRadius: 20, color: Color(0x0D28313B))],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 16, color: ink),
+                  const SizedBox(width: 7),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: NovaTypography.display,
+                        fontFamilyFallback: NovaTypography.fallback,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12.5,
+                        height: 1.2,
+                        color: ink,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (dark) ...[
+              const SizedBox(width: 6),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(color: NovaColors.blue, borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.north_east_rounded, size: 15, color: NovaColors.skyStrong),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -151,10 +246,10 @@ class UnitProgressCard extends StatelessWidget {
                             'done': course.completedLessons.toString(),
                             'total': course.lessonsCount.toString(),
                           }),
-                          style: NovaTypography.textTheme.labelMedium!.copyWith(color: NovaColors.textMuted),
+                          style: NovaTypography.textTheme.labelMedium!.copyWith(color: NovaColors.textBody),
                         ),
                       ),
-                      Text('‎$percent%', style: NovaTypography.textTheme.labelMedium!.copyWith(color: NovaColors.textMuted)),
+                      Text('‎$percent%', style: NovaTypography.textTheme.labelMedium!.copyWith(color: NovaColors.textBody)),
                     ],
                   ),
                   if (resume != null) ...[

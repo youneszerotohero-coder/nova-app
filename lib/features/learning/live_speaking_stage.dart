@@ -185,7 +185,7 @@ class _LiveSpeakingStageState extends State<LiveSpeakingStage> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.volume_up_rounded, size: 18, color: NovaColors.ink950),
+                const Icon(Icons.volume_up_rounded, size: 18, color: NovaColors.ink),
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
@@ -194,7 +194,7 @@ class _LiveSpeakingStageState extends State<LiveSpeakingStage> {
                       fontFamily: 'Geist',
                       fontWeight: FontWeight.w700,
                       fontSize: 12.5,
-                      color: NovaColors.ink950,
+                      color: NovaColors.ink,
                     ),
                   ),
                 ),
