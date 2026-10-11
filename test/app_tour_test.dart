@@ -17,7 +17,9 @@ import 'package:nova_mobile/features/auth/login_screen.dart';
 import 'package:nova_mobile/features/auth/register_screen.dart';
 import 'package:nova_mobile/features/detail/course_detail_screen.dart';
 import 'package:nova_mobile/features/detail/teacher_detail_screen.dart';
-import 'package:nova_mobile/features/explore/explore_screen.dart';
+import 'package:nova_mobile/features/catalog/offers_catalog_screen.dart';
+import 'package:nova_mobile/features/catalog/teachers_screen.dart';
+import 'package:nova_mobile/features/catalog/units_catalog_screen.dart';
 import 'package:nova_mobile/features/auth/auth_gateway_screen.dart';
 import 'package:nova_mobile/features/learning/learn_screen.dart';
 import 'package:nova_mobile/features/learning/lesson_screen.dart';
@@ -106,7 +108,7 @@ void main() {
   goldenTestWidgets('tour: lesson', (tester) => shoot(tester, '13_lesson', LessonScreen(course: ValueNotifier<Course>(ownedCourse()), index: 2), scaffold: false));
   goldenTestWidgets('tour: lesson from live', (tester) => shoot(tester, '13b_lesson_live', LessonScreen(course: ValueNotifier<Course>(ownedCourse()), index: 4), scaffold: false));
   goldenTestWidgets('tour: lives', (tester) => shoot(tester, '14_lives', const ShellScreen(initialIndex: ShellScreen.lives), scaffold: false));
-  goldenTestWidgets('tour: explore', (tester) => shoot(tester, '20_explore', const ExploreScreen()));
+  goldenTestWidgets('tour: units catalogue', (tester) => shoot(tester, '20_units_catalog', const UnitsCatalogScreen(), scaffold: false));
   goldenTestWidgets('tour: unit detail', (tester) => shoot(tester, '21_unit_detail', CourseDetailScreen(course: HomeData.popularCourses.first), scaffold: false));
   goldenTestWidgets('tour: teacher', (tester) => shoot(tester, '22_teacher', TeacherDetailScreen(teacher: HomeData.teachers.first), scaffold: false));
   goldenTestWidgets('tour: cart', (tester) => shoot(tester, '30_cart', const ShellScreen(initialIndex: ShellScreen.cart), scaffold: false));
@@ -116,4 +118,12 @@ void main() {
   goldenTestWidgets('tour: settings', (tester) => shoot(tester, '43_settings', const SettingsScreen(), scaffold: false));
   goldenTestWidgets('tour: notifications', (tester) => shoot(tester, '44_notifications', const NotificationsScreen(), scaffold: false));
   goldenTestWidgets('tour: home dark', (tester) => shoot(tester, '90_home_dark', const ShellScreen(), dark: true, scaffold: false));
+  goldenTestWidgets('tour: offers catalogue', (tester) => shoot(tester, '20b_offers_catalog', const OffersCatalogScreen(), scaffold: false));
+  goldenTestWidgets('tour: teachers', (tester) => shoot(tester, '23_teachers', const TeachersScreen(), scaffold: false));
+  goldenTestWidgets('tour: units catalogue dark', (tester) => shoot(tester, '91_units_catalog_dark', const UnitsCatalogScreen(), dark: true, scaffold: false));
+  goldenTestWidgets('tour: cart dark', (tester) => shoot(tester, '92_cart_dark', const ShellScreen(initialIndex: ShellScreen.cart), dark: true, scaffold: false));
+  goldenTestWidgets('tour: account dark', (tester) => shoot(tester, '93_account_dark', const ShellScreen(initialIndex: ShellScreen.account), dark: true, scaffold: false));
+  goldenTestWidgets('tour: offer detail', (tester) => shoot(tester, '21b_offer_detail', CourseDetailScreen.pack(pack: HomeData.featuredPacks.first), scaffold: false));
+  goldenTestWidgets('tour: unit detail dark', (tester) => shoot(tester, '94_unit_detail_dark', CourseDetailScreen(course: HomeData.popularCourses.first), dark: true, scaffold: false));
+  goldenTestWidgets('tour: teacher dark', (tester) => shoot(tester, '95_teacher_dark', TeacherDetailScreen(teacher: HomeData.teachers.first), dark: true, scaffold: false));
 }

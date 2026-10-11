@@ -7,7 +7,8 @@ import 'fixtures/fixture_app.dart';
 import 'nova_font_loader.dart';
 
 /// Generates design-snapshot goldens of the Student home (D-133) at a phone
-/// viewport, then the menu, Explore and its filters reached from it. Run with:
+/// viewport, then the menu, the Offers catalogue and its filters reached from
+/// it. Run with:
 ///   flutter test --update-goldens
 void main() {
   setUpAll(loadNovaFonts);
@@ -47,15 +48,17 @@ void main() {
       matchesGoldenFile('goldens/menu_open.png'),
     );
 
-    await tester.tap(find.bySemanticsLabel('Close'));
+    // The panel's close square (the backdrop is labelled "Close" too).
+    await tester.tap(find.bySemanticsLabel('Close').last);
     await pumpFrames(tester);
 
-    // Search and filtering live on Explore, opened from "See the Offers".
+    // Search and filtering live on the catalogues: the Offers one opens
+    // from "See the Offers".
     await tester.tap(find.text('See the Offers'));
     await settleImages(tester, looping: true);
     await expectLater(
       find.byType(NovaApp),
-      matchesGoldenFile('goldens/explore_top.png'),
+      matchesGoldenFile('goldens/offers_catalog_top.png'),
     );
 
     await tester.tap(find.bySemanticsLabel('Filters'));

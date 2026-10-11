@@ -6,12 +6,11 @@ import 'package:nova_mobile/core/widgets/success_burst.dart';
 import 'package:nova_mobile/core/widgets/nova_scene_image.dart';
 import 'package:nova_mobile/data/commerce_store.dart';
 import 'package:nova_mobile/features/account/notifications_screen.dart';
-import 'package:nova_mobile/features/account/profile_screen.dart';
 import 'package:nova_mobile/features/cart/checkout_screen.dart';
 import 'package:nova_mobile/features/detail/course_detail_screen.dart';
 import 'package:nova_mobile/features/cart/cart_screen.dart';
 import 'package:nova_mobile/features/detail/teacher_detail_screen.dart';
-import 'package:nova_mobile/features/explore/explore_screen.dart';
+import 'package:nova_mobile/features/catalog/units_catalog_screen.dart';
 import 'package:nova_mobile/features/home/home_screen.dart';
 import 'package:nova_mobile/data/models.dart';
 import 'package:nova_mobile/features/account/wallet_screen.dart';
@@ -55,11 +54,12 @@ void main() {
     await settleImages(tester, looping: looping);
   }
 
-  goldenTestWidgets('explore screen snapshot', (tester) async {
-    await pumpScreen(tester, const ExploreScreen());
+  goldenTestWidgets('units catalogue snapshot', (tester) async {
+    // Unit cards with Lives pulse their dot: frames, not settle.
+    await pumpScreen(tester, const UnitsCatalogScreen(), looping: true);
     await expectLater(
-      find.byType(ExploreScreen),
-      matchesGoldenFile('goldens/screen_explore.png'),
+      find.byType(UnitsCatalogScreen),
+      matchesGoldenFile('goldens/screen_units_catalog.png'),
     );
   });
 
@@ -141,14 +141,6 @@ void main() {
     );
   });
 
-  goldenTestWidgets('profile snapshot', (tester) async {
-    await pumpScreen(tester, const ProfileScreen());
-    await expectLater(
-      find.byType(ProfileScreen),
-      matchesGoldenFile('goldens/screen_profile.png'),
-    );
-  });
-
   goldenTestWidgets('notifications snapshot', (tester) async {
     await pumpScreen(tester, const NotificationsScreen());
     await expectLater(
@@ -182,9 +174,11 @@ void main() {
   });
 
   goldenTestWidgets('teacher detail snapshot', (tester) async {
+    // Its Unit cards pulse their live dot: frames, not settle.
     await pumpScreen(
       tester,
       TeacherDetailScreen(teacher: HomeData.teachers.first),
+      looping: true,
     );
     await expectLater(
       find.byType(TeacherDetailScreen),
