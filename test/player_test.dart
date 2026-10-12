@@ -336,6 +336,38 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     });
 
+    testWidgets('D-137: the controls read left to right in Arabic and the bar follows the finger, seeking on release', (tester) async {
+      backend = FakeBackend(<String, FakeResponse>{
+        'POST /lessons/0/playback': FakeResponse(200, <String, Object?>{'data': _authorization()}),
+        'PUT /lessons/0/progress': const FakeResponse(200, <String, Object?>{'data': <String, Object?>{}}),
+      });
+      await pumpLesson(tester, widevine: 'L1');
+      await tester.tap(find.text('Play'));
+      await tester.pump(const Duration(milliseconds: 100));
+      AppScope.of(tester.element(find.byType(LessonScreen))).setLang(NovaLang.ar);
+      await tester.pump(const Duration(milliseconds: 100));
+      players.emit(<String, Object?>{'event': 'position', 'position': 312000, 'duration': 1620400, 'buffered': 330000, 'liveOffset': -1});
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // Media controls are never mirrored: the clock and the bar run left to right.
+      final Finder slider = find.byType(Slider);
+      expect(Directionality.of(tester.element(slider)), TextDirection.ltr);
+      expect(find.text('5:12 / 27:00'), findsOneWidget);
+
+      // The thumb follows the finger; the picture seeks once, on release.
+      final Rect bar = tester.getRect(slider);
+      final TestGesture drag = await tester.startGesture(Offset(bar.left + bar.width * 0.2, bar.center.dy));
+      await drag.moveTo(Offset(bar.left + bar.width * 0.5, bar.center.dy));
+      await tester.pump();
+      expect(tester.widget<Slider>(slider).value, greaterThan(312000));
+      expect((players.commands[players.lastId] ?? <MethodCall>[]).where((MethodCall c) => c.method == 'seekTo'), isEmpty);
+      await drag.up();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect((players.commands[players.lastId] ?? <MethodCall>[]).where((MethodCall c) => c.method == 'seekTo'), hasLength(1));
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
+    });
+
     testWidgets('mode A: iPhone plays the FairPlay HLS stream (D-118)', (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       try {

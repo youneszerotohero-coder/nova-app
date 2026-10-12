@@ -903,7 +903,7 @@ class PlayerWatermark extends StatelessWidget {
   }
 }
 
-class _Controls extends StatelessWidget {
+class _Controls extends StatefulWidget {
   const _Controls({
     required this.state,
     required this.duration,
@@ -927,90 +927,106 @@ class _Controls extends StatelessWidget {
   final VoidCallback? onFullscreen;
 
   @override
-  Widget build(BuildContext context) {
-    final double total = duration.inMilliseconds.toDouble();
-    final double position = state.position.inMilliseconds.clamp(0, total).toDouble();
+  State<_Controls> createState() => _ControlsState();
+}
 
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0x00000000), Color(0x00000000), Color(0xAA000000)],
-          stops: [0, 0.55, 1],
+/// Media controls read left to right in every language (Material: playback and its timeline are never mirrored):
+/// in Arabic the clock showed the duration first and the bar filled from the right (D-137).
+class _ControlsState extends State<_Controls> {
+  /// Where the finger is on the bar while dragging; the picture seeks on release.
+  double? _drag;
+
+  @override
+  Widget build(BuildContext context) {
+    final double total = widget.duration.inMilliseconds.toDouble();
+    final double position = _drag ?? widget.state.position.inMilliseconds.clamp(0, total).toDouble();
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0x00000000), Color(0x00000000), Color(0xAA000000)],
+            stops: [0, 0.55, 1],
+          ),
         ),
-      ),
-      child: Stack(
-        children: [
-          Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _RoundButton(icon: Icons.replay_10_rounded, label: '-10 s', onTap: onBack),
-                const SizedBox(width: 22),
-                _RoundButton(
-                  icon: state.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                  label: state.playing ? 'Pause' : 'Play',
-                  size: 60,
-                  onTap: onPlay,
-                ),
-                const SizedBox(width: 22),
-                _RoundButton(icon: Icons.forward_10_rounded, label: '+10 s', onTap: onForward),
-              ],
+        child: Stack(
+          children: [
+            Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _RoundButton(icon: Icons.replay_10_rounded, label: '-10 s', onTap: widget.onBack),
+                  const SizedBox(width: 22),
+                  _RoundButton(
+                    icon: widget.state.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    label: widget.state.playing ? 'Pause' : 'Play',
+                    size: 60,
+                    onTap: widget.onPlay,
+                  ),
+                  const SizedBox(width: 22),
+                  _RoundButton(icon: Icons.forward_10_rounded, label: '+10 s', onTap: widget.onForward),
+                ],
+              ),
             ),
-          ),
-          Positioned(
-            left: 12,
-            right: 6,
-            bottom: 4,
-            child: Row(
-              children: [
-                Text(
-                  '${clockLabel(state.position)} / ${clockLabel(duration)}',
-                  style: const TextStyle(
-                    fontFamily: 'Geist',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 11,
-                    color: Colors.white,
-                  ),
-                ),
-                Expanded(
-                  child: SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 3,
-                      activeTrackColor: NovaColors.accent,
-                      inactiveTrackColor: Colors.white.withValues(alpha: 0.28),
-                      thumbColor: Colors.white,
-                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                      overlayShape: SliderComponentShape.noOverlay,
-                    ),
-                    child: Slider(
-                      value: total <= 0 ? 0 : position,
-                      max: total <= 0 ? 1 : total,
-                      onChanged: total <= 0 ? null : (_) {},
-                      onChangeEnd: (double v) => onSeek(Duration(milliseconds: v.round())),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  onPressed: onSettings,
-                  tooltip: context.tr('player.settings'),
-                  icon: const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
-                ),
-                if (onFullscreen != null)
-                  IconButton(
-                    onPressed: onFullscreen,
-                    tooltip: context.tr('player.fullscreen'),
-                    icon: Icon(
-                      fullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+            Positioned(
+              left: 12,
+              right: 6,
+              bottom: 4,
+              child: Row(
+                children: [
+                  Text(
+                    '${clockLabel(Duration(milliseconds: position.round()))} / ${clockLabel(widget.duration)}',
+                    style: const TextStyle(
+                      fontFamily: 'Geist',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
                       color: Colors.white,
-                      size: 22,
                     ),
                   ),
-              ],
+                  Expanded(
+                    child: SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 3,
+                        activeTrackColor: NovaColors.accent,
+                        inactiveTrackColor: Colors.white.withValues(alpha: 0.28),
+                        thumbColor: Colors.white,
+                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                        overlayShape: SliderComponentShape.noOverlay,
+                      ),
+                      child: Slider(
+                        value: total <= 0 ? 0 : position,
+                        max: total <= 0 ? 1 : total,
+                        onChanged: total <= 0 ? null : (double v) => setState(() => _drag = v),
+                        onChangeEnd: (double v) {
+                          setState(() => _drag = null);
+                          widget.onSeek(Duration(milliseconds: v.round()));
+                        },
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: widget.onSettings,
+                    tooltip: context.tr('player.settings'),
+                    icon: const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
+                  ),
+                  if (widget.onFullscreen != null)
+                    IconButton(
+                      onPressed: widget.onFullscreen,
+                      tooltip: context.tr('player.fullscreen'),
+                      icon: Icon(
+                        widget.fullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
