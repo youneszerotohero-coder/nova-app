@@ -46,7 +46,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     return ListenableBuilder(
       listenable: chat,
       builder: (BuildContext context, _) {
-        final int unread = chat.unreadTotal;
+        final int unread = chat.unreadBadgeTotal;
         return Scaffold(
           backgroundColor: NovaColors.paper,
           body: RefreshIndicator(

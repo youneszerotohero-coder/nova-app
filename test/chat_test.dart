@@ -62,6 +62,15 @@ void main() {
   }
 
   group('ChatStore', () {
+    test('a muted chat keeps its count but stays out of the badge total', () async {
+      final ChatStore store = await started(FakeBackend(<String, FakeResponse>{}), rooms: <Map<String, Object?>>[
+        roomJson(id: 3, name: 'Maths', unread: 4, lastMessage: lastJson(30, 'a', createdAt: '2026-10-11T07:00:00+00:00')),
+        <String, Object?>{...roomJson(id: 5, name: 'Physique', unread: 2, lastMessage: lastJson(50, 'b', createdAt: '2026-10-11T08:00:00+00:00')), 'muted': true},
+      ]);
+      expect(store.unreadTotal, 6);
+      expect(store.unreadBadgeTotal, 4);
+    });
+
     test('rooms: the public room first, then the latest conversation; unread total', () async {
       final ChatStore store = await started(FakeBackend(<String, FakeResponse>{}), rooms: <Map<String, Object?>>[
         roomJson(id: 3, name: 'Maths', unread: 4, lastMessage: lastJson(30, 'a', createdAt: '2026-10-11T07:00:00+00:00')),
@@ -70,6 +79,7 @@ void main() {
       ]);
       expect(store.rooms.map((ChatRoom r) => r.id), <int>[1, 5, 3]);
       expect(store.unreadTotal, 5);
+      expect(store.unreadBadgeTotal, 5);
       expect(store.rooms.first.isPublic, isTrue);
       expect(store.rooms.first.canViewMembers, isFalse);
     });
@@ -415,7 +425,8 @@ void main() {
       expect(find.text('2'), findsOneWidget);
       expect(find.byIcon(Icons.notifications_off_rounded), findsOneWidget);
       expect(find.textContaining('Karim Benali: Voice message'), findsOneWidget);
-      expect(find.text('5 unread'), findsOneWidget);
+      // The muted chat keeps its grey 2 but stays out of the header total, as on the website.
+      expect(find.text('3 unread'), findsOneWidget);
       await finish(tester);
     });
 

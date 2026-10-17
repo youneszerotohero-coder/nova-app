@@ -94,6 +94,10 @@ class ChatStore extends ChangeNotifier {
   /// Unread messages of every room (the top bar badge).
   int get unreadTotal => _rooms.fold(0, (int sum, ChatRoom room) => sum + room.unreadCount);
 
+  /// The badge total (top bar, Messages header): muted chats keep their grey
+  /// per-chat count but stay out of it, as on the website.
+  int get unreadBadgeTotal => _rooms.fold(0, (int sum, ChatRoom room) => room.muted ? sum : sum + room.unreadCount);
+
   /// Messages from others delivered in realtime, never for a muted room.
   Stream<ChatArrival> get arrivals => _arrivals.stream;
 

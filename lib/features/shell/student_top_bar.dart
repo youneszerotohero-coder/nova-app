@@ -90,7 +90,7 @@ class StudentTopBar extends StatelessWidget {
                     listenable: app.chat,
                     builder: (BuildContext context, _) => _Square(
                       semanticLabel: context.tr('chat.title'),
-                      badge: app.chat.unreadTotal,
+                      badge: app.chat.unreadBadgeTotal,
                       onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const ChatListScreen())),
                       child: Icon(Icons.forum_outlined, size: 20, color: NovaColors.textBody),
                     ),
