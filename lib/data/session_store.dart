@@ -328,10 +328,13 @@ class SessionStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The profile shown for [user]: a Student's, or a Teacher's name (D-143).
+  static StudentProfile profileOf(Json user) => StudentProfile.fromUser(_withTeacherName(user));
+
   void _setUser(Json? user) {
     if (user == null) return;
     _user = user;
-    _profile = StudentProfile.fromUser(_withTeacherName(user));
+    _profile = profileOf(user);
     _status = SessionStatus.signedIn;
     notifyListeners();
   }

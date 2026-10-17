@@ -1805,6 +1805,11 @@ const Map<String, Map<String, String>> K = {
     'fr': 'La déconnexion arrête les notifications de ce téléphone pour votre compte.',
     'ar': 'كي تخرج من الحساب، يحبسو إشعارات حسابك في هذا الهاتف.',
   },
+  'teacher.newPasswordSub': {
+    'en': 'For your security, replace the temporary password NOVA gave you.',
+    'fr': 'Pour votre sécurité, remplacez le mot de passe temporaire donné par NOVA.',
+    'ar': 'لأمانك، بدّل كلمة السر المؤقتة اللي عطاتهالك NOVA.',
+  },
   'push.channelMessages': {'en': 'Messages', 'fr': 'Messages', 'ar': 'الرسائل'},
   'push.channelGeneral': {'en': 'NOVA notifications', 'fr': 'Notifications NOVA', 'ar': 'إشعارات NOVA'},
   'push.askTitle': {'en': 'Turn on notifications', 'fr': 'Activer les notifications', 'ar': 'شعّل الإشعارات'},

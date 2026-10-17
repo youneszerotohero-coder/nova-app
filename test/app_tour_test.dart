@@ -4,6 +4,8 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nova_mobile/core/push/push_platform.dart';
+import 'package:nova_mobile/core/push/push_service.dart';
 import 'package:nova_mobile/core/state/app_state.dart';
 import 'package:nova_mobile/core/theme/nova_colors.dart';
 import 'package:nova_mobile/core/theme/nova_theme.dart';
@@ -25,8 +27,11 @@ import 'package:nova_mobile/features/learning/learn_screen.dart';
 import 'package:nova_mobile/features/learning/lesson_screen.dart';
 import 'package:nova_mobile/features/shell/shell_screen.dart';
 import 'package:nova_mobile/features/shell/splash_screen.dart';
+import 'package:nova_mobile/features/teacher/teacher_shell.dart';
+import 'package:nova_mobile/features/auth/change_password_screen.dart';
 
 import 'fixtures/fake_api.dart';
+import 'fixtures/fake_push.dart';
 import 'fixtures/fixture_app.dart';
 import 'fixtures/fixture_data.dart';
 import 'nova_font_loader.dart';
@@ -38,7 +43,7 @@ import 'nova_font_loader.dart';
 void main() {
   setUpAll(loadNovaFonts);
 
-  Future<void> shoot(WidgetTester tester, String name, Widget screen, {bool dark = false, bool scaffold = true, Duration settle = const Duration(milliseconds: 1600), SessionStore? session, double height = 2532}) async {
+  Future<void> shoot(WidgetTester tester, String name, Widget screen, {bool dark = false, bool scaffold = true, Duration settle = const Duration(milliseconds: 1600), SessionStore? session, PushService? push, double height = 2532}) async {
     AppState state = installFixtureApp(lang: NovaLang.ar);
     if (session != null) {
       state = AppState.seeded(
@@ -47,6 +52,7 @@ void main() {
         learning: state.learning,
         commerce: state.commerce,
         account: state.account,
+        push: push,
         lang: NovaLang.ar,
       );
       AppState.instance = state;
@@ -142,4 +148,24 @@ void main() {
   goldenTestWidgets('tour: guest home', (tester) async => shoot(tester, '05_guest_home', const ShellScreen(), scaffold: false, session: await signedOut(tester)));
   goldenTestWidgets('tour: guest tab', (tester) async => shoot(tester, '06_guest_lessons', const ShellScreen(initialIndex: ShellScreen.units), scaffold: false, session: await signedOut(tester)));
   goldenTestWidgets('tour: guest unit', (tester) async => shoot(tester, '07_guest_unit', CourseDetailScreen(course: HomeData.popularCourses.first), scaffold: false, session: await signedOut(tester)));
+
+  // D-143: the Teacher space (chats seam, settings) and the temporary password step.
+  SessionStore teacher({String? step}) {
+    final Map<String, Object?> user = <String, Object?>{
+      'id': 41,
+      'role': 'teacher',
+      'phone': '0661234567',
+      'next_required_step': step,
+      'teacher': <String, Object?>{'id': 5, 'first_name': 'كريم', 'last_name': 'بن علي', 'photo_url': null},
+    };
+    return SessionStore.seeded(SessionStore.profileOf(user), user: user);
+  }
+
+  goldenTestWidgets('tour: teacher chats', (tester) => shoot(tester, '50_teacher_chats', const TeacherShell(), scaffold: false, session: teacher()));
+  goldenTestWidgets('tour: teacher settings', (tester) async {
+    final PushService push = PushService(platform: FakePushPlatform(status: PushPermission.denied), api: null, flags: MemoryPushFlags());
+    await push.start();
+    await shoot(tester, '51_teacher_settings', const TeacherShell(initialIndex: TeacherShell.settings), scaffold: false, session: teacher(), push: push, height: 4200);
+  });
+  goldenTestWidgets('tour: teacher password', (tester) => shoot(tester, '52_teacher_password', const ChangePasswordScreen(), scaffold: false, session: teacher(step: 'password_change')));
 }

@@ -96,7 +96,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         children: [
           AuthHero(
             title: context.tr('auth.newPasswordTitle'),
-            subtitle: context.tr('auth.newPasswordSub'),
+            // D-143: a Teacher's temporary password comes from NOVA, not a school.
+            subtitle: context.tr(AppScope.of(context).session.isTeacher ? 'teacher.newPasswordSub' : 'auth.newPasswordSub'),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 24, 18, 0),
