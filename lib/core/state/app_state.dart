@@ -442,8 +442,11 @@ extension on AppState {
   /// reloads.
   void _onPushForeground(PushPayload payload) {
     if (payload.isChat || !session.signedIn) return;
+    final String? id = payload.notificationId;
+    // Without its database id the row cannot be marked read: the list only.
+    if (id == null) return _reloadNotifications();
     account.receive(<String, dynamic>{
-      'id': payload.notificationId ?? 'push:${payload.messageId ?? DateTime.now().microsecondsSinceEpoch}',
+      'id': id,
       'type': payload.type,
       'title': payload.title ?? '',
       'message': payload.body ?? '',

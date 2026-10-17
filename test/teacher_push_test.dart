@@ -465,6 +465,12 @@ void main() {
       expect(announced.single.body, 'Réunion demain à 18 h');
       await _settle();
       expect(backend.requests.where((FakeRequest r) => r.path == '/me/notifications').length, listed + 1);
+
+      // No database id: the list reloads, nothing is announced.
+      platform.foreground.add(const PushPayload(data: <String, String>{'type': 'admin_message'}, title: 'NOVA'));
+      await _settle();
+      expect(announced, hasLength(1));
+      expect(backend.requests.where((FakeRequest r) => r.path == '/me/notifications').length, listed + 2);
     });
 
     testWidgets('a tapped chat notification opens its chat over the space; another one the notifications', (tester) async {
