@@ -11,6 +11,7 @@ import 'package:nova_mobile/core/theme/nova_theme.dart';
 import 'package:nova_mobile/data/chat_store.dart';
 import 'package:nova_mobile/features/messages/chat_audio.dart';
 import 'package:nova_mobile/features/messages/chat_bubble.dart';
+import 'package:nova_mobile/features/messages/chat_info_screen.dart';
 import 'package:nova_mobile/features/messages/chat_list_screen.dart';
 import 'package:nova_mobile/features/messages/chat_notice_host.dart';
 import 'package:nova_mobile/features/messages/chat_room_screen.dart';
@@ -587,6 +588,23 @@ void main() {
       expect(sounds.played.last, (ChatSound.receive, 0.3));
       expect(find.text('Karim Benali: Second'), findsNothing);
       await tester.pump(const Duration(seconds: 4));
+    });
+
+    goldenTestWidgets('a 360 px phone in Arabic: list (also as the Teacher tab), room and info fit', (tester) async {
+      chat = tourChatStore();
+      for (final Widget screen in <Widget>[
+        const ChatListScreen(),
+        const ChatListScreen(embedded: true),
+        const ChatRoomScreen(roomId: 3),
+        const ChatInfoScreen(roomId: 3),
+      ]) {
+        await pump(tester, screen, lang: NovaLang.ar);
+        tester.view.physicalSize = const Size(1080, 2220);
+        await tester.pump(const Duration(milliseconds: 600));
+        expect(tester.takeException(), isNull, reason: '$screen');
+        if (screen is ChatListScreen) expect(find.byType(BackPill), screen.embedded ? findsNothing : findsOneWidget);
+        await finish(tester);
+      }
     });
 
     goldenTestWidgets('the top bar holds the chat icon with the unread total, next to the bell', (tester) async {
