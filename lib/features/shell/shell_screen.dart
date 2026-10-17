@@ -23,6 +23,7 @@ import '../detail/course_detail_screen.dart';
 import '../home/home_screen.dart';
 import '../learning/lives_screen.dart';
 import '../learning/my_learning_screen.dart';
+import '../messages/chat_list_screen.dart';
 import 'student_top_bar.dart';
 
 /// The Student space, as on the website's phone layout (D-133): the five
@@ -167,6 +168,8 @@ class _ShellScreenState extends State<ShellScreen> {
           tab(Icons.dashboard_outlined, 'menu.overview', ShellScreen.home),
           tab(Icons.menu_book_outlined, 'menu.myUnits', ShellScreen.units),
           tab(Icons.sensors_rounded, 'menu.lives', ShellScreen.lives),
+          // D-143: the group chats (also the top bar's chat icon).
+          NovaMenuEntry(icon: Icons.forum_outlined, label: context.tr('chat.title'), onTap: () => push(const ChatListScreen())),
           teachers,
         ]),
         NovaMenuGroup(label: context.tr('menu.groupAccount'), entries: <NovaMenuEntry>[

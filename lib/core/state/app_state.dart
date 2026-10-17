@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../data/account_store.dart';
 import '../../data/catalog_store.dart';
+import '../../data/chat_store.dart';
 import '../../data/commerce_store.dart';
 import '../../data/learning_store.dart';
 import '../../data/live_store.dart';
@@ -58,7 +59,9 @@ class AppState extends ChangeNotifier {
     this.realtime,
     this.push,
     this._lang = defaultLang,
-  }) {
+    // D-143 chat (chat agent).
+    ChatStore? chat,
+  }) : chat = chat ?? ChatStore(api) {
     for (final ChangeNotifier store in <ChangeNotifier>[
       session,
       catalog,
@@ -103,8 +106,10 @@ class AppState extends ChangeNotifier {
     ReferenceStore? references,
     PushService? push,
     NovaLang lang = defaultLang,
+    ChatStore? chat,
   }) =>
       AppState._(
+        chat: chat,
         api: null,
         references: references,
         session: session,
@@ -142,6 +147,10 @@ class AppState extends ChangeNotifier {
 
   /// Tapped system notifications, opened once the signed-in space shows.
   final PushTapRouter pushTaps = PushTapRouter();
+
+  /// D-143 group chats of the signed-in user (any role). Not forwarded to
+  /// this state's listeners: the chat screens listen to it directly.
+  final ChatStore chat;
   final List<VoidCallback> _channels = <VoidCallback>[];
 
   /// The UI language on first launch.
@@ -266,6 +275,7 @@ class AppState extends ChangeNotifier {
       if (signedIn && previousStep != null && session.nextRequiredStep == null) {
         if (!session.isTeacher) catalog.load();
         refreshAccount();
+        chat.loadRooms();
       }
       return;
     }
@@ -284,11 +294,13 @@ class AppState extends ChangeNotifier {
       account.load();
       _listenRealtime();
       _watchSession();
+      _startChat();
     } else {
       // Signed out: the first screen again, not the visitor's browsing.
       _guest = false;
       pushTaps.clear();
       _stopSessionWatch();
+      _stopChat();
       for (final VoidCallback stop in _channels) {
         stop();
       }
@@ -392,6 +404,25 @@ class AppState extends ChangeNotifier {
     session.checkSession();
   }
 
+  // ── D-143 group chats (chat agent) ─────────────────────────────────────
+  // Rooms load after sign-in for every role, each room's channel (and the
+  // staff channel of moderated rooms) is followed, and everything is
+  // dropped on sign-out. A purchase can add rooms: [refreshAccount].
+  AppLifecycleListener? _chatLifecycle;
+
+  void _startChat() {
+    chat.start(me: session.profile?.id ?? 0, realtime: realtime);
+    _chatLifecycle?.dispose();
+    if (api != null) _chatLifecycle = AppLifecycleListener(onResume: chat.onResumed);
+  }
+
+  void _stopChat() {
+    _chatLifecycle?.dispose();
+    _chatLifecycle = null;
+    chat.clear();
+  }
+  // ── end D-143 group chats ──────────────────────────────────────────────
+
   /// Reloads the Student's data after a purchase or enrolment.
   Future<void> refreshAccount() async {
     if (session.isTeacher) return account.refreshNotifications();
@@ -399,6 +430,7 @@ class AppState extends ChangeNotifier {
       learning.load(),
       commerce.load(),
       account.load(),
+      chat.loadRooms(),
     ]);
   }
 }

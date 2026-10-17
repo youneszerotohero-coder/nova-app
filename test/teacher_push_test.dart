@@ -485,7 +485,10 @@ void main() {
       await _pump(tester, state, const AppGate());
 
       platform.opened.add(const PushPayload(data: <String, String>{'type': 'chat_message', 'room_id': '12', 'route': '/chats/12'}));
-      await tester.pumpAndSettle();
+      // The real chat room shows its loading animation (no chat endpoint here): pump, never settle.
+      for (int i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
       expect(tester.widget<ChatRoomScreen>(find.byType(ChatRoomScreen)).roomId, 12);
       expect(find.byType(TeacherShell, skipOffstage: false), findsOneWidget);
 
