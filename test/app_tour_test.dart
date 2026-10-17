@@ -189,7 +189,7 @@ void main() {
     return SessionStore.seeded(SessionStore.profileOf(user), user: user);
   }
 
-  goldenTestWidgets('tour: teacher chats', (tester) => shoot(tester, '50_teacher_chats', const TeacherShell(), scaffold: false, session: teacher()));
+  goldenTestWidgets('tour: teacher chats', (tester) => shoot(tester, '50_teacher_chats', const TeacherShell(), scaffold: false, session: teacher(), chat: tourChatStore()));
   goldenTestWidgets('tour: teacher settings', (tester) async {
     final PushService push = PushService(platform: FakePushPlatform(status: PushPermission.denied), api: null, flags: MemoryPushFlags());
     await push.start();
