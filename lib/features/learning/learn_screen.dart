@@ -257,7 +257,7 @@ class LessonRow extends StatelessWidget {
                             : context.tr('lesson.durationPending'),
                       ),
                       if (lesson.hasPdf)
-                        HeroChip(icon: Icons.description_outlined, label: 'PDF', color: NovaColors.heartRed, background: NovaColors.heartRed.withValues(alpha: 0.1)),
+                        HeroChip(icon: Icons.description_outlined, label: lesson.pdfCount > 1 ? '${lesson.pdfCount} PDF' : 'PDF', color: NovaColors.heartRed, background: NovaColors.heartRed.withValues(alpha: 0.1)),
                       if (lesson.hasQuiz)
                         HeroChip(icon: Icons.help_outline_rounded, label: context.tr('learn.rowQuiz'), color: NovaColors.badgeOrange, background: NovaColors.yellow.withValues(alpha: 0.28)),
                       if (lesson.fromLive)

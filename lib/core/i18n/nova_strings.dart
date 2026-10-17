@@ -1498,6 +1498,7 @@ const Map<String, Map<String, String>> K = {
   'lesson.videoProgress': {'en': 'You watched {n}%. The video counts as watched at 90%.', 'fr': 'Tu as regardé {n} %. La vidéo compte comme vue à 90 %.', 'ar': 'تفرّجت {n}%. الفيديو يتحسب كي توصل 90%.'},
   'lesson.videoHint': {'en': 'Press play. The video counts as watched at 90%.', 'fr': 'Appuie sur lecture. La vidéo compte comme vue à 90 %.', 'ar': 'اضغط على التشغيل. الفيديو يتحسب كي توصل 90%.'},
   'lesson.blockPdf': {'en': 'Read the PDF', 'fr': 'Lis le PDF', 'ar': 'اقرا الـPDF'},
+  'lesson.blockPdfs': {'en': 'Read the PDFs', 'fr': 'Lis les PDF', 'ar': 'اقرا ملفات الـPDF'},
   'lesson.pdfTitle': {'en': 'The lesson summary', 'fr': 'Le résumé de la leçon', 'ar': 'ملخص الدرس'},
   'lesson.pdfOpened': {'en': 'Opened. You can open it again at any time.', 'fr': 'Ouvert. Tu peux le rouvrir quand tu veux.', 'ar': 'حلّيتو. تقدر تعاود تحلّو وقتما حبيت.'},
   'lesson.pdfText': {'en': 'It opens right here, only for you.', 'fr': 'Il s’ouvre ici, rien que pour toi.', 'ar': 'يتحل هنا، غير ليك.'},
