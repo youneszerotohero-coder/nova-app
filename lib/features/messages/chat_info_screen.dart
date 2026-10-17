@@ -210,9 +210,14 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
                   ],
                 ),
               ),
-              Switch.adaptive(
+              // The settings' switch (appearance controls).
+              Switch(
                 value: room.muted,
+                activeThumbColor: Colors.white,
                 activeTrackColor: NovaColors.accent,
+                inactiveThumbColor: Colors.white,
+                inactiveTrackColor: NovaColors.lineStrong,
+                trackOutlineColor: const WidgetStatePropertyAll<Color>(Colors.transparent),
                 onChanged: _toggleMute,
               ),
             ],
@@ -291,14 +296,31 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
-            controller: _search,
-            onChanged: _onSearch,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: context.tr('chat.searchMembers'),
-              prefixIcon: const Icon(Icons.search_rounded),
-              isDense: true,
+          Container(
+            height: 46,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: NovaColors.paperRaised,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: NovaColors.borderOnLight),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.search_rounded, size: 20, color: NovaColors.textMuted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _search,
+                    onChanged: _onSearch,
+                    textInputAction: TextInputAction.search,
+                    style: heroText(15, color: NovaColors.textStrong),
+                    decoration: InputDecoration.collapsed(
+                      hintText: context.tr('chat.searchMembers'),
+                      hintStyle: heroText(15, color: NovaColors.textMuted),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 8),
@@ -380,10 +402,9 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              pdf.attachment?.name ?? 'PDF',
+                              chatFileName(pdf.attachment?.name ?? 'PDF'),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              textDirection: chatTextDirection(pdf.attachment?.name ?? ''),
                               style: heroText(14.5, color: NovaColors.textStrong, weight: FontWeight.w700, height: 1.3),
                             ),
                             Text(
@@ -391,7 +412,7 @@ class _ChatInfoScreenState extends State<ChatInfoScreen> {
                                 chatFileSize(pdf.attachment?.size ?? 0, lang),
                                 if (pdf.createdAt != null) chatDate(pdf.createdAt!, lang),
                                 chatNameOf(context, pdf.sender.role, pdf.sender.name),
-                              ].join(' · '),
+                              ].map(chatIsolate).join(' · '),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: heroText(12.5, color: NovaColors.textMuted, height: 1.35),

@@ -537,9 +537,9 @@ class _ChatPdfSendSheetState extends State<ChatPdfSendSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(widget.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: NovaTypography.textTheme.titleSmall),
+                        Text(chatFileName(widget.name), maxLines: 2, overflow: TextOverflow.ellipsis, style: NovaTypography.textTheme.titleSmall),
                         const SizedBox(height: 2),
-                        Text('${chatFileSize(widget.size, lang)} · PDF', style: NovaTypography.textTheme.bodySmall),
+                        Text(chatIsolate('${chatFileSize(widget.size, lang)} · PDF'), style: NovaTypography.textTheme.bodySmall),
                       ],
                     ),
                   ),

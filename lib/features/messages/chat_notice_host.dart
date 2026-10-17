@@ -128,7 +128,7 @@ class _Notice extends StatelessWidget {
     final String sender = chatNameOf(context, message.sender.role, message.sender.name);
     final String preview = switch (message.kind) {
       ChatMessageKind.voice => '🎤 ${context.tr('chat.voiceMessage')}',
-      ChatMessageKind.pdf => '📄 ${message.attachment?.name ?? context.tr('chat.pdf')}',
+      ChatMessageKind.pdf => '📄 ${chatFileName(message.attachment?.name ?? context.tr('chat.pdf'))}',
       ChatMessageKind.text => message.body ?? '',
     };
     final String title = chatRoomTitle(context, arrival.room);

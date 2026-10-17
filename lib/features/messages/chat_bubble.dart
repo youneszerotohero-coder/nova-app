@@ -320,7 +320,7 @@ class _PdfContent extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        file?.name ?? 'document.pdf',
+                        chatFileName(file?.name ?? 'document.pdf'),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         textDirection: chatTextDirection(file?.name ?? ''),
@@ -337,7 +337,7 @@ class _PdfContent extends StatelessWidget {
                       Text(
                         pending
                             ? context.trf('chat.uploading', <String, String>{'p': '${((message.progress ?? 0) * 100).round()}'})
-                            : '${chatFileSize(file?.size ?? 0, lang)} · PDF',
+                            : chatIsolate('${chatFileSize(file?.size ?? 0, lang)} · PDF'),
                         style: TextStyle(
                           fontFamily: NovaTypography.body,
                           fontFamilyFallback: NovaTypography.fallback,

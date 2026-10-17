@@ -111,9 +111,25 @@ TextDirection? chatTextDirection(String text) {
   return null;
 }
 
+bool _rtlRune(int rune) => (rune >= 0x0590 && rune <= 0x08FF) || (rune >= 0xFB1D && rune <= 0xFEFC);
+
+/// [text] as one bidi unit taking its own direction (a size, a date, a
+/// name next to Arabic words).
+String chatIsolate(String text) => '\u2068$text\u2069';
+
+/// A file name in an Arabic sentence: a trailing Latin word ("2.pdf")
+/// stays one left-to-right unit instead of reading "pdf.2".
+String chatFileName(String name) {
+  final int space = name.lastIndexOf(' ');
+  if (space < 0 || !name.runes.any(_rtlRune)) return name;
+  final String last = name.substring(space + 1);
+  if (last.runes.any(_rtlRune)) return name;
+  return '${name.substring(0, space + 1)}\u2066$last\u2069';
+}
+
 /// What the list shows for a room's last message (with its kind).
 String chatPreview(BuildContext context, ChatLastMessage last) => switch (last.kind) {
       ChatMessageKind.voice => context.tr('chat.voiceMessage'),
-      ChatMessageKind.pdf => last.preview.isNotEmpty ? last.preview : context.tr('chat.pdf'),
+      ChatMessageKind.pdf => last.preview.isNotEmpty ? chatFileName(last.preview) : context.tr('chat.pdf'),
       ChatMessageKind.text => last.preview,
     };

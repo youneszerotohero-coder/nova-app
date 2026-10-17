@@ -695,7 +695,7 @@ class ChatStore extends ChangeNotifier {
         for (final ChatPerson person in _seededMembers[roomId] ?? const <ChatPerson>[])
           if (needle.isEmpty || (person.name ?? '').toLowerCase().contains(needle)) person,
       ];
-      return ChatMembersPage(members: all, total: all.length, hasMore: false);
+      return ChatMembersPage(members: all, total: needle.isEmpty ? room(roomId)?.membersCount ?? all.length : all.length, hasMore: false);
     }
     final Json body = await api.get('/chats/$roomId/members', query: <String, Object?>{
       if (search.trim().isNotEmpty) 'search': search.trim(),

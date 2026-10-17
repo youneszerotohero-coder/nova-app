@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nova_mobile/core/state/app_state.dart';
 import 'package:nova_mobile/core/theme/nova_colors.dart';
 import 'package:nova_mobile/core/theme/nova_theme.dart';
+import 'package:nova_mobile/data/chat_store.dart';
 import 'package:nova_mobile/data/models.dart';
 import 'package:nova_mobile/data/session_store.dart';
 import 'package:nova_mobile/features/account/notifications_screen.dart';
@@ -23,9 +24,14 @@ import 'package:nova_mobile/features/catalog/units_catalog_screen.dart';
 import 'package:nova_mobile/features/auth/auth_gateway_screen.dart';
 import 'package:nova_mobile/features/learning/learn_screen.dart';
 import 'package:nova_mobile/features/learning/lesson_screen.dart';
+import 'package:nova_mobile/features/messages/chat_audio.dart';
+import 'package:nova_mobile/features/messages/chat_info_screen.dart';
+import 'package:nova_mobile/features/messages/chat_list_screen.dart';
+import 'package:nova_mobile/features/messages/chat_room_screen.dart';
 import 'package:nova_mobile/features/shell/shell_screen.dart';
 import 'package:nova_mobile/features/shell/splash_screen.dart';
 
+import 'fixtures/chat_fixtures.dart';
 import 'fixtures/fake_api.dart';
 import 'fixtures/fixture_app.dart';
 import 'fixtures/fixture_data.dart';
@@ -38,11 +44,12 @@ import 'nova_font_loader.dart';
 void main() {
   setUpAll(loadNovaFonts);
 
-  Future<void> shoot(WidgetTester tester, String name, Widget screen, {bool dark = false, bool scaffold = true, Duration settle = const Duration(milliseconds: 1600), SessionStore? session, double height = 2532}) async {
+  Future<void> shoot(WidgetTester tester, String name, Widget screen, {bool dark = false, bool scaffold = true, Duration settle = const Duration(milliseconds: 1600), SessionStore? session, double height = 2532, ChatStore? chat, Future<void> Function(WidgetTester tester)? act}) async {
     AppState state = installFixtureApp(lang: NovaLang.ar);
-    if (session != null) {
+    if (session != null || chat != null) {
       state = AppState.seeded(
-        session: session,
+        session: session ?? state.session,
+        chat: chat,
         catalog: state.catalog,
         learning: state.learning,
         commerce: state.commerce,
@@ -75,6 +82,7 @@ void main() {
       ),
     );
     await tester.pump(settle);
+    if (act != null) await act(tester);
     // Looping animations (live pulse, splash dots) never settle: decode the
     // images, then let one more beat pass.
     await tester.runAsync(() async {
@@ -126,6 +134,26 @@ void main() {
   goldenTestWidgets('tour: offer detail', (tester) => shoot(tester, '21b_offer_detail', CourseDetailScreen.pack(pack: HomeData.featuredPacks.first), scaffold: false));
   goldenTestWidgets('tour: unit detail dark', (tester) => shoot(tester, '94_unit_detail_dark', CourseDetailScreen(course: HomeData.popularCourses.first), dark: true, scaffold: false));
   goldenTestWidgets('tour: teacher dark', (tester) => shoot(tester, '95_teacher_dark', TeacherDetailScreen(teacher: HomeData.teachers.first), dark: true, scaffold: false));
+
+  // D-143 group chats: the list, a room with a voice note and a PDF, its info, a recording.
+  goldenTestWidgets('tour: messages list', (tester) => shoot(tester, '50_messages_list', const ChatListScreen(), scaffold: false, chat: tourChatStore()));
+  goldenTestWidgets('tour: chat room', (tester) => shoot(tester, '51_chat_room', const ChatRoomScreen(roomId: 3), scaffold: false, chat: tourChatStore()));
+  goldenTestWidgets('tour: chat info', (tester) => shoot(tester, '52_chat_info', const ChatInfoScreen(roomId: 3), scaffold: false, chat: tourChatStore()));
+  goldenTestWidgets('tour: chat info full', (tester) => shoot(tester, '52b_chat_info_full', const ChatInfoScreen(roomId: 3), scaffold: false, chat: tourChatStore(), height: 4200));
+  goldenTestWidgets('tour: chat recording', (tester) {
+    final FakeRecorder recorder = FakeRecorder();
+    final ChatRecorder Function() previous = ChatRecorder.factory;
+    ChatRecorder.factory = () => recorder;
+    addTearDown(() => ChatRecorder.factory = previous);
+    return shoot(tester, '53_chat_recording', const ChatRoomScreen(roomId: 3), scaffold: false, chat: tourChatStore(), act: (WidgetTester tester) async {
+      await tester.tap(find.byIcon(Icons.mic_rounded));
+      for (int i = 0; i < 72; i++) {
+        recorder.emit(0.15 + 0.8 * ((i * 7) % 11) / 10 * (i.isEven ? 1 : 0.55));
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    });
+  });
+  goldenTestWidgets('tour: chat room dark', (tester) => shoot(tester, '96_chat_room_dark', const ChatRoomScreen(roomId: 3), dark: true, scaffold: false, chat: tourChatStore()));
 
   // D-134: "continue without an account" — the whole first screen, then a visitor's Home and a tab that asks to sign in.
   Future<SessionStore> signedOut(WidgetTester tester) async {
