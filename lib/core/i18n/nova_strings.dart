@@ -1775,6 +1775,12 @@ const Map<String, Map<String, String>> K = {
   'auth.groupSecure': {'en': 'Secure your account', 'fr': 'Protégez votre compte', 'ar': 'أمّن الحساب تاعك'},
   'auth.groupAcademic': {'en': 'Academic information', 'fr': 'Ma classe', 'ar': 'القراية'},
   'auth.groupLocation': {'en': 'Location', 'fr': 'Où j’habite', 'ar': 'وين تسكن'},
+
+  // D-143 group chats — chat agent appends strings below this line.
+  'chat.__anchor': {'en': ''},
+
+  // D-143 Teacher mode and mobile push — platform agent appends strings below this line.
+  'teacher.__anchor': {'en': ''},
 };
 
 extension NovaTr on BuildContext {
