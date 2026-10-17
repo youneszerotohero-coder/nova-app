@@ -843,71 +843,125 @@ class _SheetFrame extends StatelessWidget {
   }
 }
 
-/// "Message info": who read the message, and when.
-class _SeenSheet extends StatelessWidget {
+/// "Message info": who read the message, and when, by pages of 50 with the total.
+class _SeenSheet extends StatefulWidget {
   const _SeenSheet({required this.roomId, required this.message});
 
   final int roomId;
   final ChatMessage message;
 
   @override
+  State<_SeenSheet> createState() => _SeenSheetState();
+}
+
+class _SeenSheetState extends State<_SeenSheet> {
+  final List<ChatPerson> _readers = <ChatPerson>[];
+  int _total = 0;
+  int _page = 0;
+  bool _hasMore = false;
+  bool _loading = true;
+  Object? _error;
+
+  ChatStore? _chat;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_chat == null) {
+      _chat = AppScope.of(context).chat;
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final ChatMembersPage page = await _chat!.seenBy(widget.roomId, widget.message.id, page: _page + 1);
+      if (!mounted) return;
+      setState(() {
+        _readers.addAll(page.members.where((ChatPerson p) => !_readers.any((ChatPerson r) => r.userId == p.userId)));
+        _total = page.total;
+        _hasMore = page.hasMore;
+        _page += 1;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final ChatStore chat = AppScope.of(context).chat;
+    final bool firstLoad = _page == 0;
     return _SheetFrame(
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.6),
-        child: FutureBuilder<List<ChatPerson>>(
-          future: chat.seenBy(roomId, message.id),
-          builder: (BuildContext context, AsyncSnapshot<List<ChatPerson>> snapshot) {
-            final List<ChatPerson>? readers = snapshot.data;
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
-                  child: Text(
-                    readers == null ? context.tr('chat.messageInfo') : context.trf('chat.seenBy', <String, String>{'n': '${readers.length}'}),
-                    style: NovaTypography.textTheme.titleLarge,
-                  ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
+              child: Text(
+                firstLoad ? context.tr('chat.messageInfo') : context.trf('chat.seenBy', <String, String>{'n': '$_total'}),
+                style: NovaTypography.textTheme.titleLarge,
+              ),
+            ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(apiErrorText(context, _error!), style: NovaTypography.textTheme.bodySmall),
+              )
+            else if (firstLoad && _loading)
+              const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
+            else if (_readers.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(context.tr('chat.seenNobody'), textAlign: TextAlign.center, style: NovaTypography.textTheme.bodySmall),
+              )
+            else
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _readers.length + (_hasMore ? 1 : 0),
+                  itemBuilder: (BuildContext context, int i) {
+                    if (i == _readers.length) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Center(
+                          child: _loading
+                              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.4))
+                              : TextButton(
+                                  onPressed: _load,
+                                  child: Text(context.trf('chat.seenMore', <String, String>{'shown': '${_readers.length}', 'total': '$_total'})),
+                                ),
+                        ),
+                      );
+                    }
+                    final ChatPerson person = _readers[i];
+                    final DateTime? at = person.readAt;
+                    return ListTile(
+                      leading: ChatPersonAvatar(userId: person.userId, role: person.role, name: person.name, photoUrl: person.avatarUrl, size: 38),
+                      title: Row(
+                        children: [
+                          Flexible(child: Text(chatNameOf(context, person.role, person.name), maxLines: 1, overflow: TextOverflow.ellipsis, style: NovaTypography.textTheme.titleSmall)),
+                          const SizedBox(width: 6),
+                          ChatRoleBadge(role: person.role),
+                        ],
+                      ),
+                      subtitle: at == null ? null : Text('${chatDayLabel(context, at)} · ${chatClock(at)}', style: NovaTypography.textTheme.bodySmall),
+                    );
+                  },
                 ),
-                if (snapshot.hasError)
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(apiErrorText(context, snapshot.error!), style: NovaTypography.textTheme.bodySmall),
-                  )
-                else if (readers == null)
-                  const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
-                else if (readers.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(context.tr('chat.seenNobody'), textAlign: TextAlign.center, style: NovaTypography.textTheme.bodySmall),
-                  )
-                else
-                  Flexible(
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: readers.length,
-                      itemBuilder: (BuildContext context, int i) {
-                        final ChatPerson person = readers[i];
-                        final DateTime? at = person.readAt;
-                        return ListTile(
-                          leading: ChatPersonAvatar(userId: person.userId, role: person.role, name: person.name, photoUrl: person.avatarUrl, size: 38),
-                          title: Row(
-                            children: [
-                              Flexible(child: Text(chatNameOf(context, person.role, person.name), maxLines: 1, overflow: TextOverflow.ellipsis, style: NovaTypography.textTheme.titleSmall)),
-                              const SizedBox(width: 6),
-                              ChatRoleBadge(role: person.role),
-                            ],
-                          ),
-                          subtitle: at == null ? null : Text('${chatDayLabel(context, at)} · ${chatClock(at)}', style: NovaTypography.textTheme.bodySmall),
-                        );
-                      },
-                    ),
-                  ),
-              ],
-            );
-          },
+              ),
+          ],
         ),
       ),
     );

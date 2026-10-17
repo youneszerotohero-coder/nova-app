@@ -62,6 +62,24 @@ void main() {
   }
 
   group('ChatStore', () {
+    test('the seen list of an announcement comes by pages of 50 with the total', () async {
+      List<Map<String, Object?>> readers(int from, int count) => <Map<String, Object?>>[
+            for (int i = from; i < from + count; i++) <String, Object?>{'user_id': i, 'name': 'Lecteur $i', 'role': 'student', 'read_at': '2026-10-17T08:00:00+00:00'},
+          ];
+      final FakeBackend backend = FakeBackend(<String, FakeResponse>{
+        'GET /chats/1/messages/9/seen?page=1': FakeResponse(200, <String, Object?>{'data': readers(1, 50), 'meta': <String, Object?>{'total': 120, 'current_page': 1, 'last_page': 3, 'has_more': true}}),
+        'GET /chats/1/messages/9/seen?page=3': FakeResponse(200, <String, Object?>{'data': readers(101, 20), 'meta': <String, Object?>{'total': 120, 'current_page': 3, 'last_page': 3, 'has_more': false}}),
+      });
+      final ChatStore store = await started(backend);
+      final ChatMembersPage first = await store.seenBy(1, 9);
+      expect(first.members, hasLength(50));
+      expect(first.total, 120);
+      expect(first.hasMore, isTrue);
+      final ChatMembersPage last = await store.seenBy(1, 9, page: 3);
+      expect(last.members, hasLength(20));
+      expect(last.hasMore, isFalse);
+    });
+
     test('a muted chat keeps its count but stays out of the badge total', () async {
       final ChatStore store = await started(FakeBackend(<String, FakeResponse>{}), rooms: <Map<String, Object?>>[
         roomJson(id: 3, name: 'Maths', unread: 4, lastMessage: lastJson(30, 'a', createdAt: '2026-10-11T07:00:00+00:00')),

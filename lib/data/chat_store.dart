@@ -683,12 +683,19 @@ class ChatStore extends ChangeNotifier {
     return _api!.getBytes(link.url);
   }
 
-  /// Who read a message, with when.
-  Future<List<ChatPerson>> seenBy(int roomId, int messageId) async {
+  /// Who read a message, with when: pages of 50 (latest readers first) and
+  /// the total, since an announcement can be read by thousands of Students.
+  Future<ChatMembersPage> seenBy(int roomId, int messageId, {int page = 1}) async {
     final NovaApi? api = _api;
-    if (api == null) return const <ChatPerson>[];
-    final Json body = await api.get('/chats/$roomId/messages/$messageId/seen');
-    return body.list('data').map(ChatPerson.fromJson).toList();
+    if (api == null) return const ChatMembersPage(members: <ChatPerson>[], total: 0, hasMore: false);
+    final Json body = await api.get('/chats/$roomId/messages/$messageId/seen', query: <String, Object?>{'page': page});
+    final List<ChatPerson> readers = body.list('data').map(ChatPerson.fromJson).toList();
+    final Json? meta = body.obj('meta');
+    return ChatMembersPage(
+      members: readers,
+      total: meta?.integer('total') ?? readers.length,
+      hasMore: meta?.flag('has_more') ?? false,
+    );
   }
 
   Future<ChatMembersPage> members(int roomId, {String search = '', int page = 1}) async {

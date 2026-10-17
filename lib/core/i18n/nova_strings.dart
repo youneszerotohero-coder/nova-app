@@ -1847,6 +1847,7 @@ const Map<String, Map<String, String>> K = {
   'chat.copied': {'en': 'Copied', 'fr': 'Copié', 'ar': 'تنسخ'},
   'chat.messageInfo': {'en': 'Message info', 'fr': 'Infos du message', 'ar': 'معلومات الرسالة'},
   'chat.seenNobody': {'en': 'Nobody has seen it yet.', 'fr': 'Personne ne l’a encore vu.', 'ar': 'حتى واحد ما شافها دروك.'},
+  'chat.seenMore': {'en': 'Show more ({shown} of {total})', 'fr': 'Voir plus ({shown} sur {total})', 'ar': 'شوف كثر ({shown} من {total})'},
   'chat.delete': {'en': 'Delete', 'fr': 'Supprimer', 'ar': 'امسح'},
   'chat.cancel': {'en': 'Cancel', 'fr': 'Annuler', 'ar': 'بطّل'},
   'chat.deleteTitle': {'en': 'Delete this message?', 'fr': 'Supprimer ce message ?', 'ar': 'تمسح هاد الرسالة؟'},
