@@ -25,6 +25,11 @@ dependencies:
   pdfx: ^2.11.0
   web_socket_channel: ^3.0.3
   livekit_client: ^2.13.0
+  # D-143 group chats: voice notes recorded as AAC (.m4a), voice notes and
+  # the chat sounds played back, the recording's temporary file.
+  record: ^7.1.2
+  audioplayers: ^6.8.1
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:
@@ -44,6 +49,8 @@ flutter:
     - assets/images/covers/
     - assets/images/packs/
     - assets/images/people/
+    # D-143: the chat's send and receive sounds, synthesized for NOVA.
+    - assets/sounds/
 
   # The website's faces (D-125 hero style): Baloo Bhaijaan 2 for titles and
   # every Arabic glyph, Geist for Latin text. Static weights instanced from

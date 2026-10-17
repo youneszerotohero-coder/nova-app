@@ -7,6 +7,7 @@ import '../../core/theme/nova_typography.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../account/notifications_screen.dart';
 import '../account/settings_screen.dart';
+import '../messages/chat_list_screen.dart';
 import '../auth/require_account.dart';
 import 'shell_screen.dart';
 
@@ -80,6 +81,19 @@ class StudentTopBar extends StatelessWidget {
                 // D-134: a visitor has no initials nor notifications: sign in.
                 _SignInPill(onTap: () => requireAccount(context))
               else ...[
+                // D-143: the group chats with their unread total, next to the bell.
+                if (context.findAncestorWidgetOfExactType<ChatListScreen>() == null) ...[
+                  ListenableBuilder(
+                    listenable: app.chat,
+                    builder: (BuildContext context, _) => _Square(
+                      semanticLabel: context.tr('chat.title'),
+                      badge: app.chat.unreadTotal,
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const ChatListScreen())),
+                      child: Icon(Icons.forum_outlined, size: 20, color: NovaColors.textBody),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 _Square(
                   semanticLabel: context.tr('topbar.notifications'),
                   badge: app.unreadCount,

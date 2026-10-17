@@ -8,6 +8,7 @@ import 'core/theme/nova_theme.dart';
 import 'core/update/app_update_gate.dart';
 import 'core/widgets/notification_banner.dart';
 import 'features/account/notifications_screen.dart';
+import 'features/messages/chat_notice_host.dart';
 import 'features/shell/app_gate.dart';
 
 class NovaApp extends StatelessWidget {
@@ -63,7 +64,11 @@ class NovaApp extends StatelessWidget {
                       openNotification(state, navigator, notification);
                     }
                   },
-                  child: child ?? const SizedBox.shrink(),
+                  // D-143: chat messages for another room, above every screen.
+                  child: ChatNoticeHost(
+                    navigatorKey: _navigator,
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               ),
             ),

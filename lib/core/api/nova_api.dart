@@ -84,6 +84,61 @@ class NovaApi {
     return _send('POST', path, body: form);
   }
 
+  /// [ApiException.code] of a request stopped through its [CancelToken].
+  static const String cancelled = 'REQUEST_CANCELLED';
+
+  /// D-143: a multipart POST of [fields] plus the file at [filePath] under
+  /// [fileField] (chat voice notes and PDFs), reporting the upload's
+  /// [onProgress] (0..1); [cancelToken] stops it and nothing is sent.
+  Future<Json> postMultipart(
+    String path, {
+    required Map<String, Object?> fields,
+    required String fileField,
+    required String filePath,
+    String? fileName,
+    String? contentType,
+    void Function(double progress)? onProgress,
+    CancelToken? cancelToken,
+  }) async {
+    Future<Response<dynamic>> send({bool freshToken = false}) async {
+      final FormData form = FormData.fromMap(<String, Object>{
+        for (final MapEntry<String, Object?> field in fields.entries)
+          if (field.value != null) field.key: '${field.value}',
+        fileField: await MultipartFile.fromFile(
+          filePath,
+          filename: fileName ?? File(filePath).uri.pathSegments.last,
+          contentType: contentType == null ? null : DioMediaType.parse(contentType),
+        ),
+      });
+      return _dio.request<dynamic>(
+        path,
+        data: form,
+        cancelToken: cancelToken,
+        onSendProgress: onProgress == null
+            ? null
+            : (int sent, int total) {
+                if (total > 0) onProgress(sent / total);
+              },
+        options: Options(
+          method: 'POST',
+          headers: <String, Object>{'X-XSRF-TOKEN': await _csrfToken(fresh: freshToken)},
+        ),
+      );
+    }
+
+    try {
+      Response<dynamic> response = await send();
+      if (response.statusCode == 419) response = await send(freshToken: true);
+      return _unwrap(path, response);
+    } on DioException catch (error) {
+      throw ApiException(
+        status: 0,
+        code: error.type == DioExceptionType.cancel ? cancelled : ApiException.network,
+        message: error.message ?? 'Network unavailable',
+      );
+    }
+  }
+
   /// Raw bytes of an absolute URL on the API host (signed PDF content),
   /// sent with the session cookie like any other request.
   Future<List<int>> getBytes(String url) async {
