@@ -563,6 +563,11 @@ class ChatStore extends ChangeNotifier {
       final ChatMessage sent = ChatMessage.fromJson(body.obj('data') ?? <String, dynamic>{});
       if (sent.id <= 0) throw const ApiException(status: 500, code: 'HTTP_500', message: 'Unexpected answer');
       final bool known = thread.messages.any((ChatMessage m) => m.id == sent.id);
+      // The server copy takes the pending one's place, whatever it echoes.
+      thread.messages = <ChatMessage>[
+        for (final ChatMessage m in thread.messages)
+          if (m.isConfirmed || m.clientUuid != uuid) m,
+      ];
       _merge(thread, <ChatMessage>[sent]);
       if (!known) _noteRoomMessage(roomId, sent, announce: false);
       _deleteLocal(message);
@@ -794,7 +799,9 @@ class ChatStore extends ChangeNotifier {
       return;
     }
     final _Thread? thread = _threads[roomId];
-    final bool known = thread?.messages.any((ChatMessage m) => m.id == message.id) ?? false;
+    // Already listed, or already the room's latest (a repeated broadcast).
+    final bool known = (thread?.messages.any((ChatMessage m) => m.id == message.id) ?? false) ||
+        message.id <= (current.lastMessage?.id ?? 0);
     if (thread != null) _merge(thread, <ChatMessage>[message]);
     if (!known) _noteRoomMessage(roomId, message, announce: true);
     notifyListeners();

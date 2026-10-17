@@ -55,8 +55,11 @@ class _ChatComposerState extends State<ChatComposer> {
 
   ChatRecorder? _recorder;
   StreamSubscription<double>? _levelsSub;
-  final Stopwatch _clock = Stopwatch();
+  /// Time recorded so far: the ticker's own count of periods (exact even
+  /// when a frame is late).
+  Duration _elapsed = Duration.zero;
   Timer? _ticker;
+  static const Duration _tick = Duration(milliseconds: 200);
   bool _recording = false;
   bool _busy = false;
   final List<double> _levels = <double>[];
@@ -113,15 +116,14 @@ class _ChatComposerState extends State<ChatComposer> {
       if (!mounted) return;
       HapticFeedback.mediumImpact();
       _levels.clear();
-      _clock
-        ..reset()
-        ..start();
+      _elapsed = Duration.zero;
       _levelsSub = recorder.levels.listen((double level) {
         if (mounted) setState(() => _levels.add(level));
       });
-      _ticker = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      _ticker = Timer.periodic(_tick, (Timer timer) {
         if (!mounted) return;
-        if (_clock.elapsed >= ChatStore.maxVoice) {
+        _elapsed = _tick * timer.tick;
+        if (_elapsed >= ChatStore.maxVoice) {
           // The 5-minute cap: what was said is sent.
           _sendRecording();
         } else {
@@ -141,7 +143,6 @@ class _ChatComposerState extends State<ChatComposer> {
     _ticker = null;
     _levelsSub?.cancel();
     _levelsSub = null;
-    _clock.stop();
   }
 
   Future<void> _cancelRecording() async {
@@ -161,7 +162,7 @@ class _ChatComposerState extends State<ChatComposer> {
   Future<void> _sendRecording() async {
     if (!_recording || _busy) return;
     _busy = true;
-    final Duration duration = _clock.elapsed > ChatStore.maxVoice ? ChatStore.maxVoice : _clock.elapsed;
+    final Duration duration = _elapsed > ChatStore.maxVoice ? ChatStore.maxVoice : _elapsed;
     _stopClock();
     String? path;
     try {
@@ -326,7 +327,7 @@ class _ChatComposerState extends State<ChatComposer> {
   }
 
   Widget _recordingBar(BuildContext context) {
-    final Duration elapsed = _clock.elapsed;
+    final Duration elapsed = _elapsed;
     final bool nearCap = ChatStore.maxVoice - elapsed < const Duration(seconds: 30);
     return SizedBox(
       key: const ValueKey<String>('composer-recording'),

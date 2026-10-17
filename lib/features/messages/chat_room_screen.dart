@@ -836,7 +836,7 @@ class _SheetFrame extends StatelessWidget {
         children: [
           Container(width: 40, height: 4, decoration: BoxDecoration(color: NovaColors.lineStrong, borderRadius: BorderRadius.circular(4))),
           const SizedBox(height: 8),
-          child,
+          Material(type: MaterialType.transparency, child: child),
         ],
       ),
     );
