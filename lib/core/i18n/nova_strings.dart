@@ -1776,8 +1776,7 @@ const Map<String, Map<String, String>> K = {
   'auth.groupAcademic': {'en': 'Academic information', 'fr': 'Ma classe', 'ar': 'القراية'},
   'auth.groupLocation': {'en': 'Location', 'fr': 'Où j’habite', 'ar': 'وين تسكن'},
 
-  // D-143 group chats — chat agent appends strings below this line.
-  'chat.__anchor': {'en': ''},
+  // D-143 group chats
   'chat.title': {'en': 'Messages', 'fr': 'Messages', 'ar': 'الرسائل'},
   'chat.kicker': {'en': 'Your groups', 'fr': 'Tes groupes', 'ar': 'المجموعات تاعك'},
   'chat.unreadKicker': {'en': '{n} unread', 'fr': '{n} non lus', 'ar': 'رسائل جديدة: {n}'},
@@ -1886,8 +1885,7 @@ const Map<String, Map<String, String>> K = {
   'chat.pdfs': {'en': 'PDFs', 'fr': 'PDF', 'ar': 'ملفات PDF'},
   'chat.noPdfs': {'en': 'No PDF shared yet.', 'fr': 'Aucun PDF partagé pour le moment.', 'ar': 'ما كاين حتى PDF دروك.'},
 
-  // D-143 Teacher mode and mobile push — platform agent appends strings below this line.
-  'teacher.__anchor': {'en': ''},
+  // D-143 Teacher mode and mobile push
   'teacher.tabChats': {'en': 'Chats', 'fr': 'Discussions', 'ar': 'المحادثات'},
   'teacher.tabNotifications': {'en': 'Alerts', 'fr': 'Alertes', 'ar': 'الإشعارات'},
   'teacher.tabSettings': {'en': 'Settings', 'fr': 'Réglages', 'ar': 'الإعدادات'},
