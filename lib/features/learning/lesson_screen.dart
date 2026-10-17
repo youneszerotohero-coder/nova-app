@@ -46,12 +46,8 @@ class _LessonScreenState extends State<LessonScreen> {
   final GlobalKey _quizKey = GlobalKey();
   final ScrollController _scroll = ScrollController();
 
-  /// PDFs opened during this visit (the server does not record reading), as
-  /// `lessonId:pdfId` (`lessonId:` alone before the Lesson's list is known).
-  final Set<String> _pdfOpened = <String>{};
-
-  /// D-142: each Lesson's PDFs in the Admin's order, once loaded.
-  final Map<int, List<LessonPdf>> _pdfs = <int, List<LessonPdf>>{};
+  /// PDFs opened during this visit (the server does not record reading).
+  final Set<int> _pdfOpened = <int>{};
 
   /// The Student's attempts at this Lesson's quiz (best score, next try).
   QuizAttempts? _attempts;
@@ -63,10 +59,7 @@ class _LessonScreenState extends State<LessonScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadQuiz();
-      _loadPdfs();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadQuiz());
   }
 
   @override
@@ -92,24 +85,11 @@ class _LessonScreenState extends State<LessonScreen> {
     }
   }
 
-  Future<void> _loadPdfs() async {
-    final AppState app = AppScope.of(context);
-    final Lesson lesson = _lesson;
-    if (!lesson.hasPdf || app.learning.api == null || _pdfs.containsKey(lesson.id)) return;
-    try {
-      final List<LessonPdf> pdfs = await app.learning.lessonPdfs(lesson.id);
-      if (mounted && pdfs.isNotEmpty) setState(() => _pdfs[lesson.id] = pdfs);
-    } on ApiException {
-      // One card still opens the Lesson's first PDF.
-    }
-  }
-
   void _go(int index) {
     if (index < 0 || index >= _course.lessons.length || index == _index) return;
     setState(() => _index = index);
     _scroll.jumpTo(0);
     _loadQuiz();
-    _loadPdfs();
   }
 
   /// A saved progress report: update the lesson, and when it completes
@@ -128,7 +108,6 @@ class _LessonScreenState extends State<LessonScreen> {
                 'has_quiz': lesson.hasQuiz,
                 'quiz_required': lesson.quizRequired,
                 'has_pdf': lesson.hasPdf,
-                'pdf_count': lesson.pdfCount,
                 'from_live': lesson.fromLive,
                 'completed': completed,
               })
@@ -155,15 +134,10 @@ class _LessonScreenState extends State<LessonScreen> {
     await (value ? enterPlayerFullscreen() : exitPlayerFullscreen());
   }
 
-  Future<void> _openPdf(LessonPdf? pdf) async {
-    setState(() => _pdfOpened.add('${_lesson.id}:${pdf?.id ?? ''}'));
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LessonPdfScreen(lesson: _lesson, pdf: pdf)));
+  Future<void> _openPdf() async {
+    setState(() => _pdfOpened.add(_lesson.id));
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LessonPdfScreen(lesson: _lesson)));
   }
-
-  /// The first PDF opened before the list was known counts as that PDF.
-  bool _isPdfOpened(Lesson lesson, List<LessonPdf?> pdfs, LessonPdf? pdf) =>
-      _pdfOpened.contains('${lesson.id}:${pdf?.id ?? ''}') ||
-      (pdf != null && pdfs.first?.id == pdf.id && _pdfOpened.contains('${lesson.id}:'));
 
   Future<void> _openQuiz() async {
     await openLessonQuiz(context, _lesson, onPassed: _refreshCourse);
@@ -202,12 +176,9 @@ class _LessonScreenState extends State<LessonScreen> {
     final List<Lesson> lessons = _course.lessons;
     final bool videoDone = lesson.completed || lesson.watched >= 90;
     final bool quizPassed = (_attempts?.passed ?? lesson.quiz?.passed ?? false) || (lesson.completed && lesson.quizRequired);
-    // D-142: every PDF in order; until the list is known, one card (null) opens the first PDF.
-    final List<LessonPdf?> pdfs = _pdfs[lesson.id] ?? (lesson.hasPdf ? <LessonPdf?>[null] : <LessonPdf?>[]);
-    final bool allPdfsOpened = pdfs.isNotEmpty && pdfs.every((LessonPdf? pdf) => _isPdfOpened(lesson, pdfs, pdf));
     final List<({String label, _Step state, GlobalKey key})> steps = [
       (label: context.tr('lesson.stepVideo'), state: videoDone ? _Step.done : _Step.todo, key: _videoKey),
-      (label: context.tr('lesson.stepPdf'), state: !lesson.hasPdf ? _Step.none : allPdfsOpened ? _Step.done : _Step.todo, key: _pdfKey),
+      (label: context.tr('lesson.stepPdf'), state: !lesson.hasPdf ? _Step.none : _pdfOpened.contains(lesson.id) ? _Step.done : _Step.todo, key: _pdfKey),
       (label: context.tr('lesson.stepQuiz'), state: !lesson.hasQuiz ? _Step.none : quizPassed ? _Step.done : _Step.todo, key: _quizKey),
     ];
 
@@ -298,40 +269,27 @@ class _LessonScreenState extends State<LessonScreen> {
             ),
           ),
           const SizedBox(height: 14),
-          // 2. The PDFs (D-142: one card each, in the Admin's order).
+          // 2. The PDF.
           _Block(
             key: _pdfKey,
             number: 2,
-            title: context.tr(pdfs.length > 1 ? 'lesson.blockPdfs' : 'lesson.blockPdf'),
+            title: context.tr('lesson.blockPdf'),
             empty: !lesson.hasPdf,
             child: !lesson.hasPdf
                 ? _EmptyLine(context.tr('lesson.noPdf'))
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (int i = 0; i < pdfs.length; i++) ...[
-                        if (i > 0) ...[
-                          const SizedBox(height: 14),
-                          Divider(height: 1, color: NovaColors.borderOnLight),
-                          const SizedBox(height: 14),
-                        ],
-                        _Tool(
-                          icon: Icons.description_outlined,
-                          number: pdfs.length > 1 ? i + 1 : null,
-                          iconColor: NovaColors.heartRed,
-                          iconBackground: NovaColors.heartRed.withValues(alpha: 0.1),
-                          title: pdfs[i]?.title ?? context.tr('lesson.pdfTitle'),
-                          text: _isPdfOpened(lesson, pdfs, pdfs[i]) ? context.tr('lesson.pdfOpened') : context.tr('lesson.pdfText'),
-                          button: NovaButton(
-                            label: context.tr('lesson.openPdf'),
-                            variant: NovaButtonVariant.soft,
-                            chipIcon: Icons.description_outlined,
-                            expand: true,
-                            onTap: () => _openPdf(pdfs[i]),
-                          ),
-                        ),
-                      ],
-                    ],
+                : _Tool(
+                    icon: Icons.description_outlined,
+                    iconColor: NovaColors.heartRed,
+                    iconBackground: NovaColors.heartRed.withValues(alpha: 0.1),
+                    title: context.tr('lesson.pdfTitle'),
+                    text: _pdfOpened.contains(lesson.id) ? context.tr('lesson.pdfOpened') : context.tr('lesson.pdfText'),
+                    button: NovaButton(
+                      label: context.tr('lesson.openPdf'),
+                      variant: NovaButtonVariant.soft,
+                      chipIcon: Icons.description_outlined,
+                      expand: true,
+                      onTap: _openPdf,
+                    ),
                   ),
           ),
           const SizedBox(height: 14),
@@ -568,13 +526,9 @@ class _Tool extends StatelessWidget {
     required this.title,
     required this.text,
     required this.button,
-    this.number,
   });
 
   final IconData icon;
-
-  /// Shown in place of the icon (a Lesson's PDFs are numbered, D-142).
-  final int? number;
   final Color iconColor;
   final Color iconBackground;
   final String title;
@@ -591,19 +545,8 @@ class _Tool extends StatelessWidget {
             Container(
               width: 52,
               height: 52,
-              alignment: Alignment.center,
               decoration: BoxDecoration(color: iconBackground, borderRadius: BorderRadius.circular(16)),
-              child: number == null
-                  ? Icon(icon, size: 26, color: iconColor)
-                  : Text(
-                      '$number',
-                      style: NovaTypography.textTheme.titleMedium!.copyWith(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: iconColor,
-                        fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
-                      ),
-                    ),
+              child: Icon(icon, size: 26, color: iconColor),
             ),
             const SizedBox(width: 12),
             Expanded(
