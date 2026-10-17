@@ -1,6 +1,7 @@
 import AudioToolbox
 import Flutter
 import UIKit
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -8,6 +9,10 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // D-143 push: the app delegate receives the notification center's
+    // callbacks and hands them to firebase_messaging and
+    // flutter_local_notifications (taps, foreground presentation).
+    UNUserNotificationCenter.current().delegate = self as? UNUserNotificationCenterDelegate
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

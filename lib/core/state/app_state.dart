@@ -12,6 +12,11 @@ import '../../data/json.dart';
 import '../../data/models.dart';
 import '../../data/session_store.dart';
 import '../api/nova_api.dart';
+import '../i18n/nova_strings.dart';
+import '../push/firebase_push_platform.dart';
+import '../push/push_platform.dart';
+import '../push/push_service.dart';
+import '../push/push_taps.dart';
 import '../realtime/reverb_client.dart';
 import '../theme/nova_colors.dart';
 import 'account_intent.dart';
@@ -51,6 +56,7 @@ class AppState extends ChangeNotifier {
     this.references,
     this.live,
     this.realtime,
+    this.push,
     this._lang = defaultLang,
   }) {
     for (final ChangeNotifier store in <ChangeNotifier>[
@@ -66,6 +72,7 @@ class AppState extends ChangeNotifier {
     _lastSessionStatus = session.status;
     _lastRequiredStep = session.nextRequiredStep;
     session.addListener(_onSessionChanged);
+    _wirePush();
   }
 
   factory AppState.live() {
@@ -80,6 +87,7 @@ class AppState extends ChangeNotifier {
       references: ReferenceStore(api),
       live: LiveStore(api),
       realtime: ReverbClient(api),
+      push: PushService(platform: FirebasePushPlatform.fromEnvironment(), api: api),
     );
   }
 
@@ -93,6 +101,7 @@ class AppState extends ChangeNotifier {
     required AccountStore account,
     LiveStore? live,
     ReferenceStore? references,
+    PushService? push,
     NovaLang lang = defaultLang,
   }) =>
       AppState._(
@@ -104,6 +113,7 @@ class AppState extends ChangeNotifier {
         commerce: commerce,
         account: account,
         live: live,
+        push: push,
         lang: lang,
       );
 
@@ -126,6 +136,12 @@ class AppState extends ChangeNotifier {
 
   /// Reverb connection; null in offline previews.
   final ReverbClient? realtime;
+
+  /// D-143 Firebase push; null in offline previews (off without its options).
+  final PushService? push;
+
+  /// Tapped system notifications, opened once the signed-in space shows.
+  final PushTapRouter pushTaps = PushTapRouter();
   final List<VoidCallback> _channels = <VoidCallback>[];
 
   /// The UI language on first launch.
@@ -163,11 +179,14 @@ class AppState extends ChangeNotifier {
 
   NovaLang get lang => _lang;
 
-  /// Starts the app: the Student's saved language, then the public
-  /// catalogue and the stored session in parallel.
+  /// Starts the app: the saved language, the stored session, then the
+  /// catalogue — never for a Teacher, whom every Student endpoint refuses
+  /// (D-143). Firebase starts alongside when this build has push.
   Future<void> boot() async {
     await _restoreLang();
-    await Future.wait(<Future<void>>[catalog.load(), session.boot()]);
+    _startPush();
+    await session.boot();
+    if (!session.isTeacher) await catalog.load();
   }
 
   /// A language the Student chose survives relaunches; until they choose,
@@ -220,6 +239,9 @@ class AppState extends ChangeNotifier {
     if (api != null) {
       const FlutterSecureStorage().write(key: _langKey, value: lang.name).catchError((Object _) {});
     }
+    _nameChannels();
+    // D-143: a Teacher has neither catalogue nor Lessons.
+    if (session.isTeacher) return;
     // Reference names (subjects, levels…) are resolved per language.
     catalog.load();
     if (session.signedIn) learning.load();
@@ -231,6 +253,7 @@ class AppState extends ChangeNotifier {
   /// Loads everything that needs the session once, and wipes it on
   /// sign-out so nothing of one Student survives into the next.
   void _onSessionChanged() {
+    _syncPush();
     final bool signedIn = session.signedIn;
     final SessionStatus previous = _lastSessionStatus;
     _lastSessionStatus = session.status;
@@ -241,13 +264,18 @@ class AppState extends ChangeNotifier {
       // Student's data could not load behind it, and onboarding sets the
       // level the catalogue follows.
       if (signedIn && previousStep != null && session.nextRequiredStep == null) {
-        catalog.load();
+        if (!session.isTeacher) catalog.load();
         refreshAccount();
       }
       return;
     }
     _wasSignedIn = signedIn;
-    if (signedIn) {
+    if (signedIn && session.isTeacher) {
+      // D-143: a Teacher loads no Student store, only their notifications.
+      account.refreshNotifications();
+      _listenRealtime();
+      _watchSession();
+    } else if (signedIn) {
       // D-083: a signed-in Student sees the catalogue of their level and
       // filière. The boot load already carried the stored session cookie.
       if (previous != SessionStatus.booting) catalog.load();
@@ -259,6 +287,7 @@ class AppState extends ChangeNotifier {
     } else {
       // Signed out: the first screen again, not the visitor's browsing.
       _guest = false;
+      pushTaps.clear();
       _stopSessionWatch();
       for (final VoidCallback stop in _channels) {
         stop();
@@ -281,15 +310,18 @@ class AppState extends ChangeNotifier {
     final StudentProfile? me = session.profile;
     if (client == null || !client.configured || me == null) return;
     client.connect();
-    _channels
-      ..add(client.subscribe('private-user.${me.id}', (String event, Json data) {
-        if (event == 'SessionReplaced') {
-          session.replacedElsewhere(data.str('session_fingerprint'));
-        }
-      }))
-      ..add(client.subscribe('private-student.${me.studentId}', (String event, Json data) {
+    _channels.add(client.subscribe('private-user.${me.id}', (String event, Json data) {
+      if (event == 'SessionReplaced') {
+        session.replacedElsewhere(data.str('session_fingerprint'));
+      }
+      // D-143: a Teacher has no Student channel; their notifications come here.
+      if (event == 'NotificationCreated' && session.isTeacher) onNotificationCreated(data);
+    }));
+    if (!session.isTeacher) {
+      _channels.add(client.subscribe('private-student.${me.studentId}', (String event, Json data) {
         if (event == 'NotificationCreated') onNotificationCreated(data);
       }));
+    }
   }
 
   /// A `NotificationCreated` broadcast: listed and announced at once
@@ -297,7 +329,17 @@ class AppState extends ChangeNotifier {
   /// points refresh from the server.
   void onNotificationCreated(Json payload) {
     account.receive(payload);
-    account.load();
+    _reloadNotifications();
+  }
+
+  /// The bell and the list again (with the points for a Student; a
+  /// Teacher has notifications only, D-143).
+  void _reloadNotifications() {
+    if (session.isTeacher) {
+      account.refreshNotifications();
+    } else {
+      account.load();
+    }
   }
 
   /// Reverb delivers `SessionReplaced` at once, so `GET /auth/session` is
@@ -352,6 +394,7 @@ class AppState extends ChangeNotifier {
 
   /// Reloads the Student's data after a purchase or enrolment.
   Future<void> refreshAccount() async {
+    if (session.isTeacher) return account.refreshNotifications();
     await Future.wait(<Future<void>>[
       learning.load(),
       commerce.load(),
@@ -359,6 +402,58 @@ class AppState extends ChangeNotifier {
     ]);
   }
 }
+
+// ── D-143 push: system notifications (platform agent) ──────────────────────
+extension on AppState {
+  void _wirePush() {
+    final PushService? service = push;
+    if (service == null) return;
+    // The token leaves the account while the session still works.
+    session.beforeLogout = service.unregister;
+    service.foreground.listen(_onPushForeground);
+    service.opened.listen(pushTaps.open);
+  }
+
+  void _startPush() {
+    push?.start();
+    _nameChannels();
+  }
+
+  void _nameChannels() {
+    String tr(String key) => K[key]?[lang.name] ?? K[key]?['en'] ?? key;
+    push?.nameChannels(messages: tr('push.channelMessages'), general: tr('push.channelGeneral'));
+  }
+
+  /// The token is registered once the account is past its required steps
+  /// (the backend refuses everything else before), deleted when it ends.
+  void _syncPush() {
+    final PushService? service = push;
+    if (service == null) return;
+    if (session.signedIn && session.nextRequiredStep == null) {
+      service.signedIn();
+    } else if (!session.signedIn && session.status != SessionStatus.booting) {
+      service.signedOut();
+    }
+  }
+
+  /// A message while the app is open: chat messages have their own sound
+  /// and banner (chat feature); anything else chimes and shows the
+  /// notification banner like a realtime one (once per id), then the list
+  /// reloads.
+  void _onPushForeground(PushPayload payload) {
+    if (payload.isChat || !session.signedIn) return;
+    account.receive(<String, dynamic>{
+      'id': payload.notificationId ?? 'push:${payload.messageId ?? DateTime.now().microsecondsSinceEpoch}',
+      'type': payload.type,
+      'title': payload.title ?? '',
+      'message': payload.body ?? '',
+      'read_at': null,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    });
+    _reloadNotifications();
+  }
+}
+// ── end D-143 push ─────────────────────────────────────────────────────────
 
 /// InheritedNotifier bridge so any widget can read/rebuild on state.
 class AppScope extends InheritedNotifier<AppState> {

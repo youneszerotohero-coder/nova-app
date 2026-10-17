@@ -8,8 +8,9 @@ import 'otp.dart';
 
 enum SessionStatus { booting, offline, signedOut, signedIn }
 
-/// The Student's Laravel session (D-067): same endpoints and rules as
-/// the web SPA, including one active session per Student.
+/// The Laravel session (D-067): same endpoints and rules as the web SPA,
+/// including one active session per Student. D-143: a Teacher signs in too
+/// (several sessions allowed); an Admin is refused.
 class SessionStore extends ChangeNotifier {
   SessionStore(NovaApi api) : _api = api {
     api.onSessionLost = _onSessionLost;
@@ -31,6 +32,26 @@ class SessionStore extends ChangeNotifier {
   SessionStatus get status => _status;
   StudentProfile? get profile => _profile;
   bool get signedIn => _status == SessionStatus.signedIn;
+
+  /// The roles the app signs in (D-143): Students and Teachers.
+  static const Set<String> appRoles = <String>{'student', 'teacher'};
+
+  /// `student` | `teacher` while signed in.
+  String? get role => signedIn ? _user?.strOrNull('role') : null;
+
+  /// D-143: a Teacher reaches only their chats, notifications and settings
+  /// (every Student endpoint answers 403 `TEACHER_FORBIDDEN`).
+  bool get isTeacher => role == 'teacher';
+
+  /// The signed-in Teacher's profile (`UserResource.teacher`).
+  TeacherIdentity? get teacher {
+    final Json? teacher = isTeacher ? _user?.obj('teacher') : null;
+    return teacher == null ? null : TeacherIdentity.fromJson(teacher);
+  }
+
+  /// Runs before an explicit sign-out while the session still works (the
+  /// phone's push token is removed from the account, D-143).
+  Future<void> Function()? beforeLogout;
 
   /// `password_change` | `phone` | `onboarding` | `school_year` | null —
   /// the backend blocks every other route until the step is done.
@@ -78,8 +99,9 @@ class SessionStore extends ChangeNotifier {
       'password': password,
     });
     final Json? user = body.obj('data');
-    if (user?.str('role') != 'student') {
-      // Admin accounts use the web console; the app is Student-only.
+    if (!appRoles.contains(user?.str('role'))) {
+      // Admin accounts use the web console; the app is for Students and
+      // Teachers (D-143).
       await logout();
       throw const ApiException(
         status: 403,
@@ -277,6 +299,11 @@ class SessionStore extends ChangeNotifier {
 
   Future<void> logout() async {
     try {
+      await beforeLogout?.call();
+    } catch (_) {
+      // Signing out never waits on a push clean-up failure.
+    }
+    try {
       await _api?.post('/auth/logout');
     } on ApiException {
       // Signing out locally must work even offline or when expired.
@@ -304,7 +331,7 @@ class SessionStore extends ChangeNotifier {
   void _setUser(Json? user) {
     if (user == null) return;
     _user = user;
-    _profile = StudentProfile.fromUser(user);
+    _profile = StudentProfile.fromUser(_withTeacherName(user));
     _status = SessionStatus.signedIn;
     notifyListeners();
   }
@@ -322,4 +349,43 @@ class SessionStore extends ChangeNotifier {
     _endedReason = error.code;
     _signedOut();
   }
+}
+
+/// D-143: a Teacher's own name stands where a Student's would (initials,
+/// watermark-free screens), read from `UserResource.teacher`.
+Json _withTeacherName(Json user) {
+  final Json? teacher = user['role'] == 'teacher' ? user.obj('teacher') : null;
+  if (teacher == null) return user;
+  return <String, dynamic>{
+    ...user,
+    'student': <String, dynamic>{
+      'first_name': teacher.str('first_name'),
+      'last_name': teacher.str('last_name'),
+    },
+  };
+}
+
+/// The signed-in Teacher (`UserResource.teacher`, D-143).
+@immutable
+class TeacherIdentity {
+  const TeacherIdentity({
+    required this.id,
+    required this.firstName,
+    required this.lastName,
+    this.photoUrl,
+  });
+
+  factory TeacherIdentity.fromJson(Json json) => TeacherIdentity(
+        id: json.integer('id'),
+        firstName: json.str('first_name').trim(),
+        lastName: json.str('last_name').trim(),
+        photoUrl: json.strOrNull('photo_url'),
+      );
+
+  final int id;
+  final String firstName;
+  final String lastName;
+  final String? photoUrl;
+
+  String get fullName => '$firstName $lastName'.trim();
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/i18n/nova_strings.dart';
+import '../../core/push/push_host.dart';
 import '../../core/state/app_state.dart';
 import '../../core/widgets/hero_style.dart';
 import '../../data/session_store.dart';
@@ -9,6 +10,7 @@ import '../auth/change_password_screen.dart';
 import '../auth/phone_step_screen.dart';
 import '../auth/register_screen.dart';
 import '../auth/school_year_screen.dart';
+import '../teacher/teacher_shell.dart';
 import 'shell_screen.dart';
 import 'splash_screen.dart';
 
@@ -20,6 +22,8 @@ import 'splash_screen.dart';
 /// Student still signed in goes straight to their space, anyone else to the
 /// "I have an account / I'm new" gateway. D-134: the gateway's "continue
 /// without an account" opens the Student space read-only for a visitor.
+/// D-143: a Teacher changes their temporary password first, then reaches the
+/// Teacher shell; tapped system notifications open over either space.
 class AppGate extends StatefulWidget {
   const AppGate({super.key});
 
@@ -72,12 +76,14 @@ class _AppGateState extends State<AppGate> {
                 SessionStatus.signedOut => app.guest ? const ShellScreen() : const AuthGatewayScreen(),
                 SessionStatus.signedIn => switch (session.nextRequiredStep) {
                     'password_change' => const ChangePasswordScreen(),
+                    // D-143: no Student step applies to a Teacher.
+                    _ when session.isTeacher => const PushHost(child: TeacherShell()),
                     // D-079: an account without a valid mobile, before onboarding.
                     'phone' => const PhoneStepScreen(),
                     'onboarding' => const RegisterScreen(onboarding: true),
                     // D-098: a new school year, level and filière confirmed first.
                     'school_year' => const SchoolYearScreen(),
-                    _ => const ShellScreen(),
+                    _ => const PushHost(child: ShellScreen()),
                   },
               },
       ),

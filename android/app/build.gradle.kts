@@ -20,6 +20,8 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // flutter_local_notifications (D-143 push channels) needs desugaring.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -84,4 +86,6 @@ dependencies {
     implementation("com.google.android.play:app-update:2.1.0")
     // @OptIn for Media3's @UnstableApi DRM/DASH builders (lint-checked).
     implementation("androidx.annotation:annotation-experimental:1.4.1")
+    // Java 8+ APIs on older Android for flutter_local_notifications (D-143).
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- D-143: NOVA blue behind the notification icon (the website's accent). -->
+    <color name="nova_notification">#1F54D6</color>
+</resources>

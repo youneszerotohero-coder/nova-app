@@ -8,6 +8,7 @@ import '../../core/widgets/pressable_scale.dart';
 import '../account/notifications_screen.dart';
 import '../account/settings_screen.dart';
 import '../auth/require_account.dart';
+import '../teacher/teacher_top_bar.dart';
 import 'shell_screen.dart';
 
 /// Lets a tab page switch tabs or open the menu (the shell provides it).
@@ -40,6 +41,8 @@ class StudentTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // D-143: a Teacher's pages carry the Teacher bar (photo, name, bell).
+    if (!showBack && AppScope.of(context).session.isTeacher) return TeacherTopBar(trailing: trailing);
     final double top = MediaQuery.paddingOf(context).top;
     if (showBack) {
       return Padding(

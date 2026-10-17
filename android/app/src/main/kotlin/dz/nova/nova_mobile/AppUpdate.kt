@@ -1,6 +1,8 @@
 package dz.nova.nova_mobile
 
 import android.app.Activity
+import android.content.pm.PackageInfo
+import android.os.Build
 import com.google.android.play.core.appupdate.AppUpdateInfo
 import com.google.android.play.core.appupdate.AppUpdateManager
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
@@ -21,6 +23,7 @@ import io.flutter.plugin.common.MethodChannel
  *  - `start`    `{immediate}`: Play's own flow, answering `ok`, `canceled`
  *               or `failed`
  *  - `complete` installs a downloaded flexible update (the app restarts)
+ *  - `version`  the installed `{version, build}` (D-143 push `app_version`)
  *
  * Flexible download progress leaves on `nova/app_update/events`.
  */
@@ -91,10 +94,29 @@ object AppUpdate {
                     manager.completeUpdate()
                     result.success(null)
                 }
+                // D-143: the installed version, sent with the push token
+                // (`app_version`), as iOS answers it.
+                "version" -> {
+                    val info = activity.packageManager.getPackageInfo(activity.packageName, 0)
+                    result.success(
+                        mapOf(
+                            "version" to (info.versionName ?: ""),
+                            "build" to versionCode(info).toString(),
+                        ),
+                    )
+                }
                 else -> result.notImplemented()
             }
         }
     }
+
+    private fun versionCode(info: PackageInfo): Long =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            info.versionCode.toLong()
+        }
 
     private fun describe(info: AppUpdateInfo): Map<String, Any?> = mapOf(
         "available" to (info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE),

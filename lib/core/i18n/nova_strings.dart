@@ -1781,6 +1781,67 @@ const Map<String, Map<String, String>> K = {
 
   // D-143 Teacher mode and mobile push — platform agent appends strings below this line.
   'teacher.__anchor': {'en': ''},
+  'teacher.tabChats': {'en': 'Chats', 'fr': 'Discussions', 'ar': 'المحادثات'},
+  'teacher.tabNotifications': {'en': 'Alerts', 'fr': 'Alertes', 'ar': 'الإشعارات'},
+  'teacher.tabSettings': {'en': 'Settings', 'fr': 'Réglages', 'ar': 'الإعدادات'},
+  'teacher.role': {'en': 'Teacher', 'fr': 'Professeur', 'ar': 'أستاذ'},
+  'teacher.space': {'en': 'Teacher space', 'fr': 'Espace professeur', 'ar': 'فضاء الأستاذ'},
+  'teacher.settingsLead': {
+    'en': 'Your account, phone notifications and appearance.',
+    'fr': 'Votre compte, les notifications du téléphone et l’affichage.',
+    'ar': 'حسابك، إشعارات الهاتف والمظهر.',
+  },
+  'teacher.profileKicker': {'en': 'Teacher account', 'fr': 'Compte professeur', 'ar': 'حساب الأستاذ'},
+  'teacher.profileTitle': {'en': 'Your profile', 'fr': 'Votre profil', 'ar': 'ملفك الشخصي'},
+  'teacher.profileManaged': {
+    'en': 'Your name, photo and phone are managed by NOVA administration.',
+    'fr': 'Votre nom, votre photo et votre téléphone sont gérés par l’administration NOVA.',
+    'ar': 'الاسم، الصورة ورقم الهاتف تسيّرهم إدارة NOVA.',
+  },
+  'teacher.pushTitle': {'en': 'Phone notifications', 'fr': 'Notifications du téléphone', 'ar': 'إشعارات الهاتف'},
+  'teacher.signOutTitle': {'en': 'This phone', 'fr': 'Ce téléphone', 'ar': 'هذا الهاتف'},
+  'teacher.signOutSub': {
+    'en': 'Signing out stops this phone’s notifications for your account.',
+    'fr': 'La déconnexion arrête les notifications de ce téléphone pour votre compte.',
+    'ar': 'كي تخرج من الحساب، يحبسو إشعارات حسابك في هذا الهاتف.',
+  },
+  'push.channelMessages': {'en': 'Messages', 'fr': 'Messages', 'ar': 'الرسائل'},
+  'push.channelGeneral': {'en': 'NOVA notifications', 'fr': 'Notifications NOVA', 'ar': 'إشعارات NOVA'},
+  'push.askTitle': {'en': 'Turn on notifications', 'fr': 'Activer les notifications', 'ar': 'شعّل الإشعارات'},
+  'push.askBody': {
+    'en': 'Get your teachers’ messages, new lessons, Lives and payment news, even when the app is closed.',
+    'fr': 'Reçois les messages de tes professeurs, les nouvelles leçons, les Lives et le suivi de tes paiements, même quand l’application est fermée.',
+    'ar': 'باش توصلك رسائل الأساتذة، الدروس الجداد، اللايفات وأخبار الخلاص حتى كي يكون التطبيق مسكّر.',
+  },
+  'push.askBodyTeacher': {
+    'en': 'Get your Students’ messages as soon as they are sent, even when the app is closed.',
+    'fr': 'Recevez les messages de vos élèves dès leur envoi, même quand l’application est fermée.',
+    'ar': 'توصلك رسائل التلاميذ وقت ما يبعثوها، حتى كي يكون التطبيق مسكّر.',
+  },
+  'push.askEnable': {'en': 'Enable notifications', 'fr': 'Activer', 'ar': 'شعّل الإشعارات'},
+  'push.askLater': {'en': 'Not now', 'fr': 'Plus tard', 'ar': 'ماشي دروك'},
+  'push.statusOn': {
+    'en': 'On: messages reach this phone even when the app is closed.',
+    'fr': 'Activées : les messages arrivent sur ce téléphone même application fermée.',
+    'ar': 'مشعّلة: الرسائل توصل لهذا الهاتف حتى كي يكون التطبيق مسكّر.',
+  },
+  'push.statusOff': {
+    'en': 'Off: turn them on to get messages when the app is closed.',
+    'fr': 'Désactivées : activez-les pour recevoir les messages application fermée.',
+    'ar': 'طافية: شعّلها باش توصلك الرسائل كي يكون التطبيق مسكّر.',
+  },
+  'push.statusBlocked': {
+    'en': 'Blocked: allow NOVA in your phone’s notification settings.',
+    'fr': 'Bloquées : autorisez NOVA dans les réglages de notifications du téléphone.',
+    'ar': 'محبوسة: سرّح NOVA في إعدادات الإشعارات تاع الهاتف.',
+  },
+  'push.statusUnavailable': {
+    'en': 'Not available in this version of the app.',
+    'fr': 'Indisponibles dans cette version de l’application.',
+    'ar': 'ماراهمش متوفرين في هذي النسخة تاع التطبيق.',
+  },
+  'push.enable': {'en': 'Enable', 'fr': 'Activer', 'ar': 'شعّل'},
+  'push.openSettings': {'en': 'Open phone settings', 'fr': 'Ouvrir les réglages', 'ar': 'افتح إعدادات الهاتف'},
 };
 
 extension NovaTr on BuildContext {
