@@ -16,9 +16,12 @@ import '../../data/models.dart';
 /// session, rendered in-app under the Student's watermark. The window is
 /// `FLAG_SECURE` on Android and blurred during capture on iOS.
 class LessonPdfScreen extends StatefulWidget {
-  const LessonPdfScreen({super.key, required this.lesson});
+  const LessonPdfScreen({super.key, required this.lesson, this.pdf});
 
   final Lesson lesson;
+
+  /// D-142: one of the Lesson's PDFs; without it, the Lesson's first PDF.
+  final LessonPdf? pdf;
 
   @override
   State<LessonPdfScreen> createState() => _LessonPdfScreenState();
@@ -37,7 +40,7 @@ class _LessonPdfScreenState extends State<LessonPdfScreen> {
   Future<void> _load() async {
     final AppState app = AppScope.of(context);
     try {
-      final List<int> bytes = await app.learning.lessonPdf(widget.lesson.id);
+      final List<int> bytes = await app.learning.lessonPdf(widget.lesson.id, pdfId: widget.pdf?.id);
       if (!mounted) return;
       setState(() {
         _controller = PdfControllerPinch(
@@ -72,7 +75,7 @@ class _LessonPdfScreenState extends State<LessonPdfScreen> {
                   ),
                   Expanded(
                     child: Text(
-                      widget.lesson.title,
+                      widget.pdf?.title ?? widget.lesson.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: NovaTypography.textTheme.titleMedium,

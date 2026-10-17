@@ -72,6 +72,7 @@ class Lesson {
     this.hasQuiz = false,
     this.quizRequired = false,
     this.hasPdf = false,
+    this.pdfCount = 0,
     this.apiCompleted,
     this.quiz,
     this.pdf,
@@ -91,6 +92,7 @@ class Lesson {
       watched: 0,
       hasQuiz: json.flag('has_quiz'),
       hasPdf: json.flag('has_pdf'),
+      pdfCount: json.integer('pdf_count', json.flag('has_pdf') ? 1 : 0),
       fromLive: json.flag('from_live'),
     );
   }
@@ -110,6 +112,9 @@ class Lesson {
   final bool hasQuiz;
   final bool quizRequired;
   final bool hasPdf;
+
+  /// D-142: how many PDFs the Lesson has (1 from a server before D-142).
+  final int pdfCount;
 
   /// Server verdict from `/courses/{id}/progress`; wins over the local
   /// rule when present.
@@ -138,12 +143,29 @@ class Lesson {
         hasQuiz: row.flag('has_quiz', hasQuiz),
         quizRequired: row.flag('quiz_required'),
         hasPdf: row.flag('has_pdf', hasPdf),
+        pdfCount: row.integer('pdf_count', row.flag('has_pdf', hasPdf) ? (pdfCount > 0 ? pdfCount : 1) : 0),
         apiCompleted: row.flag('completed'),
         quiz: quiz,
         pdf: pdf,
         allowDownload: allowDownload,
         fromLive: row.flag('from_live', fromLive),
       );
+}
+
+/// D-142: one of a Lesson's PDFs, in the Admin's order; it opens through
+/// `/lessons/{lesson}/pdfs/{id}/access`.
+class LessonPdf {
+  const LessonPdf({required this.id, required this.title, required this.position});
+
+  factory LessonPdf.fromJson(Json json) => LessonPdf(
+        id: json.integer('id'),
+        title: json.str('title'),
+        position: json.integer('position'),
+      );
+
+  final int id;
+  final String title;
+  final int position;
 }
 
 class QuizData {

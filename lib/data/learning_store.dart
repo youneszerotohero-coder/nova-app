@@ -156,11 +156,18 @@ class LearningStore extends ChangeNotifier {
     return QuizResult.fromJson(body);
   }
 
-  /// The lesson PDF, fetched through its 5-minute signed URL with the
-  /// session cookie (both are required by the backend).
-  Future<List<int>> lessonPdf(int lessonId) async {
-    final Json access = (await _api!.get('/lessons/$lessonId/pdf-access')).obj('data') ??
-        <String, dynamic>{};
+  /// D-142: the Lesson's PDFs in the Admin's order (`/lessons/{id}`).
+  Future<List<LessonPdf>> lessonPdfs(int lessonId) async {
+    final Json lesson = (await _api!.get('/lessons/$lessonId')).obj('data') ?? <String, dynamic>{};
+    return lesson.list('pdfs').map(LessonPdf.fromJson).toList();
+  }
+
+  /// A lesson PDF, fetched through its 5-minute signed URL with the
+  /// session cookie (both are required by the backend). Without [pdfId],
+  /// the Lesson's first PDF.
+  Future<List<int>> lessonPdf(int lessonId, {int? pdfId}) async {
+    final String path = pdfId == null ? '/lessons/$lessonId/pdf-access' : '/lessons/$lessonId/pdfs/$pdfId/access';
+    final Json access = (await _api!.get(path)).obj('data') ?? <String, dynamic>{};
     return _api.getBytes(access.str('url'));
   }
 
