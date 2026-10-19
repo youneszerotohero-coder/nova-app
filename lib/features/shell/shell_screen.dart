@@ -5,10 +5,12 @@ import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
+import '../../core/theme/nova_dimens.dart';
 import '../../core/widgets/app_menu.dart';
 import '../../core/widgets/nova_bottom_bar.dart';
 import '../../core/widgets/nova_toast.dart';
 import '../account/notifications_screen.dart';
+import '../assistant/assistant_screen.dart';
 import '../../data/models.dart';
 import '../account/orders_screen.dart';
 import '../account/settings_screen.dart';
@@ -231,6 +233,14 @@ class _ShellScreenState extends State<ShellScreen> {
               currentIndex: _currentIndex,
               onChanged: _select,
             ),
+            // D-150: the help assistant, as the website's floating button
+            // above its phone tab bar (not in offline previews: no API).
+            if (state.api != null)
+              PositionedDirectional(
+                start: 16,
+                bottom: 12 + MediaQuery.viewPaddingOf(context).bottom + NovaDimens.bottomBarHeight + 14,
+                child: const AssistantFab(),
+              ),
           ],
         ),
       ),

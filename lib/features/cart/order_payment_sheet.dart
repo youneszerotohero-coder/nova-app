@@ -15,15 +15,23 @@ import '../../core/widgets/pressable_scale.dart';
 import '../../data/models.dart';
 import 'cart_screen.dart';
 
-/// Lets the Student choose a CCP receipt: JPEG, PNG or PDF up to
-/// 10 MB, the backend's own limits. Null when cancelled.
+/// Lets the Student choose a photo of the CCP receipt from the phone's
+/// photos (owner request, 2026-10-19): JPEG or PNG up to 10 MB, the
+/// backend's own limits. iOS hands an iPhone photo (HEIC) over as JPEG.
+/// Null when cancelled.
 Future<File?> pickCcpReceipt(BuildContext context) async {
   final List<PlatformFile> files = await FilePicker.pickFiles(
-    type: FileType.custom,
-    allowedExtensions: const <String>['jpg', 'jpeg', 'png', 'pdf'],
+    type: FileType.image,
+    darwinOptions: const DarwinOptions(assetRepresentationMode: DarwinAssetRepresentationMode.compatible),
   );
   final String? path = files.isEmpty ? null : files.first.path;
   if (path == null) return null;
+  if (!RegExp(r'\.(jpe?g|png)$', caseSensitive: false).hasMatch(path)) {
+    if (context.mounted) {
+      novaToast(context, context.tr('checkout.receiptFormat'), icon: Icons.error_outline_rounded);
+    }
+    return null;
+  }
   final File file = File(path);
   if (await file.length() > 10 * 1024 * 1024) {
     if (context.mounted) {

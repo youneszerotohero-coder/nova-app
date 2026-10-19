@@ -31,6 +31,10 @@ String apiErrorText(BuildContext context, Object error) {
     'STUDENT_ONLY' => 'err.studentOnly',
     'FORBIDDEN' => 'err.forbidden',
     'TOO_MANY_REQUESTS' => 'err.tooMany',
+    // D-150 help assistant.
+    'ASSISTANT_BUSY' => 'assistant.busy',
+    'ASSISTANT_DAILY_LIMIT' => 'assistant.dailyLimit',
+    'ASSISTANT_UNAVAILABLE' => 'assistant.unavailable',
     'LIVE_BUSY' => 'err.liveBusy',
     'PROFILE_NAME_REQUIRED' => 'live.nameTitle',
     'COURSE_IS_FREE' => 'err.courseFree',
