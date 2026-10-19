@@ -1995,6 +1995,8 @@ const Map<String, Map<String, String>> K = {
   'assistant.linkForgotPassword': {'en': 'Choose a password', 'fr': 'Choisir un mot de passe', 'ar': 'اختر كلمة مرور'},
   'assistant.linkLogin': {'en': 'Sign in', 'fr': 'Se connecter', 'ar': 'تسجيل الدخول'},
   'assistant.linkRegister': {'en': 'Create an account', 'fr': 'Créer un compte', 'ar': 'إنشاء حساب'},
+  'assistant.linkAppAndroid': {'en': 'NOVA on Google Play', 'fr': 'NOVA sur Google Play', 'ar': 'NOVA على Google Play'},
+  'assistant.linkAppIos': {'en': 'NOVA on the App Store', 'fr': 'NOVA sur l’App Store', 'ar': 'NOVA على App Store'},
 };
 
 extension NovaTr on BuildContext {

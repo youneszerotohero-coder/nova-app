@@ -30,6 +30,11 @@ Future<void> openAssistantHref(BuildContext context, String href) async {
   }
 
   final Uri uri = Uri.parse(href);
+  // D-151: a store page (the app's own) or any other site opens outside.
+  if (uri.hasScheme) {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    return;
+  }
   final List<String> parts = uri.pathSegments;
   final String first = parts.isEmpty ? '' : parts.first;
   final String? slug = parts.length > 1 ? parts[1] : null;

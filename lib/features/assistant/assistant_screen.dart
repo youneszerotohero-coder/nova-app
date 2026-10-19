@@ -524,6 +524,8 @@ const Map<String, String> _linkLabels = <String, String>{
   'forgot_password': 'assistant.linkForgotPassword',
   'login': 'assistant.linkLogin',
   'register': 'assistant.linkRegister',
+  'app_android': 'assistant.linkAppAndroid',
+  'app_ios': 'assistant.linkAppIos',
 };
 
 class _LinkChip extends StatelessWidget {
