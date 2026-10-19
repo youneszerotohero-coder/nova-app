@@ -15,13 +15,17 @@ typedef ReverbListener = void Function(String event, Json data);
 /// private and presence channels are authorized by
 /// `POST /broadcasting/auth` with the same session cookie.
 ///
-/// The app key is public by design but not in this repository, so it is
-/// supplied at build time (`--dart-define=NOVA_REVERB_KEY=…`). Without
-/// it the app polls exactly like the web does when Reverb is down.
+/// The app key is public by design (the website sends it to every browser).
+/// D-149: production's key is the default; `--dart-define=NOVA_REVERB_KEY=…`
+/// still overrides it, and an empty key makes the app poll exactly like the
+/// web does when Reverb is down.
 class ReverbClient {
   ReverbClient(this._api);
 
-  static const String appKey = String.fromEnvironment('NOVA_REVERB_KEY');
+  static const String appKey = String.fromEnvironment(
+    'NOVA_REVERB_KEY',
+    defaultValue: 'f5c8760b803f52a3b1349d97e6303cc1',
+  );
   static const String host = String.fromEnvironment(
     'NOVA_REVERB_HOST',
     defaultValue: 'nova-elearning.com',

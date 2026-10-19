@@ -1,13 +1,14 @@
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nova_mobile/core/api/api_exception.dart';
 import 'package:nova_mobile/core/api/nova_api.dart';
-import 'package:nova_mobile/core/push/firebase_push_platform.dart';
 import 'package:nova_mobile/core/push/push_config.dart';
 import 'package:nova_mobile/core/push/push_platform.dart';
 import 'package:nova_mobile/core/push/push_service.dart';
+import 'package:nova_mobile/core/realtime/reverb_client.dart';
 import 'package:nova_mobile/core/state/app_state.dart';
 import 'package:nova_mobile/core/theme/nova_theme.dart';
 import 'package:nova_mobile/data/account_store.dart';
@@ -259,14 +260,24 @@ void main() {
   });
 
   group('Firebase push (D-143)', () {
-    test('push is off without the Firebase --dart-defines', () async {
+    test('without --dart-defines a build uses the production project, with each platform\'s own key (D-149)', () {
+      final FirebaseOptions android = PushConfig.fromEnvironment(TargetPlatform.android).optionsFor(TargetPlatform.android)!;
+      expect(android.projectId, 'nova-b557b');
+      expect(android.messagingSenderId, '626629111453');
+      expect(android.appId, '1:626629111453:android:854aa19d12a032685e6e74');
+      expect(android.apiKey, 'AIzaSyBLNASvIg17wwnMj7HaBHMtQlkEde1qU5o');
+      final FirebaseOptions ios = PushConfig.fromEnvironment(TargetPlatform.iOS).optionsFor(TargetPlatform.iOS)!;
+      expect(ios.appId, '1:626629111453:ios:9220f1b8392bbccd5e6e74');
+      expect(ios.apiKey, 'AIzaSyDYz58V2zoljN2hdeJ1pdhABt9sdWvB59g');
+      expect(ReverbClient.appKey, 'f5c8760b803f52a3b1349d97e6303cc1');
+    });
+
+    test('push is off when a Firebase value is empty', () async {
       expect(const PushConfig().optionsFor(TargetPlatform.android), isNull);
       expect(const PushConfig(apiKey: 'k', projectId: 'p', senderId: '1').optionsFor(TargetPlatform.android), isNull);
       const PushConfig full = PushConfig(apiKey: 'k', projectId: 'p', senderId: '1', appIdAndroid: '1:1:android:a', appIdIos: '1:1:ios:b');
       expect(full.optionsFor(TargetPlatform.android)?.appId, '1:1:android:a');
       expect(full.optionsFor(TargetPlatform.iOS)?.appId, '1:1:ios:b');
-      // This test build has none: no Firebase platform at all.
-      expect(FirebasePushPlatform.fromEnvironment(), isNull);
 
       final FakeBackend backend = FakeBackend(<String, FakeResponse>{});
       final PushService push = PushService(platform: null, api: fakeApi(backend), flags: MemoryPushFlags());

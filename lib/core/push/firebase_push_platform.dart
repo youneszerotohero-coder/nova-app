@@ -29,7 +29,7 @@ class FirebasePushPlatform implements PushPlatform {
   /// The platform for this build, or null when its options are missing.
   static FirebasePushPlatform? fromEnvironment() {
     if (kIsWeb) return null;
-    final FirebaseOptions? options = const PushConfig.fromEnvironment().optionsFor(defaultTargetPlatform);
+    final FirebaseOptions? options = PushConfig.fromEnvironment(defaultTargetPlatform).optionsFor(defaultTargetPlatform);
     return options == null ? null : FirebasePushPlatform(options);
   }
 
