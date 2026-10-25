@@ -1830,7 +1830,7 @@ const Map<String, Map<String, String>> K = {
   'chat.attachPdf': {'en': 'Send a PDF', 'fr': 'Envoyer un PDF', 'ar': 'ابعث PDF'},
   'chat.sendPdfTitle': {'en': 'Send this PDF', 'fr': 'Envoyer ce PDF', 'ar': 'ابعث هاد الـPDF'},
   'chat.captionHint': {'en': 'Add a caption (optional)', 'fr': 'Ajouter une légende (facultatif)', 'ar': 'زيد تعليق (ماشي لازم)'},
-  'chat.pdfTooBig': {'en': 'The PDF must be 20 MB or less.', 'fr': 'Le PDF doit faire 20 Mo au maximum.', 'ar': 'الـPDF لازم ما يفوتش 20 ميغا.'},
+  'chat.pdfTooBig': {'en': 'The PDF must be 50 MB or less.', 'fr': 'Le PDF doit faire 50 Mo au maximum.', 'ar': 'الـPDF لازم ما يفوتش 50 ميغا.'},
   'chat.lockedPublic': {'en': 'Only NOVA posts in the announcements.', 'fr': 'Seul NOVA publie dans les annonces.', 'ar': 'غير NOVA لي تكتب في الإعلانات.'},
   'chat.lockedGroup': {'en': 'Only the teacher writes in this group.', 'fr': 'Seul le prof écrit dans ce groupe.', 'ar': 'غير الأستاذ لي يكتب في هاد المجموعة.'},
   'chat.errClosed': {

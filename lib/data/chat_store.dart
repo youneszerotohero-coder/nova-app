@@ -55,7 +55,7 @@ class ChatStore extends ChangeNotifier {
   static const Duration pollInterval = Duration(seconds: 10);
   static const int maxTextLength = 2000;
   static const int maxCaptionLength = 500;
-  static const int maxPdfBytes = 20 * 1024 * 1024;
+  static const int maxPdfBytes = 50 * 1024 * 1024;
 
   /// D-156 BR-X1: one JPEG, PNG or WebP of at most 15 MB.
   static const int maxImageBytes = 15 * 1024 * 1024;
