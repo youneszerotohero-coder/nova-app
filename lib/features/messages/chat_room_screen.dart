@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,8 +18,11 @@ import 'chat_audio.dart';
 import 'chat_bubble.dart';
 import 'chat_composer.dart';
 import 'chat_format.dart';
+import 'chat_image.dart';
 import 'chat_info_screen.dart';
 import 'chat_pdf_screen.dart';
+import 'chat_pins.dart';
+import 'chat_reactions.dart';
 import 'chat_widgets.dart';
 
 /// Opens room [roomId] above [navigator]'s pages; a room already on top
@@ -41,7 +45,8 @@ void openChatRoom(NavigatorState navigator, int roomId) {
 /// pages while scrolling up, position kept), day separators, bubbles
 /// grouped by sender; new messages slide in and scroll into view only when
 /// the latest one is shown, otherwise "Jump to latest" counts them. The
-/// room is read while its latest message is on screen.
+/// room is read while its latest message is on screen. D-156: the pinned
+/// bar under the app bar, reactions and Pin / Unpin in the message menu.
 class ChatRoomScreen extends StatefulWidget {
   const ChatRoomScreen({super.key, required this.roomId});
 
@@ -74,6 +79,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   int _count = 0;
   final Set<String> _shown = <String>{};
 
+  /// D-156: each bubble's key (by [chatMessageKey]), so a pin can be
+  /// scrolled to; the message briefly highlighted after the jump.
+  final Map<String, GlobalKey> _itemKeys = <String, GlobalKey>{};
+  int? _highlight;
+  Timer? _highlightTimer;
+  bool _pinsAsked = false;
+
   int get _roomId => widget.roomId;
 
   @override
@@ -90,10 +102,20 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       _chat.refreshRoom(_roomId).catchError((Object _) => null);
     }
     _chat.openThread(_roomId);
+    _loadPins();
+  }
+
+  /// The pins of a room that has some, once per visit (then on
+  /// `ChatPinsChanged`).
+  void _loadPins() {
+    if (_pinsAsked || (_chat.room(_roomId)?.pinnedCount ?? 0) == 0) return;
+    _pinsAsked = true;
+    _chat.loadPins(_roomId);
   }
 
   @override
   void dispose() {
+    _highlightTimer?.cancel();
     _chat.leave(_roomId);
     _chat.removeListener(_onStore);
     _removed?.cancel();
@@ -133,6 +155,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   /// was shown (always for one's own), or are counted on the jump button.
   void _onStore() {
     if (!mounted) return;
+    _loadPins();
     if (_anchor == null) {
       _syncThread();
       if (_anchor != null) return;
@@ -204,11 +227,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     _readIfShown();
   }
 
-  /// Another page covers the room (info, PDF): it is not read meanwhile.
-  Future<void> _cover(Widget page) async {
+  /// Another page covers the room (info, PDF, photo): it is not read
+  /// meanwhile.
+  Future<void> _cover(Widget page) => _coverWith(MaterialPageRoute<void>(builder: (_) => page));
+
+  Future<void> _coverWith(Route<void> route) async {
     _covered = true;
     _chat.leave(_roomId);
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+    await Navigator.of(context).push(route);
     if (!mounted) return;
     _covered = false;
     _chat.setActive(_roomId, atBottom: _atBottom);
@@ -220,6 +246,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   void _openPdf(ChatMessage message) =>
       _cover(ChatPdfScreen(roomId: _roomId, messageId: message.id, title: message.attachment?.name ?? 'PDF'));
 
+  void _openImage(ChatMessage message) {
+    if (message.isConfirmed) _coverWith(chatImageRoute(_chat, message));
+  }
+
   // ── Actions on a message ───────────────────────────────────────────────
 
   Future<void> _retry(ChatMessage message) async {
@@ -228,8 +258,93 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     if (error == null) {
       ChatSounds.sent();
     } else {
-      novaToast(context, chatErrorText(context, error), icon: Icons.error_outline_rounded);
+      novaToast(context, chatErrorText(context, error, kind: message.kind), icon: Icons.error_outline_rounded);
     }
+  }
+
+  /// D-156: a reaction tapped (chip or quick bar): the same one removes it,
+  /// another replaces it.
+  Future<void> _react(ChatMessage message, String emoji) async {
+    HapticFeedback.selectionClick();
+    final ApiException? error = await _chat.react(_roomId, message.id, emoji);
+    if (error != null && mounted) novaToast(context, chatErrorText(context, error), icon: Icons.error_outline_rounded);
+  }
+
+  void _showReactors(ChatMessage message) {
+    HapticFeedback.selectionClick();
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => ChatReactorsSheet(roomId: _roomId, message: message),
+    );
+  }
+
+  Future<void> _togglePin(ChatMessage message) async {
+    final bool pinned = message.isPinned;
+    try {
+      if (pinned) {
+        await _chat.unpin(_roomId, message.id);
+      } else {
+        await _chat.pin(_roomId, message.id);
+      }
+      if (mounted) {
+        novaToast(context, context.tr(pinned ? 'chat.unpinnedDone' : 'chat.pinnedDone'), icon: Icons.push_pin_outlined);
+      }
+    } on ApiException catch (error) {
+      if (mounted) novaToast(context, chatErrorText(context, error), icon: Icons.error_outline_rounded);
+    }
+  }
+
+  void _openPins() {
+    _chat.loadPins(_roomId);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext sheet) => ChatPinsSheet(
+        chat: _chat,
+        roomId: _roomId,
+        onPick: (ChatMessage pin) {
+          Navigator.of(sheet).pop();
+          _jumpTo(pin.id);
+        },
+      ),
+    );
+  }
+
+  /// Scrolls to message [messageId] (older pages first when it is further
+  /// up) and highlights it for a moment.
+  Future<void> _jumpTo(int messageId) async {
+    final bool found = await _chat.loadUntil(_roomId, messageId);
+    if (!mounted) return;
+    final ChatMessage? target = _chat.messagesOf(_roomId).where((ChatMessage m) => m.id == messageId).firstOrNull;
+    if (!found || target == null) {
+      novaToast(context, context.tr('chat.pinGone'), icon: Icons.info_outline_rounded);
+      return;
+    }
+    final GlobalKey key = _itemKeys.putIfAbsent(chatMessageKey(target), GlobalKey.new);
+    // Laid out lazily: step through the list towards it until it is built.
+    final bool older = messageId <= (_anchor ?? 0);
+    for (int step = 0; step < 400 && key.currentContext == null; step++) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || !_scroll.hasClients) return;
+      if (key.currentContext != null) break;
+      final ScrollPosition position = _scroll.position;
+      final double next = older
+          ? math.min(position.pixels + position.viewportDimension * 0.8, position.maxScrollExtent)
+          : math.max(position.pixels - position.viewportDimension * 0.8, position.minScrollExtent);
+      if (next == position.pixels) break;
+      _scroll.jumpTo(next);
+    }
+    final BuildContext? item = key.currentContext;
+    if (item == null || !item.mounted) return;
+    setState(() => _highlight = messageId);
+    _highlightTimer?.cancel();
+    _highlightTimer = Timer(const Duration(milliseconds: 1600), () {
+      if (mounted) setState(() => _highlight = null);
+    });
+    await Scrollable.ensureVisible(item, alignment: 0.5, duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
   }
 
   Future<void> _actions(ChatMessage message, ChatRoom room) async {
@@ -248,13 +363,33 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     final String text = message.body ?? '';
     final bool canDelete = mine || room.canModerate;
     final bool canSeeReaders = mine || room.canModerate;
-    final String? choice = await _sheet(<_Action>[
-      if (text.isNotEmpty) _Action('copy', Icons.content_copy_rounded, context.tr('chat.copy')),
-      if (canSeeReaders) _Action('info', Icons.visibility_outlined, context.tr('chat.messageInfo')),
-      if (canDelete) _Action('delete', Icons.delete_outline_rounded, context.tr('chat.delete'), danger: true),
-    ]);
+    final String? choice = await _sheet(
+      <_Action>[
+        if (text.isNotEmpty) _Action('copy', Icons.content_copy_rounded, context.tr('chat.copy')),
+        if (room.canPin)
+          message.isPinned
+              ? _Action('unpin', Icons.push_pin_outlined, context.tr('chat.unpin'))
+              : _Action('pin', Icons.push_pin_rounded, context.tr('chat.pin')),
+        if (canSeeReaders) _Action('info', Icons.visibility_outlined, context.tr('chat.messageInfo')),
+        if (canDelete) _Action('delete', Icons.delete_outline_rounded, context.tr('chat.delete'), danger: true),
+      ],
+      header: room.canReact
+          ? (BuildContext sheet) => ChatQuickReactions(
+                emojis: room.reactionEmojis,
+                selected: message.myReaction,
+                onPick: (String emoji) => Navigator.of(sheet).pop('react:$emoji'),
+              )
+          : null,
+    );
     if (!mounted || choice == null) return;
+    if (choice.startsWith('react:')) {
+      _react(message, choice.substring('react:'.length));
+      return;
+    }
     switch (choice) {
+      case 'pin':
+      case 'unpin':
+        _togglePin(message);
       case 'copy':
         await Clipboard.setData(ClipboardData(text: text));
         if (mounted) novaToast(context, context.tr('chat.copied'), icon: Icons.content_copy_rounded);
@@ -270,15 +405,21 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
-  Future<String?> _sheet(List<_Action> actions) {
-    if (actions.isEmpty) return Future<String?>.value();
+  /// The message menu: [header] on top (the reactions' quick bar), then
+  /// the actions; pops the chosen action's id.
+  Future<String?> _sheet(List<_Action> actions, {WidgetBuilder? header}) {
+    if (actions.isEmpty && header == null) return Future<String?>.value();
     return showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (BuildContext context) => _SheetFrame(
+      builder: (BuildContext context) => ChatSheetFrame(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (header != null) ...[
+              header(context),
+              if (actions.isNotEmpty) Divider(height: 1, thickness: 1, color: NovaColors.borderOnLight),
+            ],
             for (final _Action action in actions)
               ListTile(
                 leading: Icon(action.icon, color: action.danger ? NovaColors.heartRed : NovaColors.textStrong),
@@ -336,6 +477,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       body: Column(
         children: [
           _RoomBar(room: room, onInfo: room == null ? null : _openInfo),
+          if (room != null && room.pinnedCount > 0)
+            ChatPinnedBar(
+              room: room,
+              pins: _chat.pinsOf(_roomId),
+              onJump: (ChatMessage pin) => _jumpTo(pin.id),
+              onList: _openPins,
+            ),
           Expanded(child: room == null ? _placeholder(context) : _messages(context, room)),
           if (room != null) ChatComposer(room: room, onSent: () => WidgetsBinding.instance.addPostFrameCallback((_) => _toLatest())),
         ],
@@ -386,20 +534,29 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         animate: animate,
         mine: mine,
         child: Column(
+          key: _itemKeys.putIfAbsent(key, GlobalKey.new),
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (newDay) _DaySeparator(label: chatDayLabel(context, at)),
             if (unreadHere) const _UnreadSeparator(),
-            ChatBubble(
-              message: m,
-              room: room,
-              mine: mine,
-              first: first,
-              last: last,
-              onTap: m.state == ChatSendState.failed ? () => _retry(m) : null,
-              onLongPress: () => _actions(m, room),
-              onOpenPdf: () => _openPdf(m),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 320),
+              color: _highlight == m.id && m.isConfirmed ? NovaColors.accent.withValues(alpha: 0.14) : Colors.transparent,
+              child: ChatBubble(
+                message: m,
+                room: room,
+                mine: mine,
+                first: first,
+                last: last,
+                onTap: m.state == ChatSendState.failed ? () => _retry(m) : null,
+                onLongPress: () => _actions(m, room),
+                onOpenPdf: () => _openPdf(m),
+                onOpenImage: () => _openImage(m),
+                onReact: room.canReact && m.isConfirmed ? (String emoji) => _react(m, emoji) : null,
+                // "Who reacted" follows the members-list right (BR-X3).
+                onShowReactors: room.canViewMembers && m.isConfirmed ? () => _showReactors(m) : null,
+              ),
             ),
           ],
         ),
@@ -817,32 +974,6 @@ class _RoomBar extends StatelessWidget {
   }
 }
 
-/// The white sheet the message actions sit in.
-class _SheetFrame extends StatelessWidget {
-  const _SheetFrame({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(10, 10, 10, 12 + MediaQuery.paddingOf(context).bottom),
-      decoration: BoxDecoration(
-        color: NovaColors.paperCard,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: NovaColors.lineStrong, borderRadius: BorderRadius.circular(4))),
-          const SizedBox(height: 8),
-          Material(type: MaterialType.transparency, child: child),
-        ],
-      ),
-    );
-  }
-}
-
 /// "Message info": who read the message, and when, by pages of 50 with the total.
 class _SeenSheet extends StatefulWidget {
   const _SeenSheet({required this.roomId, required this.message});
@@ -900,7 +1031,7 @@ class _SeenSheetState extends State<_SeenSheet> {
   @override
   Widget build(BuildContext context) {
     final bool firstLoad = _page == 0;
-    return _SheetFrame(
+    return ChatSheetFrame(
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.6),
         child: Column(

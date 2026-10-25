@@ -127,9 +127,24 @@ String chatFileName(String name) {
   return '${name.substring(0, space + 1)}\u2066$last\u2069';
 }
 
-/// What the list shows for a room's last message (with its kind).
+/// What the list shows for a room's last message (with its kind's icon).
 String chatPreview(BuildContext context, ChatLastMessage last) => switch (last.kind) {
       ChatMessageKind.voice => context.tr('chat.voiceMessage'),
       ChatMessageKind.pdf => last.preview.isNotEmpty ? chatFileName(last.preview) : context.tr('chat.pdf'),
+      // D-156: the caption, or "Photo".
+      ChatMessageKind.image => last.preview.isNotEmpty ? last.preview : context.tr('chat.photo'),
       ChatMessageKind.text => last.preview,
     };
+
+/// One line for a message where no icon is shown (in-app notice, pinned
+/// bar and list): "🎤 Voice message", "📄 file.pdf", "📷 Photo" or the
+/// photo's caption, the text.
+String chatMessageLine(BuildContext context, ChatMessage message) {
+  final String body = message.body?.trim() ?? '';
+  return switch (message.kind) {
+    ChatMessageKind.voice => '🎤 ${context.tr('chat.voiceMessage')}',
+    ChatMessageKind.pdf => '📄 ${chatFileName(message.attachment?.name ?? context.tr('chat.pdf'))}',
+    ChatMessageKind.image => '📷 ${body.isNotEmpty ? body : context.tr('chat.photo')}',
+    ChatMessageKind.text => body,
+  };
+}

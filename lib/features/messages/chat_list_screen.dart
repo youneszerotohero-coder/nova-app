@@ -186,9 +186,13 @@ class _RoomRow extends StatelessWidget {
                       children: [
                         if (last != null && last.kind != ChatMessageKind.text) ...[
                           Icon(
-                            last.kind == ChatMessageKind.voice ? Icons.mic_rounded : Icons.picture_as_pdf_rounded,
+                            switch (last.kind) {
+                              ChatMessageKind.voice => Icons.mic_rounded,
+                              ChatMessageKind.image => Icons.photo_camera_rounded,
+                              _ => Icons.picture_as_pdf_rounded,
+                            },
                             size: 15,
-                            color: last.kind == ChatMessageKind.voice ? NovaColors.accent : NovaColors.heartRed,
+                            color: last.kind == ChatMessageKind.pdf ? NovaColors.heartRed : NovaColors.accent,
                           ),
                           const SizedBox(width: 3),
                         ],

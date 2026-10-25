@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../core/widgets/nova_toast.dart';
@@ -126,11 +125,7 @@ class _Notice extends StatelessWidget {
   Widget build(BuildContext context) {
     final ChatMessage message = arrival.message;
     final String sender = chatNameOf(context, message.sender.role, message.sender.name);
-    final String preview = switch (message.kind) {
-      ChatMessageKind.voice => '🎤 ${context.tr('chat.voiceMessage')}',
-      ChatMessageKind.pdf => '📄 ${chatFileName(message.attachment?.name ?? context.tr('chat.pdf'))}',
-      ChatMessageKind.text => message.body ?? '',
-    };
+    final String preview = chatMessageLine(context, message);
     final String title = chatRoomTitle(context, arrival.room);
     return Semantics(
       liveRegion: true,

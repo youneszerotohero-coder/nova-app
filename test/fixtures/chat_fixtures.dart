@@ -6,7 +6,7 @@ import 'package:nova_mobile/features/messages/chat_audio.dart';
 import 'fake_api.dart';
 
 /// D-143 payloads exactly as `/api/v1/chats…` and the Reverb events send
-/// them (docs/D-143 §3.1, §3.5).
+/// them (docs/D-143 §3.1, §3.5), with the D-156 fields (docs/D-156 §3).
 
 const int meId = 77;
 const int teacherUserId = 5;
@@ -20,6 +20,10 @@ Map<String, Object?> roomJson({
   bool? canSend,
   bool? canSendVoice,
   bool canSendPdf = false,
+  bool? canSendImage,
+  bool canPin = false,
+  bool canReact = true,
+  int pinnedCount = 0,
   bool canModerate = false,
   bool canViewMembers = true,
   int membersCount = 134,
@@ -40,6 +44,11 @@ Map<String, Object?> roomJson({
       'can_send': canSend ?? (kind == 'group' && studentsCanSend),
       'can_send_voice': canSendVoice ?? (kind == 'group' && studentsCanSend),
       'can_send_pdf': canSendPdf,
+      'can_send_image': canSendImage ?? canSendPdf,
+      'can_pin': canPin,
+      'can_react': canReact,
+      'pinned_count': pinnedCount,
+      'reaction_emojis': const <String>['👍', '❤️', '😂', '😮', '😢', '🙏'],
       'can_moderate': canModerate,
       'can_view_members': kind == 'public' ? false : canViewMembers,
       'members_count': membersCount,
@@ -69,6 +78,9 @@ Map<String, Object?> messageJson({
   String? clientUuid,
   String createdAt = '2026-10-11T08:00:00+00:00',
   int? seenCount,
+  String? pinnedAt,
+  List<Map<String, Object?>> reactions = const <Map<String, Object?>>[],
+  String? myReaction,
 }) =>
     <String, Object?>{
       'id': id,
@@ -80,7 +92,13 @@ Map<String, Object?> messageJson({
       'client_uuid': clientUuid,
       'created_at': createdAt,
       'seen_count': seenCount,
+      'pinned_at': pinnedAt,
+      'reactions': reactions,
+      'my_reaction': myReaction,
     };
+
+/// `{emoji, count}` of a message's `reactions`.
+Map<String, Object?> reaction(String emoji, int count) => <String, Object?>{'emoji': emoji, 'count': count};
 
 Map<String, Object?> voiceAttachment({int durationMs = 42000, List<int>? waveform}) => <String, Object?>{
       'name': 'voice.m4a',
@@ -88,6 +106,17 @@ Map<String, Object?> voiceAttachment({int durationMs = 42000, List<int>? wavefor
       'mime': 'audio/mp4',
       'duration_ms': durationMs,
       'waveform': waveform ?? <int>[for (int i = 0; i < 48; i++) 12 + ((i * 37) % 80)],
+    };
+
+/// A photo's attachment: the server's `full` JPEG and its size.
+Map<String, Object?> imageAttachment({int width = 1600, int height = 1200, String name = 'tableau.jpg'}) => <String, Object?>{
+      'name': name,
+      'size': 284311,
+      'mime': 'image/jpeg',
+      'width': width,
+      'height': height,
+      'duration_ms': null,
+      'waveform': null,
     };
 
 Map<String, Object?> pdfAttachment({String name = 'Série 4 — Suites numériques.pdf', int size = 1258291}) =>

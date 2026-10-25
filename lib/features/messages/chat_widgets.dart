@@ -198,3 +198,30 @@ class ChatIconButton extends StatelessWidget {
     );
   }
 }
+
+/// The rounded sheet the chat's menus and lists sit in (message actions,
+/// "seen by", reactions, pins).
+class ChatSheetFrame extends StatelessWidget {
+  const ChatSheetFrame({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(10, 10, 10, 12 + MediaQuery.paddingOf(context).bottom),
+      decoration: BoxDecoration(
+        color: NovaColors.paperCard,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 40, height: 4, decoration: BoxDecoration(color: NovaColors.lineStrong, borderRadius: BorderRadius.circular(4))),
+          const SizedBox(height: 8),
+          Material(type: MaterialType.transparency, child: child),
+        ],
+      ),
+    );
+  }
+}

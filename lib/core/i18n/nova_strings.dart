@@ -1888,6 +1888,28 @@ const Map<String, Map<String, String>> K = {
   'chat.pdfs': {'en': 'PDFs', 'fr': 'PDF', 'ar': 'ملفات PDF'},
   'chat.noPdfs': {'en': 'No PDF shared yet.', 'fr': 'Aucun PDF partagé pour le moment.', 'ar': 'ما كاين حتى PDF دروك.'},
 
+  // D-156 group chats: photos, pinned messages, reactions
+  'chat.photo': {'en': 'Photo', 'fr': 'Photo', 'ar': 'صورة'},
+  'chat.attachPhoto': {'en': 'Send a photo', 'fr': 'Envoyer une photo', 'ar': 'ابعث صورة'},
+  'chat.sendPhotoTitle': {'en': 'Send this photo', 'fr': 'Envoyer cette photo', 'ar': 'ابعث هاد الصورة'},
+  'chat.photoTooBig': {'en': 'The photo must be 15 MB or less.', 'fr': 'La photo doit faire 15 Mo au maximum.', 'ar': 'الصورة لازم ما تفوتش 15 ميغا.'},
+  'chat.photoFormat': {'en': 'Choose a JPEG, PNG or WebP photo.', 'fr': 'Choisis une photo JPEG, PNG ou WebP.', 'ar': 'اختار صورة JPEG ولا PNG ولا WebP.'},
+  'chat.errImageUnreadable': {'en': 'This photo could not be read. Choose another one.', 'fr': 'Cette photo est illisible. Choisis-en une autre.', 'ar': 'هاد الصورة ما تقراتش. اختار وحدة أخرى.'},
+  'chat.photoFailed': {'en': 'The photo did not load. Tap to retry.', 'fr': 'La photo ne s’est pas chargée. Touche pour réessayer.', 'ar': 'الصورة ما تحمّلتش. اضغط باش تعاود.'},
+  'chat.openPhoto': {'en': 'Open the photo', 'fr': 'Ouvrir la photo', 'ar': 'حلّ الصورة'},
+  'chat.close': {'en': 'Close', 'fr': 'Fermer', 'ar': 'سكّر'},
+  'chat.pin': {'en': 'Pin', 'fr': 'Épingler', 'ar': 'ثبّت'},
+  'chat.unpin': {'en': 'Unpin', 'fr': 'Désépingler', 'ar': 'نحّي التثبيت'},
+  'chat.pinnedDone': {'en': 'Message pinned', 'fr': 'Message épinglé', 'ar': 'الرسالة تثبّتت'},
+  'chat.unpinnedDone': {'en': 'Message unpinned', 'fr': 'Message désépinglé', 'ar': 'الرسالة ما بقاتش مثبّتة'},
+  'chat.pinnedOne': {'en': 'Pinned message', 'fr': 'Message épinglé', 'ar': 'رسالة مثبّتة'},
+  'chat.pinnedMany': {'en': '{n} pinned messages', 'fr': '{n} messages épinglés', 'ar': 'رسائل مثبّتة: {n}'},
+  'chat.pinsTitle': {'en': 'Pinned messages', 'fr': 'Messages épinglés', 'ar': 'الرسائل المثبّتة'},
+  'chat.pinGone': {'en': 'This message is no longer available.', 'fr': 'Ce message n’est plus disponible.', 'ar': 'هاد الرسالة ما بقاتش.'},
+  'chat.reactWith': {'en': 'React with {e}', 'fr': 'Réagir avec {e}', 'ar': 'تفاعل بـ {e}'},
+  'chat.reactionsTitle': {'en': 'Reactions', 'fr': 'Réactions', 'ar': 'التفاعلات'},
+  'chat.reactionsNobody': {'en': 'No reaction yet.', 'fr': 'Aucune réaction pour le moment.', 'ar': 'ما كاين حتى تفاعل دروك.'},
+
   // D-143 Teacher mode and mobile push
   'teacher.tabChats': {'en': 'Chats', 'fr': 'Discussions', 'ar': 'المحادثات'},
   'teacher.tabNotifications': {'en': 'Alerts', 'fr': 'Alertes', 'ar': 'الإشعارات'},

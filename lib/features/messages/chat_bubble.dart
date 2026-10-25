@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,8 @@ import '../../core/widgets/nova_toast.dart';
 import '../../data/chat_store.dart';
 import 'chat_audio.dart';
 import 'chat_format.dart';
+import 'chat_image.dart';
+import 'chat_reactions.dart';
 import 'chat_widgets.dart';
 
 /// The key of a message on screen: its id, or its `client_uuid` while it
@@ -19,7 +22,8 @@ String chatMessageKey(ChatMessage message) => message.clientUuid != null ? 'u${m
 /// One message: own messages on the end side on the blue gradient, the
 /// others on the card surface with their name colour, avatar and badge;
 /// grouped by sender ([first]/[last] of a run), the time on every bubble,
-/// ticks or "Seen by N" on own messages, pending and failed states.
+/// ticks or "Seen by N" on own messages, pending and failed states; D-156
+/// photos, the pin mark and the reaction chips under the bubble.
 class ChatBubble extends StatelessWidget {
   const ChatBubble({
     super.key,
@@ -31,6 +35,9 @@ class ChatBubble extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.onOpenPdf,
+    this.onOpenImage,
+    this.onReact,
+    this.onShowReactors,
   });
 
   final ChatMessage message;
@@ -43,6 +50,13 @@ class ChatBubble extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final VoidCallback? onOpenPdf;
+  final VoidCallback? onOpenImage;
+
+  /// A reaction chip was tapped (null: this viewer cannot react).
+  final ValueChanged<String>? onReact;
+
+  /// A chip was long-pressed: who reacted (null: not allowed here).
+  final VoidCallback? onShowReactors;
 
   static const double avatarSize = 30;
 
@@ -61,6 +75,7 @@ class ChatBubble extends StatelessWidget {
     final Widget content = switch (message.kind) {
       ChatMessageKind.voice => ChatVoiceContent(message: message, mine: mine),
       ChatMessageKind.pdf => _PdfContent(message: message, mine: mine, onOpen: onOpenPdf),
+      ChatMessageKind.image => _ImageContent(message: message, mine: mine, maxWidth: maxWidth - 24, onOpen: onOpenImage),
       ChatMessageKind.text => _TextContent(text: message.body ?? '', mine: mine),
     };
 
@@ -130,6 +145,14 @@ class ChatBubble extends StatelessWidget {
               ),
             ],
           ),
+          if (message.reactions.isNotEmpty)
+            Padding(
+              padding: EdgeInsetsDirectional.only(top: 4, start: mine ? 0 : avatarSize + 6),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: ChatReactionChips(message: message, onToggle: onReact, onShowReactors: onShowReactors),
+              ),
+            ),
           if (failed)
             Padding(
               padding: const EdgeInsetsDirectional.only(top: 4, end: 4),
@@ -241,6 +264,11 @@ class _Meta extends StatelessWidget {
     final bool staffSender = message.sender.role != ChatRole.student;
     final int? seen = message.seenCount;
     final List<Widget> children = <Widget>[];
+    if (message.isPinned) {
+      children
+        ..add(Icon(Icons.push_pin_rounded, key: const ValueKey<String>('pin-mark'), size: 12, color: ink, semanticLabel: context.tr('chat.pinnedOne')))
+        ..add(const SizedBox(width: 4));
+    }
     if (mine && staffSender && seen != null && message.isConfirmed) {
       children
         ..add(Icon(Icons.visibility_rounded, size: 12, color: ink))
@@ -367,7 +395,138 @@ class _PdfContent extends StatelessWidget {
   }
 }
 
-/// A voice note or PDF on its way: the upload progress with a cancel.
+// ── Photo (D-156) ──────────────────────────────────────────────────────
+
+/// A photo: its preview at its own aspect ratio (the box is sized from
+/// width/height before it loads, so the list does not jump), rounded, the
+/// caption below; a placeholder while it loads, a retry when it fails.
+/// While it uploads, the picked file with the progress and a cancel.
+class _ImageContent extends StatefulWidget {
+  const _ImageContent({required this.message, required this.mine, required this.maxWidth, this.onOpen});
+
+  final ChatMessage message;
+  final bool mine;
+  final double maxWidth;
+  final VoidCallback? onOpen;
+
+  @override
+  State<_ImageContent> createState() => _ImageContentState();
+}
+
+class _ImageContentState extends State<_ImageContent> {
+  /// Bumped by a retry: the picture is asked for again.
+  int _attempt = 0;
+
+  Future<void> _retry(ImageProvider<Object> provider) async {
+    await provider.evict();
+    if (mounted) setState(() => _attempt++);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ChatMessage message = widget.message;
+    final bool mine = widget.mine;
+    final Size box = chatImageBox(message.attachment, widget.maxWidth);
+    final String caption = message.body ?? '';
+    final String? local = message.localPath;
+    final Color fill = mine ? Colors.white.withValues(alpha: 0.16) : NovaColors.paperRaised;
+
+    Widget placeholder() => ColoredBox(
+          color: fill,
+          child: Center(child: Icon(Icons.image_outlined, size: 34, color: mine ? Colors.white.withValues(alpha: 0.7) : NovaColors.textMuted)),
+        );
+
+    final Widget picture;
+    if (!message.isConfirmed && local != null) {
+      picture = Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.file(File(local), fit: BoxFit.cover, errorBuilder: (_, _, _) => placeholder()),
+          if (message.state == ChatSendState.pending)
+            ColoredBox(
+              color: Colors.black.withValues(alpha: 0.32),
+              child: Center(child: _UploadRing(message: message, mine: true, size: 52)),
+            ),
+        ],
+      );
+    } else {
+      final ChatImageProvider provider = ChatImageProvider(chat: AppScope.of(context).chat, roomId: message.roomId, messageId: message.id, preview: true);
+      picture = Semantics(
+        button: true,
+        image: true,
+        label: context.tr('chat.openPhoto'),
+        child: GestureDetector(
+          onTap: widget.onOpen,
+          child: Hero(
+            tag: chatImageHeroTag(message),
+            child: Image(
+              key: ValueKey<String>('chat-image-${message.id}-$_attempt'),
+              image: provider,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              frameBuilder: (BuildContext context, Widget child, int? frame, bool sync) => sync
+                  ? child
+                  : Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        placeholder(),
+                        AnimatedOpacity(opacity: frame == null ? 0 : 1, duration: const Duration(milliseconds: 220), child: child),
+                      ],
+                    ),
+              errorBuilder: (BuildContext context, _, _) => GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _retry(provider),
+                child: ColoredBox(
+                  key: ValueKey<String>('chat-image-failed-${message.id}'),
+                  color: fill,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.refresh_rounded, size: 28, color: mine ? Colors.white : NovaColors.accent),
+                        const SizedBox(height: 6),
+                        Text(
+                          context.tr('chat.photoFailed'),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: NovaTypography.body,
+                            fontFamilyFallback: NovaTypography.fallback,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12.5,
+                            height: 1.35,
+                            color: mine ? Colors.white : NovaColors.textBody,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SizedBox(width: box.width, height: box.height, child: picture),
+        ),
+        if (caption.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          SizedBox(width: box.width, child: _TextContent(text: caption, mine: mine)),
+        ],
+      ],
+    );
+  }
+}
+
+/// A voice note, PDF or photo on its way: the upload progress with a cancel.
 class _UploadRing extends StatelessWidget {
   const _UploadRing({required this.message, required this.mine, this.size = 40});
 

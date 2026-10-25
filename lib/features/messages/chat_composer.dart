@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -20,8 +21,8 @@ import 'chat_format.dart';
 import 'chat_widgets.dart';
 
 /// A send failure in the user's words (writing closed, file refused,
-/// too many messages…).
-String chatErrorText(BuildContext context, ApiException error) {
+/// too many messages…); [kind] tells which file was too big.
+String chatErrorText(BuildContext context, ApiException error, {ChatMessageKind? kind}) {
   final Iterable<String> details = error.fieldErrors.values;
   bool says(String code) => error.code == code || details.any((String d) => d.contains(code));
   if (says('CHAT_SEND_CLOSED')) return context.tr('chat.errClosed');
@@ -29,14 +30,15 @@ String chatErrorText(BuildContext context, ApiException error) {
   if (says('CHAT_FORBIDDEN')) return context.tr('chat.errForbidden');
   if (says('VOICE_TOO_LONG')) return context.tr('chat.errVoiceLong');
   if (says('VOICE_UNREADABLE')) return context.tr('chat.errVoiceUnreadable');
+  if (says('IMAGE_UNREADABLE')) return context.tr('chat.errImageUnreadable');
   if (error.status == 429) return context.tr('chat.errTooFast');
-  if (error.status == 413) return context.tr('chat.pdfTooBig');
+  if (error.status == 413) return context.tr(kind == ChatMessageKind.image ? 'chat.photoTooBig' : 'chat.pdfTooBig');
   return apiErrorText(context, error);
 }
 
 /// The bottom of a room: the text field with send, the microphone (when
-/// voice notes are allowed) and the PDF button (Teacher); or the locked
-/// banner when this user cannot write here.
+/// voice notes are allowed), the PDF and photo buttons (Teacher, Admin);
+/// or the locked banner when this user cannot write here.
 class ChatComposer extends StatefulWidget {
   const ChatComposer({super.key, required this.room, required this.onSent});
 
@@ -81,14 +83,14 @@ class _ChatComposerState extends State<ChatComposer> {
     super.dispose();
   }
 
-  Future<void> _deliver(Future<ApiException?> sending) async {
+  Future<void> _deliver(Future<ApiException?> sending, {ChatMessageKind? kind}) async {
     widget.onSent();
     final ApiException? error = await sending;
     if (!mounted) return;
     if (error == null) {
       ChatSounds.sent();
     } else if (error.code != NovaApi.cancelled) {
-      novaToast(context, chatErrorText(context, error), icon: Icons.error_outline_rounded);
+      novaToast(context, chatErrorText(context, error, kind: kind), icon: Icons.error_outline_rounded);
     }
   }
 
@@ -210,6 +212,66 @@ class _ChatComposerState extends State<ChatComposer> {
     _deliver(_chat.sendPdf(widget.room.id, path: path, name: picked.name, caption: caption));
   }
 
+  // ── Photo (D-156) ────────────────────────────────────────────────────
+
+  /// A photo from the gallery, as the CCP receipt is picked: JPEG, PNG or
+  /// WebP up to 15 MB (iOS hands an iPhone photo, HEIC, over as JPEG),
+  /// then an optional caption.
+  Future<void> _pickPhoto() async {
+    final List<PlatformFile> files;
+    try {
+      files = await FilePicker.pickFiles(
+        type: FileType.image,
+        darwinOptions: const DarwinOptions(assetRepresentationMode: DarwinAssetRepresentationMode.compatible),
+      );
+    } catch (_) {
+      return;
+    }
+    final PlatformFile? picked = files.isEmpty ? null : files.first;
+    final String? path = picked?.path;
+    if (picked == null || path == null || !mounted) return;
+    final String name = picked.name.isNotEmpty ? picked.name : File(path).uri.pathSegments.last;
+    if (ChatStore.imageMimeOf(name) == null) {
+      novaToast(context, context.tr('chat.photoFormat'), icon: Icons.error_outline_rounded);
+      return;
+    }
+    final int size = await File(path).length();
+    if (!mounted) return;
+    if (size > ChatStore.maxImageBytes) {
+      novaToast(context, context.tr('chat.photoTooBig'), icon: Icons.error_outline_rounded);
+      return;
+    }
+    final String? caption = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ChatPhotoSendSheet(path: path),
+    );
+    if (caption == null || !mounted) return;
+    final (int, int) dimensions = await _dimensionsOf(path);
+    if (!mounted) return;
+    HapticFeedback.lightImpact();
+    _deliver(
+      _chat.sendImage(widget.room.id, path: path, name: name, caption: caption, width: dimensions.$1, height: dimensions.$2),
+      kind: ChatMessageKind.image,
+    );
+  }
+
+  /// The picked photo's size in pixels, read from its header without
+  /// decoding it, so the pending bubble already has its final shape.
+  static Future<(int, int)> _dimensionsOf(String path) async {
+    try {
+      final ui.ImmutableBuffer buffer = await ui.ImmutableBuffer.fromFilePath(path);
+      final ui.ImageDescriptor descriptor = await ui.ImageDescriptor.encoded(buffer);
+      final (int, int) size = (descriptor.width, descriptor.height);
+      descriptor.dispose();
+      buffer.dispose();
+      return size;
+    } catch (_) {
+      return (0, 0);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ChatRoom room = widget.room;
@@ -243,6 +305,16 @@ class _ChatComposerState extends State<ChatComposer> {
           Padding(
             padding: const EdgeInsets.only(bottom: 2),
             child: ChatIconButton(icon: Icons.attach_file_rounded, label: context.tr('chat.attachPdf'), onTap: _pickPdf),
+          ),
+        if (room.canSendImage)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: ChatIconButton(
+              key: const ValueKey<String>('composer-photo'),
+              icon: Icons.photo_outlined,
+              label: context.tr('chat.attachPhoto'),
+              onTap: _pickPhoto,
+            ),
           ),
         Expanded(
           child: Container(
@@ -469,6 +541,85 @@ class _LockedBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Before a photo is sent: the photo, and an optional caption. Pops the
+/// caption ('' for none), or null when cancelled.
+class ChatPhotoSendSheet extends StatefulWidget {
+  const ChatPhotoSendSheet({super.key, required this.path});
+
+  final String path;
+
+  @override
+  State<ChatPhotoSendSheet> createState() => _ChatPhotoSendSheetState();
+}
+
+class _ChatPhotoSendSheetState extends State<ChatPhotoSendSheet> {
+  final TextEditingController _caption = TextEditingController();
+
+  @override
+  void dispose() {
+    _caption.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: Container(
+        padding: EdgeInsets.fromLTRB(18, 10, 18, 18 + MediaQuery.paddingOf(context).bottom),
+        decoration: BoxDecoration(
+          color: NovaColors.paperCard,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(width: 40, height: 4, decoration: BoxDecoration(color: NovaColors.lineStrong, borderRadius: BorderRadius.circular(4))),
+            ),
+            const SizedBox(height: 16),
+            Text(context.tr('chat.sendPhotoTitle'), style: NovaTypography.textTheme.titleLarge),
+            const SizedBox(height: 14),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.38),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: ColoredBox(
+                  color: NovaColors.paperRaised,
+                  child: Image.file(
+                    File(widget.path),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) => SizedBox(
+                      height: 120,
+                      child: Center(child: Icon(Icons.image_outlined, size: 36, color: NovaColors.textMuted)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _caption,
+              maxLength: ChatStore.maxCaptionLength,
+              minLines: 1,
+              maxLines: 4,
+              decoration: InputDecoration(hintText: context.tr('chat.captionHint')),
+            ),
+            const SizedBox(height: 8),
+            NovaButton(
+              label: context.tr('chat.send'),
+              icon: Icons.send_rounded,
+              expand: true,
+              onTap: () => Navigator.of(context).pop(_caption.text.trim()),
+            ),
+          ],
+        ),
       ),
     );
   }
