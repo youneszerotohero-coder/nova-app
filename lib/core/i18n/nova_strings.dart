@@ -1405,6 +1405,11 @@ const Map<String, Map<String, String>> K = {
     'ar': 'تم تنزيل الإصدار الجديد. أعد تشغيل نوفا لإكمال التثبيت.',
   },
   'update.restart': {'en': 'Restart', 'fr': 'Redémarrer', 'ar': 'إعادة التشغيل'},
+  'update.downloading': {
+    'en': 'Downloading the new version…',
+    'fr': 'Téléchargement de la nouvelle version…',
+    'ar': 'جارٍ تنزيل الإصدار الجديد…',
+  },
 
   // Screen-capture protection (D-067).
   'capture.blocked': {

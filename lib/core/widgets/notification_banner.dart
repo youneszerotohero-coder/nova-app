@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 
 import '../../data/models.dart';
 import '../i18n/notification_text.dart';
+import '../push/push_platform.dart';
+import '../push/windows_push_platform.dart';
 import '../state/app_state.dart';
 import '../theme/nova_colors.dart';
 import 'nova_toast.dart';
@@ -94,7 +96,14 @@ class _NotificationBannerHostState extends State<NotificationBannerHost>
   }
 
   void _show(AppNotification notification) {
-    NotificationChime.play();
+    // PC app away from the screen: a Windows notification too (it chimes).
+    final NotificationText text = notificationText(notification, AppScope.of(context).lang);
+    final bool system = WindowsPushPlatform.showIfAway(PushPayload(
+      data: <String, String>{'type': notification.type, 'notification_id': notification.id},
+      title: text.title,
+      body: text.message,
+    ));
+    if (!system) NotificationChime.play();
     _timer?.cancel();
     setState(() => _current = notification);
     _motion.forward();

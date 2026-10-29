@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -7,6 +8,7 @@ import '../i18n/nova_strings.dart';
 import '../theme/nova_colors.dart';
 import '../theme/nova_typography.dart';
 import '../widgets/hero_style.dart';
+import '../widgets/nova_toast.dart';
 import '../widgets/pressable_scale.dart';
 import 'store_updates.dart';
 
@@ -90,6 +92,8 @@ class _AppUpdateGateState extends State<AppUpdateGate> with WidgetsBindingObserv
         case UpdateAction.prompt:
           if (offer.storeUrl != null) {
             await _offerStore(offer);
+          } else if (offer.installerUrl != null) {
+            await _offerInstaller(offer);
           } else {
             await _startFlexible(offer);
           }
@@ -123,6 +127,36 @@ class _AppUpdateGateState extends State<AppUpdateGate> with WidgetsBindingObserv
     } else {
       await _updates.declined(offer.version);
     }
+  }
+
+  /// PC app: the NOVA sheet, the verified download, then "Restart" runs
+  /// the installer silently and NOVA comes back updated.
+  Future<void> _offerInstaller(UpdateOffer offer) async {
+    final bool? update = await _sheet(
+      icon: Icons.system_update_rounded,
+      title: 'update.availableTitle',
+      body: 'update.availableBody',
+      version: offer.version.split('+').first,
+      action: 'update.now',
+    );
+    if (update != true) {
+      await _updates.declined(offer.version);
+      return;
+    }
+    final BuildContext? context = widget.navigatorKey.currentContext;
+    if (context != null && context.mounted) {
+      novaToast(context, context.tr('update.downloading'), icon: Icons.download_rounded);
+    }
+    final File? installer = await _updates.downloadInstaller(offer);
+    // A failed download or check is offered again at the next check.
+    if (installer == null || !mounted) return;
+    final bool? restart = await _sheet(
+      icon: Icons.restart_alt_rounded,
+      title: 'update.readyTitle',
+      body: 'update.readyBody',
+      action: 'update.restart',
+    );
+    if (restart == true) await _updates.installAndRestart(installer);
   }
 
   Future<void> _offerRestart() async {

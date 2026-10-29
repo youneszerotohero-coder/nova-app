@@ -33,6 +33,9 @@ dependencies:
   record: ^7.1.2
   audioplayers: ^6.8.1
   path_provider: ^2.1.6
+  # PC app updates: the downloaded installer's SHA-256 is checked before it
+  # runs (already in the lock through other packages).
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:

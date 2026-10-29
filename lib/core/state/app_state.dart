@@ -18,6 +18,7 @@ import '../push/firebase_push_platform.dart';
 import '../push/push_platform.dart';
 import '../push/push_service.dart';
 import '../push/push_taps.dart';
+import '../push/windows_push_platform.dart';
 import '../realtime/reverb_client.dart';
 import '../theme/nova_colors.dart';
 import 'account_intent.dart';
@@ -90,7 +91,8 @@ class AppState extends ChangeNotifier {
       references: ReferenceStore(api),
       live: LiveStore(api),
       realtime: ReverbClient(api),
-      push: PushService(platform: FirebasePushPlatform.fromEnvironment(), api: api),
+      // The PC app has no Firebase: its notifications come over Reverb.
+      push: PushService(platform: WindowsPushPlatform.instance ?? FirebasePushPlatform.fromEnvironment(), api: api),
     );
   }
 

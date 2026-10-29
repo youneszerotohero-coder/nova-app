@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/push/push_platform.dart';
+import '../../core/push/windows_push_platform.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../core/widgets/nova_toast.dart';
@@ -52,7 +54,14 @@ class _ChatNoticeHostState extends State<ChatNoticeHost> with SingleTickerProvid
 
   void _onArrival(ChatArrival arrival) {
     if (!mounted) return;
-    ChatSounds.received(soft: arrival.inOpenRoom);
+    // PC app away from the screen: a Windows notification (with its sound).
+    final bool system = WindowsPushPlatform.showIfAway(PushPayload(
+      data: <String, String>{'type': PushPayload.chatMessage, 'room_id': '${arrival.room.id}'},
+      title: arrival.room.name,
+      body: '${chatNameOf(context, arrival.message.sender.role, arrival.message.sender.name)}: '
+          '${chatMessageLine(context, arrival.message)}',
+    ));
+    if (!system) ChatSounds.received(soft: arrival.inOpenRoom);
     if (arrival.inOpenRoom) return;
     _timer?.cancel();
     setState(() => _current = arrival);

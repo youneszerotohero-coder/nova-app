@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// What to do about a newer store version.
 enum UpdateAction {
@@ -20,15 +24,20 @@ enum UpdateAction {
 }
 
 class UpdateOffer {
-  const UpdateOffer({required this.action, required this.version, this.storeUrl});
+  const UpdateOffer({required this.action, required this.version, this.storeUrl, this.installerUrl, this.sha256});
 
   final UpdateAction action;
 
-  /// Store version: `1.2.0` on the App Store, the version code on Play.
+  /// Store version: `1.2.0` on the App Store, the version code on Play,
+  /// `X.Y.Z+build` for the PC app.
   final String version;
 
   /// App Store page (iPhone).
   final Uri? storeUrl;
+
+  /// PC app: the NOVA installer to download, and its SHA-256 (hex).
+  final Uri? installerUrl;
+  final String? sha256;
 }
 
 /// Where a declined offer is remembered, so the Student is not asked
@@ -58,6 +67,10 @@ class SecureUpdateMemory implements UpdateMemory {
 ///   Only installs from Play see updates.
 /// * iPhone: the public App Store lookup for this bundle id, compared with
 ///   the installed version (`AppDelegate.swift`, `nova/app_update`).
+/// * PC app (owner decision 2026-10-29, no store): [pcLatestUrl] says
+///   `{version, url, sha256}`; a newer installer is downloaded from the NOVA
+///   site, checked against its SHA-256 and run silently, then NOVA restarts
+///   (`docs/pc-app-windows.md`).
 class StoreUpdates {
   StoreUpdates({
     MethodChannel? channel,
@@ -78,6 +91,17 @@ class StoreUpdates {
 
   /// App Store storefronts to look in: Algeria first, then the default.
   static const List<String?> storefronts = <String?>['dz', null];
+
+  /// The PC app's update manifest; `--dart-define=NOVA_PC_UPDATE_URL=…`
+  /// points a test build elsewhere.
+  static const String pcLatestUrl = String.fromEnvironment(
+    'NOVA_PC_UPDATE_URL',
+    defaultValue: 'https://nova-elearning.com/downloads/pc/latest.json',
+  );
+
+  /// Installers are only ever taken from the NOVA site, over HTTPS.
+  static bool trustedInstallerUrl(Uri url) =>
+      url.scheme == 'https' && (url.host == 'nova-elearning.com' || url.host.endsWith('.nova-elearning.com'));
 
   static const String _declinedKey = 'nova.update.declined';
 
@@ -100,6 +124,7 @@ class StoreUpdates {
       return switch (_platform ?? defaultTargetPlatform) {
         TargetPlatform.android => await _android(),
         TargetPlatform.iOS => await _ios(),
+        TargetPlatform.windows => await _windows(),
         _ => null,
       };
     } on MissingPluginException {
@@ -154,6 +179,64 @@ class StoreUpdates {
     return null;
   }
 
+  Future<UpdateOffer?> _windows() async {
+    final Map<String, dynamic>? me = await _channel.invokeMapMethod<String, dynamic>('version');
+    final String installed = '${me?['version'] ?? ''}';
+    if (installed.isEmpty) return null;
+    final Map<String, dynamic>? latest = await _fetchJson(Uri.parse(pcLatestUrl));
+    final String version = '${latest?['version'] ?? ''}';
+    final Uri? url = Uri.tryParse('${latest?['url'] ?? ''}');
+    final String sha256 = '${latest?['sha256'] ?? ''}'.toLowerCase();
+    if (version.isEmpty || url == null || !trustedInstallerUrl(url)) return null;
+    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(sha256)) return null;
+    if (compareVersions(version, installed) <= 0) return null;
+    if (!await _mayOffer(version)) return null;
+    return UpdateOffer(action: UpdateAction.prompt, version: version, installerUrl: url, sha256: sha256);
+  }
+
+  /// PC app: downloads [offer]'s installer to the temporary folder and keeps
+  /// it only when its SHA-256 is the announced one; null otherwise.
+  Future<File?> downloadInstaller(UpdateOffer offer) async {
+    final Uri? url = offer.installerUrl;
+    final String? expected = offer.sha256;
+    if (url == null || expected == null || !trustedInstallerUrl(url)) return null;
+    try {
+      final Directory folder = await getTemporaryDirectory();
+      final File file = File('${folder.path}${Platform.pathSeparator}NOVA-Setup-${offer.version.replaceAll(RegExp(r'[^0-9A-Za-z.+-]'), '')}.exe');
+      await Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(minutes: 2),
+      )).downloadUri(url, file.path);
+      // The announced SHA-256 is the guard: a corrupted or replaced file is
+      // never run.
+      final String actual = (await crypto.sha256.bind(file.openRead()).first).toString();
+      if (actual != expected.toLowerCase()) {
+        await file.delete();
+        return null;
+      }
+      return file;
+    } on DioException {
+      return null;
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  /// PC app: runs the verified installer silently (per-user, no admin
+  /// rights; it closes NOVA, replaces it and starts it again) and quits.
+  Future<void> installAndRestart(File installer) async {
+    try {
+      await Process.start(
+        installer.path,
+        const <String>['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CLOSEAPPLICATIONS'],
+        mode: ProcessStartMode.detached,
+      );
+    } on ProcessException {
+      return;
+    }
+    exit(0);
+  }
+
   /// Starts Google Play's flow; `ok`, `canceled` or `failed`.
   Future<String> start({required bool immediate}) async {
     try {
@@ -203,7 +286,15 @@ class StoreUpdates {
         receiveTimeout: const Duration(seconds: 10),
         responseType: ResponseType.json,
       )).getUri<dynamic>(uri);
-      final Object? data = response.data;
+      Object? data = response.data;
+      // A server that names the JSON text/plain still gives JSON.
+      if (data is String) {
+        try {
+          data = jsonDecode(data);
+        } on FormatException {
+          return null;
+        }
+      }
       return data is Map<String, dynamic> ? data : null;
     } on DioException {
       return null;

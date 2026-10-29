@@ -79,6 +79,63 @@ void main() {
     expect(compareVersions('1.0.1+5', '1.0.1'), greaterThan(0));
   });
 
+  group('PC app (Windows)', () {
+    const String sha = 'a3f1c2d4e5b60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00';
+
+    StoreUpdates updates(Map<String, dynamic>? latest, _Memory memory, {String installed = '0.5.1+19'}) {
+      _native((MethodCall _) => <String, Object?>{
+            'version': <String, String>{'version': installed},
+          });
+      return StoreUpdates(
+        channel: _channel,
+        platform: TargetPlatform.windows,
+        memory: memory,
+        now: () => DateTime(2026, 10, 29, 12),
+        fetchJson: (Uri uri) async {
+          expect(uri.toString(), StoreUpdates.pcLatestUrl);
+          return latest;
+        },
+      );
+    }
+
+    Map<String, dynamic> latest(String version, {String url = 'https://nova-elearning.com/downloads/pc/NOVA-Setup.exe', String hash = sha}) =>
+        <String, dynamic>{'version': version, 'url': url, 'sha256': hash};
+
+    test('a newer installer on the NOVA site is offered with its checksum', () async {
+      final UpdateOffer? offer = await updates(latest('0.5.2+20'), _Memory()).check();
+      expect(offer?.action, UpdateAction.prompt);
+      expect(offer?.version, '0.5.2+20');
+      expect(offer?.installerUrl.toString(), 'https://nova-elearning.com/downloads/pc/NOVA-Setup.exe');
+      expect(offer?.sha256, sha);
+      expect(offer?.storeUrl, isNull);
+      // A new build of the same version counts too.
+      expect(await updates(latest('0.5.1+20'), _Memory()).check(), isNotNull);
+    });
+
+    test('the same version, another host, plain HTTP or a bad checksum is never offered', () async {
+      expect(await updates(latest('0.5.1+19'), _Memory()).check(), isNull);
+      expect(await updates(latest('0.5.0+30'), _Memory()).check(), isNull);
+      expect(await updates(latest('0.6.0+21', url: 'https://example.com/NOVA-Setup.exe'), _Memory()).check(), isNull);
+      expect(await updates(latest('0.6.0+21', url: 'http://nova-elearning.com/NOVA-Setup.exe'), _Memory()).check(), isNull);
+      expect(await updates(latest('0.6.0+21', hash: 'abc'), _Memory()).check(), isNull);
+      expect(await updates(null, _Memory()).check(), isNull);
+    });
+
+    test('"Later" hides the PC version for three days', () async {
+      final _Memory memory = _Memory();
+      await updates(null, memory).declined('0.5.2+20');
+      expect(await updates(latest('0.5.2+20'), memory).check(), isNull);
+      expect(await updates(latest('0.5.3+21'), memory).check(), isNotNull);
+    });
+
+    test('installers come from the NOVA site only, over HTTPS', () {
+      expect(StoreUpdates.trustedInstallerUrl(Uri.parse('https://nova-elearning.com/downloads/pc/a.exe')), isTrue);
+      expect(StoreUpdates.trustedInstallerUrl(Uri.parse('https://cdn.nova-elearning.com/a.exe')), isTrue);
+      expect(StoreUpdates.trustedInstallerUrl(Uri.parse('https://nova-elearning.com.evil.example/a.exe')), isFalse);
+      expect(StoreUpdates.trustedInstallerUrl(Uri.parse('http://nova-elearning.com/a.exe')), isFalse);
+    });
+  });
+
   group('App Store (iPhone)', () {
     StoreUpdates updates(Map<String?, Map<String, dynamic>?> storefronts, _Memory memory, {DateTime? now}) {
       _native(_iphone);
