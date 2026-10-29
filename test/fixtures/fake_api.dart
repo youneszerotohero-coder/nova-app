@@ -80,7 +80,12 @@ class FakeBackend implements HttpClientAdapter {
         'error': <String, String>{'code': 'NOT_FOUND', 'message': 'No route $path'},
       });
     }
-    return _json(response.status, response.body, response.headers);
+    final Object? body = response.body;
+    if (body is Uint8List) {
+      // A file (a stamped Lesson PDF), not an envelope.
+      return ResponseBody.fromBytes(body, response.status, headers: response.headers);
+    }
+    return _json(response.status, body, response.headers);
   }
 
   static ResponseBody _json(

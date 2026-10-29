@@ -31,6 +31,10 @@ String apiErrorText(BuildContext context, Object error) {
     'STUDENT_ONLY' => 'err.studentOnly',
     'FORBIDDEN' => 'err.forbidden',
     'TOO_MANY_REQUESTS' => 'err.tooMany',
+    // Owner decision 2026-10-29: stamped Lesson PDF downloads.
+    'PDF_DOWNLOAD_LIMIT_REACHED' => 'lesson.pdfDownloadLimit',
+    'PDF_DOWNLOAD_NOT_ALLOWED' => 'lesson.pdfDownloadNotAllowed',
+    'PDF_DOWNLOAD_FAILED' => 'lesson.pdfDownloadFailed',
     // D-150 help assistant.
     'ASSISTANT_BUSY' => 'assistant.busy',
     'ASSISTANT_DAILY_LIMIT' => 'assistant.dailyLimit',

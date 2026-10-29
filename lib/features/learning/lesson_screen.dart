@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
@@ -9,12 +10,14 @@ import '../../core/theme/nova_typography.dart';
 import '../../core/utils/player_fullscreen.dart';
 import '../../core/widgets/hero_style.dart';
 import '../../core/widgets/motion.dart';
+import '../../core/widgets/nova_toast.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../data/json.dart';
 import '../../data/models.dart';
 import '../../data/playback_models.dart';
 import '../player/lesson_player.dart';
 import '../shell/student_top_bar.dart';
+import 'lesson_pdf_saver.dart';
 import 'lesson_pdf_screen.dart';
 import 'quiz_runner.dart';
 
@@ -52,6 +55,9 @@ class _LessonScreenState extends State<LessonScreen> {
 
   /// D-142: each Lesson's PDFs in the Admin's order, once loaded.
   final Map<int, List<LessonPdf>> _pdfs = <int, List<LessonPdf>>{};
+
+  /// The PDF whose stamped copy is being downloaded (owner decision 2026-10-29).
+  int? _downloading;
 
   /// The Student's attempts at this Lesson's quiz (best score, next try).
   QuizAttempts? _attempts;
@@ -160,10 +166,77 @@ class _LessonScreenState extends State<LessonScreen> {
     await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LessonPdfScreen(lesson: _lesson, pdf: pdf)));
   }
 
+  /// Owner decision 2026-10-29: the copy stamped with the Student's name,
+  /// phone and the date, saved then handed to the system share sheet.
+  Future<void> _downloadPdf(LessonPdf pdf, BuildContext button) async {
+    final AppState app = AppScope.of(context);
+    final Lesson lesson = _lesson;
+    final RenderBox? box = button.findRenderObject() as RenderBox?;
+    final Rect? origin = box == null || !box.hasSize ? null : box.localToGlobal(Offset.zero) & box.size;
+    setState(() => _downloading = pdf.id);
+    try {
+      final LessonPdfDownload download = await app.learning.downloadLessonPdf(lesson, pdf);
+      _setDownloadsLeft(lesson.id, pdf.id, download.remaining ?? ((pdf.downloadsRemaining ?? 1) - 1).clamp(0, pdf.downloadLimit));
+      await LessonPdfSaver.factory().save(download.fileName, download.bytes, origin: origin);
+    } on ApiException catch (error) {
+      if (error.code == 'PDF_DOWNLOAD_LIMIT_REACHED') _setDownloadsLeft(lesson.id, pdf.id, 0);
+      if (mounted) novaToast(context, apiErrorText(context, error), icon: Icons.error_outline_rounded);
+    } on Exception {
+      if (mounted) novaToast(context, context.tr('lesson.pdfSaveFailed'), icon: Icons.error_outline_rounded);
+    } finally {
+      if (mounted) setState(() => _downloading = null);
+    }
+  }
+
+  void _setDownloadsLeft(int lessonId, int pdfId, int remaining) {
+    final List<LessonPdf>? pdfs = _pdfs[lessonId];
+    if (pdfs == null || !mounted) return;
+    setState(() => _pdfs[lessonId] = <LessonPdf>[
+          for (final LessonPdf pdf in pdfs) pdf.id == pdfId && pdf.downloadable ? pdf.withDownloadsRemaining(remaining) : pdf,
+        ]);
+  }
+
   /// The first PDF opened before the list was known counts as that PDF.
   bool _isPdfOpened(Lesson lesson, List<LessonPdf?> pdfs, LessonPdf? pdf) =>
       _pdfOpened.contains('${lesson.id}:${pdf?.id ?? ''}') ||
       (pdf != null && pdfs.first?.id == pdf.id && _pdfOpened.contains('${lesson.id}:'));
+
+  /// Open, and when the Admin allows it (owner decision 2026-10-29) download.
+  Widget _pdfButtons(LessonPdf? pdf) {
+    final NovaButton open = NovaButton(
+      label: context.tr('lesson.openPdf'),
+      variant: NovaButtonVariant.soft,
+      chipIcon: Icons.description_outlined,
+      expand: true,
+      onTap: () => _openPdf(pdf),
+    );
+    if (pdf == null || !pdf.downloadable) return open;
+    final bool left = (pdf.downloadsRemaining ?? 0) > 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        open,
+        const SizedBox(height: 8),
+        Builder(
+          builder: (BuildContext button) => NovaButton(
+            label: context.tr('lesson.downloadPdf'),
+            variant: NovaButtonVariant.ghost,
+            chipIcon: Icons.download_rounded,
+            expand: true,
+            loading: _downloading == pdf.id,
+            onTap: left && (_downloading == null || _downloading == pdf.id) ? () => _downloadPdf(pdf, button) : null,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _downloadsLeftText(LessonPdf pdf) {
+    final int left = pdf.downloadsRemaining ?? 0;
+    return left > 0
+        ? context.trf('lesson.pdfDownloadsLeft', <String, String>{'count': '$left', 'limit': '${pdf.downloadLimit}'})
+        : context.trf('lesson.pdfDownloadsNone', <String, String>{'limit': '${pdf.downloadLimit}'});
+  }
 
   Future<void> _openQuiz() async {
     await openLessonQuiz(context, _lesson, onPassed: _refreshCourse);
@@ -322,13 +395,8 @@ class _LessonScreenState extends State<LessonScreen> {
                           iconBackground: NovaColors.heartRed.withValues(alpha: 0.1),
                           title: pdfs[i]?.title ?? context.tr('lesson.pdfTitle'),
                           text: _isPdfOpened(lesson, pdfs, pdfs[i]) ? context.tr('lesson.pdfOpened') : context.tr('lesson.pdfText'),
-                          button: NovaButton(
-                            label: context.tr('lesson.openPdf'),
-                            variant: NovaButtonVariant.soft,
-                            chipIcon: Icons.description_outlined,
-                            expand: true,
-                            onTap: () => _openPdf(pdfs[i]),
-                          ),
+                          note: pdfs[i]?.downloadsRemaining == null ? null : _downloadsLeftText(pdfs[i]!),
+                          button: _pdfButtons(pdfs[i]),
                         ),
                       ],
                     ],
@@ -569,9 +637,13 @@ class _Tool extends StatelessWidget {
     required this.text,
     required this.button,
     this.number,
+    this.note,
   });
 
   final IconData icon;
+
+  /// A second, quieter line (the stamped downloads left).
+  final String? note;
 
   /// Shown in place of the icon (a Lesson's PDFs are numbered, D-142).
   final int? number;
@@ -613,6 +685,10 @@ class _Tool extends StatelessWidget {
                   Text(title, style: NovaTypography.textTheme.titleMedium!.copyWith(fontSize: 17)),
                   const SizedBox(height: 3),
                   Text(text, style: NovaTypography.muted(NovaTypography.textTheme.bodyMedium!)),
+                  if (note != null) ...[
+                    const SizedBox(height: 3),
+                    Text(note!, style: NovaTypography.muted(NovaTypography.textTheme.bodySmall!)),
+                  ],
                 ],
               ),
             ),

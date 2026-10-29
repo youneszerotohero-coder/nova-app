@@ -155,17 +155,51 @@ class Lesson {
 /// D-142: one of a Lesson's PDFs, in the Admin's order; it opens through
 /// `/lessons/{lesson}/pdfs/{id}/access`.
 class LessonPdf {
-  const LessonPdf({required this.id, required this.title, required this.position});
+  const LessonPdf({
+    required this.id,
+    required this.title,
+    required this.position,
+    this.downloadsRemaining,
+    this.downloadLimit = 5,
+  });
 
-  factory LessonPdf.fromJson(Json json) => LessonPdf(
+  factory LessonPdf.fromJson(Json json, {int downloadLimit = 5}) => LessonPdf(
         id: json.integer('id'),
         title: json.str('title'),
         position: json.integer('position'),
+        downloadsRemaining: json['downloads_remaining'] is num ? json.integer('downloads_remaining') : null,
+        downloadLimit: downloadLimit,
       );
 
   final int id;
   final String title;
   final int position;
+
+  /// Owner decision 2026-10-29: the stamped downloads left to the Student;
+  /// null when the Admin keeps the Lesson's PDFs view-only.
+  final int? downloadsRemaining;
+  final int downloadLimit;
+
+  bool get downloadable => downloadsRemaining != null;
+
+  LessonPdf withDownloadsRemaining(int remaining) => LessonPdf(
+        id: id,
+        title: title,
+        position: position,
+        downloadsRemaining: remaining,
+        downloadLimit: downloadLimit,
+      );
+}
+
+/// A stamped Lesson PDF as downloaded (owner decision 2026-10-29).
+class LessonPdfDownload {
+  const LessonPdfDownload({required this.bytes, required this.fileName, this.remaining});
+
+  final List<int> bytes;
+  final String fileName;
+
+  /// Downloads left after this one (`X-Nova-Downloads-Remaining`).
+  final int? remaining;
 }
 
 class QuizData {

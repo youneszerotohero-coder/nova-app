@@ -36,6 +36,10 @@ dependencies:
   # PC app updates: the downloaded installer's SHA-256 is checked before it
   # runs (already in the lock through other packages).
   crypto: ^3.0.7
+  # A Lesson PDF the Admin lets Students download (owner decision 2026-10-29):
+  # the stamped copy is handed to the system share sheet (Save to Files,
+  # Drive, print…), the only way a file leaves the app's private folder.
+  share_plus: ^13.3.1
 
 dev_dependencies:
   flutter_test:

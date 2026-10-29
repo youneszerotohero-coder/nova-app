@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart' show Headers;
 import 'package:flutter/foundation.dart';
 
 import '../core/api/api_exception.dart';
@@ -156,10 +157,45 @@ class LearningStore extends ChangeNotifier {
     return QuizResult.fromJson(body);
   }
 
-  /// D-142: the Lesson's PDFs in the Admin's order (`/lessons/{id}`).
+  /// D-142: the Lesson's PDFs in the Admin's order (`/lessons/{id}`), with
+  /// the stamped downloads left when the Admin allows the download.
   Future<List<LessonPdf>> lessonPdfs(int lessonId) async {
     final Json lesson = (await _api!.get('/lessons/$lessonId')).obj('data') ?? <String, dynamic>{};
-    return lesson.list('pdfs').map(LessonPdf.fromJson).toList();
+    final int limit = lesson.integer('pdf_download_limit', 5);
+    return lesson.list('pdfs').map((Json pdf) => LessonPdf.fromJson(pdf, downloadLimit: limit)).toList();
+  }
+
+  /// Owner decision 2026-10-29: the copy of a Lesson PDF stamped with the
+  /// Student's name, phone and the date on every page (POST, counted by the
+  /// server: 409 `PDF_DOWNLOAD_LIMIT_REACHED` after 5).
+  Future<LessonPdfDownload> downloadLessonPdf(Lesson lesson, LessonPdf pdf) async {
+    final ({List<int> bytes, Headers headers}) file = await _api!.postForFile('/lessons/${lesson.id}/pdfs/${pdf.id}/download');
+    return LessonPdfDownload(
+      bytes: file.bytes,
+      fileName: pdfFileName(file.headers.value('content-disposition'), '${lesson.title} - ${pdf.title}'),
+      remaining: int.tryParse(file.headers.value('x-nova-downloads-remaining') ?? ''),
+    );
+  }
+
+  /// The UTF-8 name of a `Content-Disposition` (`filename*`, else
+  /// `filename`, else [fallback]), safe as a file name on the phone.
+  @visibleForTesting
+  static String pdfFileName(String? disposition, String fallback) {
+    String? name;
+    final RegExpMatch? encoded = RegExp(r"filename\*=utf-8''([^;]+)", caseSensitive: false).firstMatch(disposition ?? '');
+    if (encoded != null) {
+      try {
+        name = Uri.decodeComponent(encoded.group(1)!.trim());
+      } on ArgumentError {
+        name = null;
+      }
+    }
+    name ??= RegExp(r'filename="?([^";]+)"?', caseSensitive: false).firstMatch(disposition ?? '')?.group(1);
+    String clean = (name ?? fallback).replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]+'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (clean.toLowerCase().endsWith('.pdf')) clean = clean.substring(0, clean.length - 4).trim();
+    if (clean.isEmpty) clean = 'NOVA';
+    if (clean.length > 120) clean = clean.substring(0, 120).trim();
+    return '$clean.pdf';
   }
 
   /// A lesson PDF, fetched through its 5-minute signed URL with the
