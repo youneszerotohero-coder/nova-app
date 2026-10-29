@@ -61,6 +61,7 @@ endif()
 target_include_directories(${BINARY_NAME} PRIVATE "${WEBVIEW2_DIR}/build/native/include")
 target_link_libraries(${BINARY_NAME} PRIVATE
   "${WEBVIEW2_DIR}/build/native/x64/WebView2LoaderStatic.lib"
+  "shlwapi.lib"
   "version.lib"
   "winmm.lib")
 

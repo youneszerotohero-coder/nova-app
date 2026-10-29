@@ -27,9 +27,10 @@ class ProtectedPlayback;
 // ProtectedPlayerView.kt. Flutter on Windows has no platform views and a
 // PlayReady picture cannot be copied into a Flutter texture, so the video
 // plays in its own borderless window: a WebView2 (Edge's PlayReady CDM,
-// Shaka Player, windows/runner/player) placed exactly under a transparent
-// hole that the Flutter page leaves in its player box, directly behind the
-// app window. The Flutter controls and the moving watermark are drawn over
+// Shaka Player, windows/runner/player, served as
+// https://nova-elearning.com/__pc-player/ for the CDN's CORS) placed exactly
+// under a transparent hole that the Flutter page leaves in its player box,
+// directly behind the app window. The Flutter controls and the moving watermark are drawn over
 // it by the app, as on the phone. The window is excluded from capture.
 //
 // Control arrives on `nova/protected_player_<id>` (play, pause, seekTo,
@@ -83,6 +84,8 @@ class VideoWindow {
   std::shared_ptr<int> life_ = std::make_shared<int>(0);
 
   HWND window_ = nullptr;
+  // Builds the player page's local responses (WebResourceRequested).
+  Microsoft::WRL::ComPtr<ICoreWebView2Environment> environment_;
   Microsoft::WRL::ComPtr<ICoreWebView2Controller> controller_;
   Microsoft::WRL::ComPtr<ICoreWebView2> webview_;
   bool page_ready_ = false;

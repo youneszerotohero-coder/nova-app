@@ -5,7 +5,9 @@
 #include <flutter/standard_method_codec.h>
 #include <knownfolders.h>
 #include <shlobj.h>
+#include <shlwapi.h>
 
+#include <cwchar>
 #include <set>
 #include <utility>
 
@@ -25,12 +27,18 @@ using Microsoft::WRL::ComPtr;
 
 constexpr wchar_t kWindowClass[] = L"NOVA_VIDEO_WINDOW";
 
-// The player page is served from the app's own folder under this name
-// (WebView2 virtual host: https, a secure context for EME). Nothing else is
-// ever loaded: every other navigation is cancelled.
-constexpr wchar_t kHost[] = L"player.nova-app.example";
-constexpr wchar_t kOrigin[] = L"https://player.nova-app.example/";
-constexpr wchar_t kPage[] = L"https://player.nova-app.example/index.html";
+// The player page has the website's origin, https://nova-elearning.com: the
+// CDN answers CORS for that origin only (production nginx sends a fixed
+// `Access-Control-Allow-Origin: https://nova-elearning.com` for
+// /protected-live/, which Bunny caches and replays). Requests under this
+// unused path are answered from the app's own folder (data\nova_player) by
+// this WebView only, never by the network; every other nova-elearning.com URL
+// would go to the network as usual, but the page asks for none: the Flutter
+// side alone talks to the API. It is an https URL, a secure context for EME.
+// Nothing else is ever loaded: every other navigation is cancelled.
+constexpr wchar_t kPlayerPrefix[] = L"https://nova-elearning.com/__pc-player/";
+constexpr wchar_t kPlayerFilter[] = L"https://nova-elearning.com/__pc-player/*";
+constexpr wchar_t kPage[] = L"https://nova-elearning.com/__pc-player/index.html";
 
 constexpr UINT_PTR kCloseTimer = 1;
 constexpr UINT_PTR kProbeTimer = 2;
@@ -92,6 +100,17 @@ void RegisterWindowClass(WNDPROC procedure) {
   window_class.hbrBackground = static_cast<HBRUSH>(::GetStockObject(BLACK_BRUSH));
   window_class.lpszClassName = kWindowClass;
   registered = ::RegisterClassExW(&window_class) != 0;
+}
+
+// The player page's files and their types; nothing else is served.
+const wchar_t* PlayerFileType(const std::wstring& name) {
+  if (name == L"index.html") {
+    return L"text/html; charset=utf-8";
+  }
+  if (name == L"player.js" || name == L"shaka-player.compiled.js") {
+    return L"text/javascript; charset=utf-8";
+  }
+  return nullptr;
 }
 
 std::wstring UserDataFolder() {
@@ -164,6 +183,7 @@ VideoWindow::~VideoWindow() {
   }
   webview_.Reset();
   controller_.Reset();
+  environment_.Reset();
   if (window_ != nullptr) {
     ::KillTimer(window_, kCloseTimer);
     ::KillTimer(window_, kProbeTimer);
@@ -200,6 +220,7 @@ void VideoWindow::Attach(ICoreWebView2Environment* environment, HRESULT error) {
     Fail("capability", "WEBVIEW2_UNAVAILABLE");
     return;
   }
+  environment_ = environment;
   std::weak_ptr<int> life = life_;
   const HRESULT started = environment->CreateCoreWebView2Controller(
       window_,
@@ -252,17 +273,63 @@ void VideoWindow::Configure() {
     colors->put_DefaultBackgroundColor(COREWEBVIEW2_COLOR{255, 0, 0, 0});
   }
 
-  ComPtr<ICoreWebView2_3> hosting;
-  if (FAILED(webview_.As(&hosting)) ||
-      FAILED(hosting->SetVirtualHostNameToFolderMapping(
-          kHost, ProtectedPlayback::PlayerFolder().c_str(),
-          COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS))) {
+  std::weak_ptr<int> life = life_;
+  EventRegistrationToken token{};
+  // https://nova-elearning.com/__pc-player/<file> comes from the app's own
+  // folder, in this WebView only.
+  if (FAILED(webview_->AddWebResourceRequestedFilter(
+          kPlayerFilter, COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL))) {
     Fail("capability", "WEBVIEW2_TOO_OLD");
     return;
   }
-
-  std::weak_ptr<int> life = life_;
-  EventRegistrationToken token{};
+  webview_->add_WebResourceRequested(
+      Callback<ICoreWebView2WebResourceRequestedEventHandler>(
+          [this, life](ICoreWebView2* sender,
+                       ICoreWebView2WebResourceRequestedEventArgs* args) -> HRESULT {
+            if (life.expired() || environment_ == nullptr) {
+              return S_OK;
+            }
+            ComPtr<ICoreWebView2WebResourceRequest> request;
+            LPWSTR uri = nullptr;
+            if (FAILED(args->get_Request(&request)) || request == nullptr ||
+                FAILED(request->get_Uri(&uri)) || uri == nullptr) {
+              return S_OK;
+            }
+            std::wstring name(uri);
+            ::CoTaskMemFree(uri);
+            if (!StartsWith(name, kPlayerPrefix)) {
+              return S_OK;
+            }
+            name = name.substr(wcslen(kPlayerPrefix));
+            name = name.substr(0, name.find_first_of(L"?#"));
+            const wchar_t* type = PlayerFileType(name);
+            ComPtr<IStream> stream;
+            if (type != nullptr) {
+              const std::wstring file =
+                  ProtectedPlayback::PlayerFolder() + L"\\" + name;
+              if (FAILED(::SHCreateStreamOnFileEx(
+                      file.c_str(), STGM_READ | STGM_SHARE_DENY_WRITE,
+                      FILE_ATTRIBUTE_NORMAL, FALSE, nullptr, &stream))) {
+                stream.Reset();
+              }
+            }
+            ComPtr<ICoreWebView2WebResourceResponse> response;
+            if (stream != nullptr) {
+              const std::wstring headers = std::wstring(L"Content-Type: ") +
+                                           type + L"\r\nCache-Control: no-store";
+              environment_->CreateWebResourceResponse(stream.Get(), 200, L"OK",
+                                                      headers.c_str(), &response);
+            } else {
+              environment_->CreateWebResourceResponse(nullptr, 404, L"Not Found",
+                                                      L"", &response);
+            }
+            if (response != nullptr) {
+              args->put_Response(response.Get());
+            }
+            return S_OK;
+          })
+          .Get(),
+      &token);
   webview_->add_WebMessageReceived(
       Callback<ICoreWebView2WebMessageReceivedEventHandler>(
           [this, life](ICoreWebView2* sender,
@@ -272,7 +339,7 @@ void VideoWindow::Configure() {
             }
             LPWSTR source = nullptr;
             const bool ours = SUCCEEDED(args->get_Source(&source)) &&
-                              source != nullptr && StartsWith(source, kOrigin);
+                              source != nullptr && StartsWith(source, kPlayerPrefix);
             if (source != nullptr) {
               ::CoTaskMemFree(source);
             }
@@ -296,7 +363,7 @@ void VideoWindow::Configure() {
              ICoreWebView2NavigationStartingEventArgs* args) -> HRESULT {
             LPWSTR uri = nullptr;
             const bool allowed = SUCCEEDED(args->get_Uri(&uri)) &&
-                                 uri != nullptr && StartsWith(uri, kOrigin);
+                                 uri != nullptr && StartsWith(uri, kPlayerPrefix);
             if (uri != nullptr) {
               ::CoTaskMemFree(uri);
             }
