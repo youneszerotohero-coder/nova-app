@@ -186,6 +186,14 @@ void main() {
       expect(playerFailureKey('license', clear: true), 'player.clearErr.delivery');
       expect(playerFailureKey('clear_unavailable', clear: true), 'player.err.clear_unavailable');
     });
+
+    test('D-165: paused videos say for how long, also on the clear copy', () {
+      expect(playbackPausedCategory(<String, dynamic>{'until': '2026-10-29T23:00:00+00:00', 'reason': 'day'}), 'paused_day');
+      expect(playbackPausedCategory(<String, dynamic>{'reason': 'hour'}), 'paused_hour');
+      expect(playbackPausedCategory(null), 'paused_hour');
+      expect(playerFailureKey('paused_day', clear: true), 'player.err.paused_day');
+      expect(playerFailureKey('paused_hour', clear: false), 'player.err.paused_hour');
+    });
   });
 
   group('Lesson player states', () {

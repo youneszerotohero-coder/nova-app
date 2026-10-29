@@ -252,6 +252,8 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
         switch (error.code) {
           'PROTECTED_VIDEO_NOT_READY' || 'LIVE_REPLAY_NOT_READY' => 'processing',
           'TOO_MANY_REQUESTS' => 'rate',
+          // D-165: videos paused for an hour, or until midnight (`details.reason` = `day`).
+          'PLAYBACK_PAUSED' => playbackPausedCategory(error.details),
           _ when error.status == 403 => 'access',
           _ when error.status == 401 => 'session_expired',
           _ when error.isNetwork => 'timeout',
@@ -814,10 +816,14 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
   }
 }
 
+/// D-165: the failure category of a 403 PLAYBACK_PAUSED, from its `details.reason`.
+String playbackPausedCategory(Object? details) =>
+    details is Map && details['reason'] == 'day' ? 'paused_day' : 'paused_hour';
+
 /// String key of a playback failure. On the clear copy the messages never
 /// speak of protected media (web `getLocalizedClearFailureMessage`).
 String playerFailureKey(String category, {required bool clear}) {
-  if (category == 'clear_unavailable' || category == 'access' || category == 'rate') {
+  if (category == 'clear_unavailable' || category == 'access' || category == 'rate' || category.startsWith('paused_')) {
     return 'player.err.$category';
   }
   if (!clear) return 'player.err.$category';

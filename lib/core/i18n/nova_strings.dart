@@ -1184,6 +1184,17 @@ const Map<String, Map<String, String>> K = {
     'fr': 'Trop de tentatives. Attends une minute et réessaie.',
     'ar': 'محاولات كثيرة. انتظر دقيقة وأعد المحاولة.',
   },
+  // D-165: too many different videos in a short time (403 PLAYBACK_PAUSED).
+  'player.err.paused_hour': {
+    'en': 'You watched many different videos in a short time. Videos are paused for one hour; try again later.',
+    'fr': 'Tu as regardé beaucoup de vidéos différentes en peu de temps. Les vidéos sont en pause pendant une heure ; réessaie plus tard.',
+    'ar': 'شاهدت فيديوهات مختلفة كثيرة في وقت قصير. الفيديوهات متوقفة لمدة ساعة؛ أعد المحاولة لاحقاً.',
+  },
+  'player.err.paused_day': {
+    'en': 'You watched many different videos today. Videos are paused until midnight (Algeria time); come back tomorrow.',
+    'fr': 'Tu as regardé beaucoup de vidéos différentes aujourd’hui. Les vidéos sont en pause jusqu’à minuit (heure d’Algérie) ; reviens demain.',
+    'ar': 'شاهدت فيديوهات مختلفة كثيرة اليوم. الفيديوهات متوقفة حتى منتصف الليل (بتوقيت الجزائر)؛ عُد غداً.',
+  },
   // D-070 clear copy (web `player.clear.*`): its messages never speak of
   // protected media.
   'player.clearBadge': {
