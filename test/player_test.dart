@@ -7,10 +7,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nova_mobile/core/state/app_state.dart';
 import 'package:nova_mobile/core/theme/nova_theme.dart';
 import 'package:nova_mobile/core/utils/screen_awake.dart';
+import 'package:nova_mobile/core/widgets/hero_style.dart';
 import 'package:nova_mobile/data/learning_store.dart';
 import 'package:nova_mobile/data/models.dart';
 import 'package:nova_mobile/data/playback_models.dart';
 import 'package:nova_mobile/features/learning/learn_screen.dart';
+import 'package:nova_mobile/features/learning/lesson_pdf_saver.dart';
 import 'package:nova_mobile/features/learning/lesson_pdf_screen.dart';
 import 'package:nova_mobile/features/learning/lesson_screen.dart';
 import 'package:nova_mobile/features/learning/quiz_runner.dart';
@@ -818,6 +820,8 @@ void main() {
       expect(find.text('Read the PDF'), findsNothing);
       expect(tester.getTopLeft(find.text('Energy — the summary')).dy, lessThan(tester.getTopLeft(find.text('Energy — solved BAC exercises')).dy));
       expect(find.text('Open the PDF'), findsNWidgets(2));
+      // A view-only Lesson (no downloads_remaining): nothing to download.
+      expect(find.text('Download the PDF'), findsNothing);
 
       Future<void> openAndClose(int card) async {
         await tester.tap(find.text('Open the PDF').at(card));
@@ -844,6 +848,89 @@ void main() {
       expect(find.text('Opened. You can open it again at any time.'), findsNWidgets(2));
       await _reveal(tester, find.text('Lesson 3 of 5'), -300);
       expect(find.text('To do'), findsNWidgets(2));
+    });
+
+    testWidgets('a downloadable PDF gives the stamped copy to the share sheet and counts down (owner decision 2026-10-29)', (tester) async {
+      tester.view.physicalSize = const Size(1170, 2532);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      final _FakePdfSaver saver = _FakePdfSaver();
+      final LessonPdfSaver Function() realSaver = LessonPdfSaver.factory;
+      LessonPdfSaver.factory = () => saver;
+      addTearDown(() => LessonPdfSaver.factory = realSaver);
+      final FakeBackend backend = FakeBackend(<String, FakeResponse>{
+        'GET /lessons/1023': const FakeResponse(200, <String, Object?>{
+          'data': <String, Object?>{
+            'id': 1023,
+            'has_pdf': true,
+            'allow_pdf_download': true,
+            'pdf_download_limit': 5,
+            'pdfs': <Object>[
+              <String, Object>{'id': 71, 'title': 'Energy — the summary', 'position': 1, 'downloads_remaining': 2},
+              <String, Object>{'id': 72, 'title': 'Energy — solved BAC exercises', 'position': 2, 'downloads_remaining': 0},
+            ],
+          },
+        }),
+      }, sequences: <String, List<FakeResponse>>{
+        'POST /lessons/1023/pdfs/71/download': <FakeResponse>[
+          FakeResponse(200, Uint8List.fromList('%PDF-1.4 stamped'.codeUnits), <String, List<String>>{
+            'content-type': <String>['application/pdf'],
+            'content-disposition': <String>["attachment; filename=\"Energy - Energy the summary.pdf\"; filename*=utf-8''Energy%20-%20Energy%20%E2%80%94%20the%20summary.pdf"],
+            'x-nova-downloads-remaining': <String>['1'],
+          }),
+          const FakeResponse(409, <String, Object>{
+            'error': <String, String>{'code': 'PDF_DOWNLOAD_LIMIT_REACHED', 'message': 'You have already downloaded this PDF 5 times, the maximum.'},
+          }),
+        ],
+      });
+      final AppState app = installFixtureApp(learning: LearningStore(fakeApi(backend)));
+      final Course course = HomeData.popularCourses.firstWhere((Course c) => c.owned);
+      final int index = course.lessons.indexWhere((Lesson l) => l.id == 1023);
+      await tester.pumpWidget(AppScope(
+        state: app,
+        child: MaterialApp(theme: NovaTheme.light, home: LessonScreen(course: ValueNotifier<Course>(course), index: index)),
+      ));
+      await tester.pumpAndSettle();
+      await _reveal(tester, find.text('You used the 5 downloads of this PDF.'), 200);
+
+      // Each card: open, download, and what is left; the second has none left.
+      expect(find.text('Open the PDF'), findsNWidgets(2));
+      expect(find.text('Download the PDF'), findsNWidgets(2));
+      expect(find.text('2 of 5 downloads left. Each copy carries your name and phone number.'), findsOneWidget);
+      NovaButton download(int card) => tester.widget<NovaButton>(find.widgetWithText(NovaButton, 'Download the PDF').at(card));
+      expect(download(1).onTap, isNull);
+      expect(download(0).onTap, isNotNull);
+
+      // A POST with the CSRF token; the copy goes to the share sheet under the server's name.
+      await tester.tap(find.text('Download the PDF').first);
+      await tester.pumpAndSettle();
+      final FakeRequest sent = backend.requests.lastWhere((FakeRequest r) => r.path == '/lessons/1023/pdfs/71/download');
+      expect(sent.method, 'POST');
+      expect(sent.headers['X-XSRF-TOKEN'], Uri.decodeComponent(FakeBackend.xsrfCookieValue));
+      expect(saver.saved, <String>['Energy - Energy — the summary.pdf']);
+      expect(String.fromCharCodes(saver.bytes.single), '%PDF-1.4 stamped');
+      expect(find.text('1 of 5 downloads left. Each copy carries your name and phone number.'), findsOneWidget);
+
+      // The limit reached elsewhere: the server's refusal is explained and the button turns off.
+      await tester.tap(find.text('Download the PDF').first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('You have used all the downloads of this PDF.'), findsOneWidget);
+      expect(find.text('You used the 5 downloads of this PDF.'), findsNWidgets(2));
+      expect(download(0).onTap, isNull);
+      expect(saver.saved, hasLength(1));
+      await tester.pump(const Duration(seconds: 3));
+    });
+
+    test('a downloaded PDF is named from the server, safe for the phone', () {
+      expect(LearningStore.pdfFileName("attachment; filename=\"a.pdf\"; filename*=utf-8''Le%C3%A7on%20-%20R%C3%A9sum%C3%A9.pdf", 'x'), 'Leçon - Résumé.pdf');
+      expect(LearningStore.pdfFileName('attachment; filename="Limits - Summary.pdf"', 'x'), 'Limits - Summary.pdf');
+      expect(LearningStore.pdfFileName(null, 'Maths: 1/2 - "Résumé"'), 'Maths 1 2 - Résumé.pdf');
+      expect(LearningStore.pdfFileName("attachment; filename*=utf-8''%2F%2F.pdf", ''), 'NOVA.pdf');
+      final LessonPdf pdf = LessonPdf.fromJson(<String, dynamic>{'id': 1, 'title': 'A', 'position': 1, 'downloads_remaining': 3});
+      expect(pdf.downloadable, isTrue);
+      expect(pdf.withDownloadsRemaining(2).downloadsRemaining, 2);
+      expect(LessonPdf.fromJson(<String, dynamic>{'id': 1, 'title': 'A', 'position': 1, 'downloads_remaining': null}).downloadable, isFalse);
     });
 
     testWidgets('a quiz attempt is started, submitted and graded by the server, then the Unit follows', (tester) async {
@@ -1089,4 +1176,16 @@ void main() {
       expect(ScreenAwake.held, isFalse);
     });
   });
+}
+
+/// Records what would be saved and shared (owner decision 2026-10-29).
+class _FakePdfSaver implements LessonPdfSaver {
+  final List<String> saved = <String>[];
+  final List<List<int>> bytes = <List<int>>[];
+
+  @override
+  Future<void> save(String fileName, List<int> data, {Rect? origin}) async {
+    saved.add(fileName);
+    bytes.add(data);
+  }
 }

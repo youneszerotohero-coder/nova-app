@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:cookie_jar/cookie_jar.dart';
@@ -154,6 +155,45 @@ class NovaApi {
         code: 'HTTP_$status',
         message: 'Download failed ($status)',
       );
+    } on DioException catch (error) {
+      throw ApiException(
+        status: 0,
+        code: ApiException.network,
+        message: error.message ?? 'Network unavailable',
+      );
+    }
+  }
+
+  /// A POST answered with a file (owner decision 2026-10-29: a Lesson PDF
+  /// stamped for the Student): its bytes and headers. CSRF as for every
+  /// write; an error envelope is thrown as [ApiException]. The server builds
+  /// the whole copy before the first byte, hence the longer wait.
+  Future<({List<int> bytes, Headers headers})> postForFile(String path) async {
+    Future<Response<List<int>>> send({bool freshToken = false}) async => _dio.request<List<int>>(
+          path,
+          options: Options(
+            method: 'POST',
+            responseType: ResponseType.bytes,
+            receiveTimeout: const Duration(minutes: 2),
+            headers: <String, Object>{'X-XSRF-TOKEN': await _csrfToken(fresh: freshToken)},
+          ),
+        );
+
+    try {
+      Response<List<int>> response = await send();
+      if (response.statusCode == 419) response = await send(freshToken: true);
+      final int status = response.statusCode ?? 0;
+      final List<int> bytes = response.data ?? const <int>[];
+      if (status >= 200 && status < 300) return (bytes: bytes, headers: response.headers);
+      Object? body;
+      try {
+        body = jsonDecode(utf8.decode(bytes));
+      } on FormatException {
+        body = null;
+      }
+      // Not a success: [_unwrap] throws the envelope's ApiException.
+      _unwrap(path, Response<dynamic>(requestOptions: response.requestOptions, statusCode: status, data: body));
+      throw ApiException(status: status, code: 'HTTP_$status', message: 'Download failed ($status)');
     } on DioException catch (error) {
       throw ApiException(
         status: 0,

@@ -1505,6 +1505,38 @@ const Map<String, Map<String, String>> K = {
   'lesson.pdfText': {'en': 'It opens right here, only for you.', 'fr': 'Il s’ouvre ici, rien que pour toi.', 'ar': 'يتحل هنا، غير ليك.'},
   'lesson.openPdf': {'en': 'Open the PDF', 'fr': 'Ouvrir le PDF', 'ar': 'حل الـPDF'},
   'lesson.noPdf': {'en': 'No PDF for this lesson for now.', 'fr': 'Pas de PDF pour cette leçon pour l’instant.', 'ar': 'ما كاينش PDF لهاد الدرس حاليا.'},
+  // Owner decision 2026-10-29: a stamped copy when the Admin allows the download.
+  'lesson.downloadPdf': {'en': 'Download the PDF', 'fr': 'Télécharger le PDF', 'ar': 'حمّل الـPDF'},
+  'lesson.pdfDownloadsLeft': {
+    'en': '{count} of {limit} downloads left. Each copy carries your name and phone number.',
+    'fr': 'Encore {count} téléchargements sur {limit}. Chaque copie porte ton nom et ton numéro de téléphone.',
+    'ar': 'بقاولك {count} تحميلات من {limit}. كل نسخة فيها اسمك ورقم تيليفونك.',
+  },
+  'lesson.pdfDownloadsNone': {
+    'en': 'You used the {limit} downloads of this PDF.',
+    'fr': 'Tu as utilisé les {limit} téléchargements de ce PDF.',
+    'ar': 'كمّلت الـ{limit} تحميلات تاع هاد الـPDF.',
+  },
+  'lesson.pdfDownloadLimit': {
+    'en': 'You have used all the downloads of this PDF.',
+    'fr': 'Tu as utilisé tous les téléchargements de ce PDF.',
+    'ar': 'كمّلت كامل التحميلات تاع هاد الـPDF.',
+  },
+  'lesson.pdfDownloadNotAllowed': {
+    'en': 'Downloading this PDF is not allowed.',
+    'fr': 'Le téléchargement de ce PDF n’est pas autorisé.',
+    'ar': 'التحميل تاع هاد الـPDF ماشي مسموح.',
+  },
+  'lesson.pdfDownloadFailed': {
+    'en': 'This PDF cannot be downloaded right now. Please retry later.',
+    'fr': 'Ce PDF ne peut pas être téléchargé pour le moment. Réessaie plus tard.',
+    'ar': 'ما نقدروش نحضّرو هاد الـPDF دروك. عاود جرّب من بعد.',
+  },
+  'lesson.pdfSaveFailed': {
+    'en': 'The PDF could not be opened on this phone.',
+    'fr': 'Le PDF n’a pas pu être ouvert sur ce téléphone.',
+    'ar': 'ما قدرناش نحلّو الـPDF في هاد التيليفون.',
+  },
   'lesson.blockQuiz': {'en': 'Take the quiz', 'fr': 'Fais le quiz', 'ar': 'جاوب على الكويز'},
   'lesson.noQuiz': {'en': 'No quiz for this lesson for now.', 'fr': 'Pas de quiz pour cette leçon pour l’instant.', 'ar': 'ما كاينش كويز لهاد الدرس حاليا.'},
   'lesson.quizPassed': {'en': 'Quiz passed, bravo!', 'fr': 'Quiz réussi, bravo !', 'ar': 'نجحت في الكويز، برافو!'},

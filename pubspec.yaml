@@ -33,6 +33,10 @@ dependencies:
   record: ^7.1.2
   audioplayers: ^6.8.1
   path_provider: ^2.1.6
+  # A Lesson PDF the Admin lets Students download (owner decision 2026-10-29):
+  # the stamped copy is handed to the system share sheet (Save to Files,
+  # Drive, print…), the only way a file leaves the app's private folder.
+  share_plus: ^13.3.1
 
 dev_dependencies:
   flutter_test:
