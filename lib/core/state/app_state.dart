@@ -19,6 +19,7 @@ import '../push/push_platform.dart';
 import '../push/push_service.dart';
 import '../push/push_taps.dart';
 import '../realtime/reverb_client.dart';
+import '../security/device_measurement.dart';
 import '../theme/nova_colors.dart';
 import 'account_intent.dart';
 
@@ -58,6 +59,7 @@ class AppState extends ChangeNotifier {
     this.live,
     this.realtime,
     this.push,
+    this.measurement,
     this._lang = defaultLang,
     // D-143 chat (chat agent).
     ChatStore? chat,
@@ -87,6 +89,7 @@ class AppState extends ChangeNotifier {
       learning: LearningStore(api),
       commerce: CommerceStore(api),
       account: AccountStore(api),
+      measurement: DeviceMeasurement.supported ? DeviceMeasurement(api) : null,
       references: ReferenceStore(api),
       live: LiveStore(api),
       realtime: ReverbClient(api),
@@ -144,6 +147,9 @@ class AppState extends ChangeNotifier {
 
   /// D-143 Firebase push; null in offline previews (off without its options).
   final PushService? push;
+
+  /// D-168 phase 1a phone DRM measurement; null in offline previews.
+  final DeviceMeasurement? measurement;
 
   /// Tapped system notifications, opened once the signed-in space shows.
   final PushTapRouter pushTaps = PushTapRouter();
@@ -263,6 +269,7 @@ class AppState extends ChangeNotifier {
   /// sign-out so nothing of one Student survives into the next.
   void _onSessionChanged() {
     _syncPush();
+    _syncMeasurement();
     final bool signedIn = session.signedIn;
     final SessionStatus previous = _lastSessionStatus;
     _lastSessionStatus = session.status;
@@ -497,4 +504,20 @@ class AppScope extends InheritedNotifier<AppState> {
 
   static AppState of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<AppScope>()!.notifier!;
+}
+
+// ── D-168 phase 1a: the phone's DRM, measured once per app version ─────────
+extension on AppState {
+  /// A Student past every required step is measured (after a delay, in
+  /// the background); a Teacher or a signed-out app never is.
+  void _syncMeasurement() {
+    final DeviceMeasurement? service = measurement;
+    final int? user = session.profile?.id;
+    if (service == null) return;
+    if (session.signedIn && !session.isTeacher && session.nextRequiredStep == null && user != null && user > 0) {
+      service.schedule(user);
+    } else if (session.status != SessionStatus.booting) {
+      service.cancel();
+    }
+  }
 }

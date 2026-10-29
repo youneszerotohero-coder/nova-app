@@ -97,6 +97,9 @@ class ProtectedPlayerView(
     }
 
     init {
+        // D-168: a phone measurement playing its test pattern stops first, so
+        // this player gets the (often single) secure decoder.
+        DeviceMeasurement.interruptTest()
         methods.setMethodCallHandler(this)
         events.setStreamHandler(this)
         player.setVideoSurfaceView(surface)
@@ -132,7 +135,7 @@ class ProtectedPlayerView(
                 emit(
                     mapOf(
                         "event" to "error",
-                        "category" to category(error),
+                        "category" to playbackCategory(error),
                         "kind" to kind(error),
                         "code" to error.errorCode,
                         "licenseStatus" to licenseStatus,
@@ -252,29 +255,6 @@ class ProtectedPlayerView(
             .distinct()
             .sortedDescending()
 
-    /** Same failure categories as the web player (protected-playback.ts). */
-    private fun category(error: PlaybackException): String = when (error.errorCode) {
-        PlaybackException.ERROR_CODE_DRM_SCHEME_UNSUPPORTED,
-        PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
-        PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
-        PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
-        PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES -> "capability"
-        PlaybackException.ERROR_CODE_DRM_DISALLOWED_OPERATION -> "output"
-        PlaybackException.ERROR_CODE_DRM_PROVISIONING_FAILED,
-        PlaybackException.ERROR_CODE_DRM_SYSTEM_ERROR,
-        PlaybackException.ERROR_CODE_DRM_DEVICE_REVOKED -> "drm_init"
-        PlaybackException.ERROR_CODE_DRM_LICENSE_EXPIRED -> "expired"
-        PlaybackException.ERROR_CODE_DRM_CONTENT_ERROR,
-        PlaybackException.ERROR_CODE_DRM_LICENSE_ACQUISITION_FAILED,
-        PlaybackException.ERROR_CODE_DRM_UNSPECIFIED -> "license"
-        PlaybackException.ERROR_CODE_DECODING_FAILED,
-        PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
-        PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED -> "decode"
-        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> "timeout"
-        PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> "behind_live"
-        else -> "delivery"
-    }
-
     /**
      * Whether DRM or the decoder failed: in D-070 mode B the Dart side then
      * continues on the clear copy (telemetry `fallback_reason` 2 or 3).
@@ -320,4 +300,31 @@ class ProtectedPlayerView(
         events.setStreamHandler(null)
         player.release()
     }
+}
+
+/**
+ * Same failure categories as the web player (protected-playback.ts); also
+ * the D-168 test playbacks of `DeviceMeasurement`.
+ */
+@OptIn(UnstableApi::class)
+internal fun playbackCategory(error: PlaybackException): String = when (error.errorCode) {
+    PlaybackException.ERROR_CODE_DRM_SCHEME_UNSUPPORTED,
+    PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+    PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
+    PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+    PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES -> "capability"
+    PlaybackException.ERROR_CODE_DRM_DISALLOWED_OPERATION -> "output"
+    PlaybackException.ERROR_CODE_DRM_PROVISIONING_FAILED,
+    PlaybackException.ERROR_CODE_DRM_SYSTEM_ERROR,
+    PlaybackException.ERROR_CODE_DRM_DEVICE_REVOKED -> "drm_init"
+    PlaybackException.ERROR_CODE_DRM_LICENSE_EXPIRED -> "expired"
+    PlaybackException.ERROR_CODE_DRM_CONTENT_ERROR,
+    PlaybackException.ERROR_CODE_DRM_LICENSE_ACQUISITION_FAILED,
+    PlaybackException.ERROR_CODE_DRM_UNSPECIFIED -> "license"
+    PlaybackException.ERROR_CODE_DECODING_FAILED,
+    PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+    PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED -> "decode"
+    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> "timeout"
+    PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> "behind_live"
+    else -> "delivery"
 }

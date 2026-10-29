@@ -12,6 +12,7 @@ class MainActivity : FlutterActivity() {
         NotificationChime.register(flutterEngine, this)
         AppUpdate.register(flutterEngine, this)
         ScreenAwake.register(flutterEngine, this)
+        DeviceMeasurement.register(flutterEngine, this)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

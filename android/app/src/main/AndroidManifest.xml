@@ -80,5 +80,10 @@
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="mailto"/>
         </intent>
+        <!-- D-168 phase 1a: the phone measurement reports whether Google Play
+             services and the Play Store are installed (Android 11+ package
+             visibility). -->
+        <package android:name="com.google.android.gms"/>
+        <package android:name="com.android.vending"/>
     </queries>
 </manifest>

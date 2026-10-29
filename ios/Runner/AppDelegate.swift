@@ -33,6 +33,9 @@ import UserNotifications
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ScreenAwake") {
       AppDelegate.registerScreenAwake(with: registrar)
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "DeviceMeasurement") {
+      DeviceMeasurement.register(with: registrar)
+    }
   }
 
   /// `nova/screen` (D-133): the screen stays on while a video plays, as on
