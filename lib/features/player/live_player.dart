@@ -9,6 +9,7 @@ import '../../core/security/capture_shield.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../core/theme/nova_typography.dart';
+import '../../core/utils/app_lifecycle.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../data/live_store.dart';
 import '../../data/playback_diagnostics.dart';
@@ -68,6 +69,9 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
 
   LivePolicy? _policy;
   LiveDrmCandidate? _candidate;
+
+  /// Paused because the app left the screen: back at the live edge on return.
+  bool _pausedAway = false;
   LiveJoin? _join;
   ProtectedVideoController? _video;
   LiveTelemetry? _telemetry;
@@ -136,11 +140,15 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) {
+    if (leftScreen(state)) {
+      _pausedAway = true;
       _video?.pause();
-    } else if (_stage == _LiveStage.playing) {
-      _video?.seekToLiveEdge();
-      _video?.play();
+    } else if (state == AppLifecycleState.resumed && _pausedAway) {
+      _pausedAway = false;
+      if (_stage == _LiveStage.playing) {
+        _video?.seekToLiveEdge();
+        _video?.play();
+      }
     }
   }
 
@@ -204,6 +212,8 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
         final DrmSupport support = await detectDrmSupport();
         if (_disposed) return;
         candidate = switch (support) {
+          DrmSupport.hardware || DrmSupport.software when isWindowsApp =>
+            policy.playreadyFor(hardware: support == DrmSupport.hardware),
           DrmSupport.hardware || DrmSupport.software =>
             policy.widevineFor(hardware: support == DrmSupport.hardware),
           DrmSupport.fairplay => policy.fairplay,
@@ -262,10 +272,14 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
         'join_ms': joinClock.elapsedMilliseconds,
         'delivery_mode': clear ? 1 : 0,
         'fallback_reason': _fallbackReason,
-        // Web codes: Widevine 1, FairPlay 3 (FairPlay is hardware-backed).
-        if (!clear) 'drm_system': candidate?.drm == 'fairplay' ? 3 : 1,
+        // Web codes: Widevine 1, PlayReady 2, FairPlay 3 (FairPlay is hardware-backed).
+        if (!clear) 'drm_system': switch (candidate?.drm) { 'fairplay' => 3, 'playready' => 2, _ => 1 },
         if (!clear)
-          'drm_hardware': candidate?.drm == 'fairplay' || candidate?.robustness == 'HW_SECURE_ALL' ? 1 : 0,
+          'drm_hardware': candidate?.drm == 'fairplay' ||
+                  candidate?.robustness == 'HW_SECURE_ALL' ||
+                  candidate?.robustness == '3000'
+              ? 1
+              : 0,
       });
     } on ApiException catch (error) {
       _loading = false;
@@ -692,8 +706,14 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
                       ? join.hlsUrl
                       : join.dashUrl,
               clear: join.clear,
-              licenseUrl: fairPlay ? join.fairplayLicenseUrl : join.licenseUrl,
+              licenseUrl: isWindowsApp
+                  ? join.playreadyLicenseUrl
+                  : fairPlay
+                      ? join.fairplayLicenseUrl
+                      : join.licenseUrl,
               certificateUrl: fairPlay ? join.fairplayCertificateUrl : '',
+              keySystem: _candidate?.keySystem ?? playReadyKeySystem,
+              robustness: _candidate?.robustness ?? '2000',
               token: join.token,
               maxHeight: join.clear ? null : join.maxHeight ?? _policy?.maxHeight,
               live: true,

@@ -134,6 +134,21 @@ class LivePolicy {
     return null;
   }
 
+  /// The PC app's PlayReady candidate: hardware SL3000 when the PC has it
+  /// and the server offers it, software SL2000 otherwise.
+  LiveDrmCandidate? playreadyFor({required bool hardware}) {
+    LiveDrmCandidate? software;
+    for (final LiveDrmCandidate c in candidates) {
+      if (c.drm != 'playready') continue;
+      if (c.robustness == '3000') {
+        if (hardware) return c;
+      } else {
+        software ??= c;
+      }
+    }
+    return software;
+  }
+
   /// The FairPlay candidate, offered first while FairPlay is enabled.
   LiveDrmCandidate? get fairplay {
     for (final LiveDrmCandidate c in candidates) {
@@ -152,7 +167,8 @@ class LiveDrmCandidate {
 }
 
 /// `POST /lives/{id}/join`: the protected stream with its entitlement
-/// (DASH + Widevine, or HLS + FairPlay on iPhone, D-118), or (`mode: cdn`)
+/// (DASH + Widevine, HLS + FairPlay on iPhone, D-118, DASH + PlayReady in
+/// the PC app), or (`mode: cdn`)
 /// the clear adaptive HLS stream (D-070).
 class LiveJoin {
   const LiveJoin({
@@ -160,6 +176,7 @@ class LiveJoin {
     required this.token,
     required this.licenseUrl,
     this.hlsUrl = '',
+    this.playreadyLicenseUrl = '',
     this.fairplayLicenseUrl = '',
     this.fairplayCertificateUrl = '',
     required this.maxHeight,
@@ -183,6 +200,7 @@ class LiveJoin {
       token: drm.str('token'),
       licenseUrl: drm.obj('license_urls')?.str('widevine') ?? '',
       hlsUrl: data.obj('manifests')?.str('hls') ?? '',
+      playreadyLicenseUrl: drm.obj('license_urls')?.str('playready') ?? '',
       fairplayLicenseUrl: drm.obj('license_urls')?.str('fairplay') ?? '',
       fairplayCertificateUrl: drm.str('fairplay_certificate_url'),
       maxHeight: protection['max_height'] is int ? protection['max_height'] as int : null,
@@ -198,6 +216,9 @@ class LiveJoin {
   final String token;
   final String licenseUrl;
   final String hlsUrl;
+
+  /// The PC app's PlayReady licence server.
+  final String playreadyLicenseUrl;
   final String fairplayLicenseUrl;
   final String fairplayCertificateUrl;
   final int? maxHeight;

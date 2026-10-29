@@ -41,8 +41,13 @@ class NovaApi {
   /// may take the clear copy of a video in mode A (the website may not).
   static const String clientHeader = 'X-Nova-Client';
 
-  static String get clientName =>
-      defaultTargetPlatform == TargetPlatform.iOS ? 'app-ios' : 'app-android';
+  /// `app-windows` is the NOVA PC app: DRM (PlayReady) like the website,
+  /// never the phones' clear copy (owner decision 2026-10-29).
+  static String get clientName => switch (defaultTargetPlatform) {
+        TargetPlatform.iOS => 'app-ios',
+        TargetPlatform.windows => 'app-windows',
+        _ => 'app-android',
+      };
 
   /// Production API; `--dart-define=NOVA_API_URL=…` points a build at
   /// staging or a local backend instead.

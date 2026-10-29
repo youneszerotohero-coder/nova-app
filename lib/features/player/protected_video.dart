@@ -1,21 +1,27 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../core/utils/screen_awake.dart';
 
+part 'protected_video_windows.dart';
+
 
 /// Device support for protected playback.
 enum DrmSupport {
   /// Android with hardware Widevine (L1): strict policy playable.
+  /// Windows (NOVA PC app): hardware PlayReady SL3000.
   hardware,
 
   /// Android with software Widevine only (L3): playable only when the
-  /// server allows software fallback.
+  /// server allows software fallback. Windows: software PlayReady SL2000,
+  /// which the server allows for the PC app.
   software,
 
   /// Android without Widevine.
@@ -24,9 +30,18 @@ enum DrmSupport {
   /// iPhone/iPad: FairPlay on AVPlayer (D-118), when the server offers it.
   fairplay,
 
-  /// Anything else (tests, desktop).
+  /// Anything else (tests, other desktops).
   unsupported,
 }
+
+/// The NOVA PC app (owner decision 2026-10-29): the same app built for
+/// Windows, PlayReady instead of Widevine.
+bool get isWindowsApp => !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+
+/// PlayReady key systems the PC app's player asks for (EME through
+/// WebView2): SL3000 hardware, else SL2000 software.
+const String playReadyKeySystem = 'com.microsoft.playready.recommendation';
+const String playReadyHardwareKeySystem = 'com.microsoft.playready.recommendation.3000';
 
 /// Temporary build switch (owner request 2026-10-06, D-120):
 /// `--dart-define=NOVA_CLEAR_ONLY=true` reports no DRM, so the app asks for
@@ -39,6 +54,22 @@ Future<DrmSupport> detectDrmSupport() async {
   switch (defaultTargetPlatform) {
     case TargetPlatform.iOS:
       return DrmSupport.fairplay;
+    case TargetPlatform.windows:
+      // `SL3000`, `SL2000` or null, probed through the player's own CDM
+      // (protected_player.cpp), like Android's `widevineLevel`.
+      try {
+        final String? level =
+            await const MethodChannel('nova/drm').invokeMethod<String>('playreadyLevel');
+        return switch (level) {
+          'SL3000' => DrmSupport.hardware,
+          'SL2000' => DrmSupport.software,
+          _ => DrmSupport.none,
+        };
+      } on PlatformException {
+        return DrmSupport.none;
+      } on MissingPluginException {
+        return DrmSupport.unsupported;
+      }
     case TargetPlatform.android:
       try {
         final String? level =
@@ -141,6 +172,17 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
   MethodChannel? _methods;
   StreamSubscription<dynamic>? _events;
 
+  /// Windows: where the video window goes ([_WindowsVideoSurface]).
+  Future<void> _setRect(Rect rect, {required bool visible}) async {
+    await _methods?.invokeMethod<void>('setRect', <String, Object>{
+      'x': rect.left,
+      'y': rect.top,
+      'width': rect.width,
+      'height': rect.height,
+      'visible': visible,
+    });
+  }
+
   void _attach(int viewId) {
     // A new native view for this controller: the previous one must stop,
     // or its sound goes on behind the new picture (iPhone keeps it alive).
@@ -154,7 +196,16 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
     });
   }
 
-  void _onEvent(dynamic event) {
+  void _onEvent(dynamic message) {
+    // Windows sends the player page's events as JSON text.
+    Object? event = message;
+    if (event is String) {
+      try {
+        event = jsonDecode(event);
+      } on FormatException {
+        return;
+      }
+    }
     if (event is! Map) return;
     switch (event['event']) {
       case 'state':
@@ -221,7 +272,9 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
 /// The native player surface. Android: Media3 on a secure SurfaceView,
 /// embedded with hybrid composition (a Widevine L1 decoder can only render
 /// to a real SurfaceView), for both DRM and the clear copy. iPhone:
-/// AVPlayer, FairPlay HLS (D-118) or the clear copy.
+/// AVPlayer, FairPlay HLS (D-118) or the clear copy. Windows: PlayReady
+/// DASH or the clear copy in a capture-excluded video window behind a
+/// transparent hole of this widget ([_WindowsVideoSurface]).
 class ProtectedVideoView extends StatelessWidget {
   const ProtectedVideoView({
     super.key,
@@ -234,6 +287,8 @@ class ProtectedVideoView extends StatelessWidget {
     this.startSeconds = 0,
     this.maxHeight,
     this.live = false,
+    this.keySystem = playReadyKeySystem,
+    this.robustness = '2000',
   });
 
   final String manifest;
@@ -250,6 +305,11 @@ class ProtectedVideoView extends StatelessWidget {
   final bool live;
   final ProtectedVideoController controller;
 
+  /// Windows only: the PlayReady key system and video robustness (`3000`
+  /// hardware, `2000` software) the player asks for.
+  final String keySystem;
+  final String robustness;
+
   static const String viewType = 'nova/protected-player';
   static const String iosViewType = 'nova/clear-player';
 
@@ -265,6 +325,12 @@ class ProtectedVideoView extends StatelessWidget {
       'maxHeight': maxHeight,
       'live': live,
     };
+    if (isWindowsApp) {
+      return _WindowsVideoSurface(
+        params: <String, Object?>{...params, 'keySystem': keySystem, 'robustness': robustness},
+        controller: controller,
+      );
+    }
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       return UiKitView(
         viewType: iosViewType,

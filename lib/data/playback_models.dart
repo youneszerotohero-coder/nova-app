@@ -2,8 +2,8 @@ import 'json.dart';
 
 /// `POST /lessons/{id}/playback` (backend `PlaybackService::authorize`)
 /// and `GET /lives/{id}/replay/playback`: either the protected stream
-/// with its entitlement (DASH + Widevine, or HLS + FairPlay on iPhone,
-/// D-118), or (`mode: clear`, D-070) the signed clear HLS copy protected by
+/// with its entitlement (DASH + Widevine, HLS + FairPlay on iPhone, D-118,
+/// or DASH + PlayReady in the PC app), or (`mode: clear`, D-070) the signed clear HLS copy protected by
 /// the watermark only.
 class PlaybackAuthorization {
   const PlaybackAuthorization({
@@ -15,6 +15,8 @@ class PlaybackAuthorization {
     required this.hlsUrl,
     required this.drmToken,
     required this.widevineLicenseUrl,
+    this.playreadyLicenseUrl = '',
+    this.playreadyHardware = true,
     this.fairplayLicenseUrl = '',
     this.fairplayCertificateUrl = '',
     required this.strict,
@@ -47,6 +49,8 @@ class PlaybackAuthorization {
       hlsUrl: manifests.str('hls'),
       drmToken: drm.str('token'),
       widevineLicenseUrl: licenses.str('widevine'),
+      playreadyLicenseUrl: licenses.str('playready'),
+      playreadyHardware: protection['playready_hardware'] is bool ? protection['playready_hardware'] as bool : true,
       fairplayLicenseUrl: licenses.str('fairplay'),
       fairplayCertificateUrl: drm.str('fairplay_certificate_url'),
       strict: protection.str('mode', 'strict') == 'strict',
@@ -81,6 +85,14 @@ class PlaybackAuthorization {
   final String hlsUrl;
   final String drmToken;
   final String widevineLicenseUrl;
+
+  /// The NOVA PC app's licence server (PlayReady).
+  final String playreadyLicenseUrl;
+
+  /// The PC app may use hardware PlayReady SL3000 when the PC has it
+  /// (`protection.playready_hardware`, a server switch); software SL2000
+  /// otherwise.
+  final bool playreadyHardware;
 
   /// Present only while FairPlay is enabled on the server (D-088).
   final String fairplayLicenseUrl;

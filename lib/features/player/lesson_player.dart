@@ -6,6 +6,7 @@ import '../../core/api/api_exception.dart';
 import '../../core/api/nova_api.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/security/capture_shield.dart';
+import '../../core/utils/app_lifecycle.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../core/theme/nova_typography.dart';
@@ -70,6 +71,9 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
   /// iPhone: the protected stream is FairPlay HLS (D-118).
   bool _fairPlay = false;
 
+  /// PC app: hardware PlayReady SL3000 for this playback (else SL2000).
+  bool _playReadyHardware = false;
+
   /// Keeps the picture (and its native player) when fullscreen moves it to
   /// another place in the tree: without it a second player would start.
   final GlobalKey _boxKey = GlobalKey();
@@ -133,7 +137,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) _pauseAndSave();
+    if (leftScreen(state)) _pauseAndSave();
   }
 
   /// iOS screen recording/mirroring: stop protected playback (the app
@@ -298,6 +302,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
       _auth = auth;
       _authLesson = widget.lesson.id;
       _fairPlay = support == DrmSupport.fairplay;
+      _playReadyHardware = support == DrmSupport.hardware && auth.playreadyHardware;
       _start = start;
       _resumeReached = start == 0;
       _video = video;
@@ -571,8 +576,14 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
                       ? _auth!.hlsUrl
                       : _auth!.dashUrl,
               clear: _auth!.clear,
-              licenseUrl: _fairPlay ? _auth!.fairplayLicenseUrl : _auth!.widevineLicenseUrl,
+              licenseUrl: isWindowsApp
+                  ? _auth!.playreadyLicenseUrl
+                  : _fairPlay
+                      ? _auth!.fairplayLicenseUrl
+                      : _auth!.widevineLicenseUrl,
               certificateUrl: _fairPlay ? _auth!.fairplayCertificateUrl : '',
+              keySystem: _playReadyHardware ? playReadyHardwareKeySystem : playReadyKeySystem,
+              robustness: _playReadyHardware ? '3000' : '2000',
               token: _auth!.drmToken,
               startSeconds: _start,
               maxHeight: _auth!.clear ? null : _auth!.maxHeight,

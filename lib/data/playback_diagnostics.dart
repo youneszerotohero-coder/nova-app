@@ -34,7 +34,12 @@ void reportPlaybackDiagnostic(
     // negative codes are left out.
     if (code != null && code >= -1 && code <= 100000) 'code': code,
     if (httpStatus != null && httpStatus > 0) 'http_status': httpStatus,
-    if (drm) 'drm': defaultTargetPlatform == TargetPlatform.iOS ? 'fairplay' : 'widevine',
+    if (drm)
+      'drm': switch (defaultTargetPlatform) {
+        TargetPlatform.iOS => 'fairplay',
+        TargetPlatform.windows => 'playready',
+        _ => 'widevine',
+      },
     if (drm && robustness != null) 'robustness': robustness,
     'wording': neutral ? 'neutral' : 'protected',
     'delivery': clear ? 'clear' : 'protected',
