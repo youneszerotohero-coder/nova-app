@@ -65,8 +65,8 @@ double Number(const EncodableMap& map, const char* key) {
   if (const auto* real = std::get_if<double>(&found->second)) {
     return *real;
   }
-  if (const auto* small = std::get_if<int32_t>(&found->second)) {
-    return static_cast<double>(*small);
+  if (const auto* int32_value = std::get_if<int32_t>(&found->second)) {
+    return static_cast<double>(*int32_value);
   }
   if (const auto* large = std::get_if<int64_t>(&found->second)) {
     return static_cast<double>(*large);

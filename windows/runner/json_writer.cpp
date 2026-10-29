@@ -57,8 +57,8 @@ void AppendDouble(std::string& out, double value) {
 void Append(std::string& out, const flutter::EncodableValue& value) {
   if (const auto* flag = std::get_if<bool>(&value)) {
     out += *flag ? "true" : "false";
-  } else if (const auto* small = std::get_if<int32_t>(&value)) {
-    out += std::to_string(*small);
+  } else if (const auto* int32_value = std::get_if<int32_t>(&value)) {
+    out += std::to_string(*int32_value);
   } else if (const auto* large = std::get_if<int64_t>(&value)) {
     out += std::to_string(*large);
   } else if (const auto* number = std::get_if<double>(&value)) {
