@@ -6,6 +6,7 @@ import '../../core/theme/nova_colors.dart';
 import '../../core/widgets/appearance_controls.dart';
 import '../../core/widgets/motion.dart';
 import '../../core/widgets/nova_page_header.dart';
+import '../../core/widgets/nova_toast.dart';
 import '../../data/models.dart';
 import '../shell/student_top_bar.dart';
 import 'dashboard_card.dart';
@@ -62,14 +63,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Entrance(delay: Duration(milliseconds: 50 * i), child: cards[i]),
               ),
             Center(
-              child: Text(
-                'noova.elearning@gmail.com · © 2026 Nova Learning',
-                style: heroText(12.5, color: NovaColors.textMuted),
+              // D-168: a long press measures this phone's DRM now (hidden
+              // support action; the app also does it once per version).
+              child: GestureDetector(
+                onLongPress: () => _measureNow(context, app),
+                child: Text(
+                  'noova.elearning@gmail.com · © 2026 Nova Learning',
+                  style: heroText(12.5, color: NovaColors.textMuted),
+                ),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  /// The D-168 measurement on demand, with a short technical summary.
+  Future<void> _measureNow(BuildContext context, AppState app) async {
+    final int? user = app.session.profile?.id;
+    if (app.measurement == null || user == null || app.session.isTeacher) return;
+    novaToast(context, '…', icon: Icons.memory_rounded);
+    final Map<String, dynamic>? sent = await app.measurement!.runNow(user);
+    if (!context.mounted) return;
+    novaToast(
+      context,
+      sent == null
+          ? '—'
+          : <Object?>[
+              sent['security_level'] ?? sent['platform'],
+              if (sent['max_hdcp'] != null) 'HDCP ${sent['max_hdcp']}',
+              'HW ${sent['hardware_test']}${sent['hardware_test_error'] == null ? '' : ' (${sent['hardware_test_error']})'}',
+              'SW ${sent['software_test']}${sent['software_test_error'] == null ? '' : ' (${sent['software_test_error']})'}',
+              if (sent['integrity_token'] != null) 'PI ✓',
+              if (sent['integrity_error_code'] != null) 'PI ${sent['integrity_error_code']}',
+            ].join(' · '),
+      icon: Icons.memory_rounded,
     );
   }
 

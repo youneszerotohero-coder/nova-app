@@ -84,6 +84,8 @@ final class ClearPlayerView: NSObject, FlutterPlatformView, FlutterStreamHandler
     )
     live = params["live"] as? Bool ?? false
     super.init()
+    // D-168: a phone measurement playing its test pattern stops first.
+    FairPlayTestPlayback.interrupt()
 
     container.backgroundColor = .black
     container.playerLayer.videoGravity = .resizeAspect

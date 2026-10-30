@@ -84,6 +84,9 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:$media3")
     // Store updates from Google Play (in-app update flows).
     implementation("com.google.android.play:app-update:2.1.0")
+    // D-168 phase 1a: Play Integrity verdict in the phone measurement (only
+    // when the server configured a Google Cloud project number).
+    implementation("com.google.android.play:integrity:1.4.0")
     // @OptIn for Media3's @UnstableApi DRM/DASH builders (lint-checked).
     implementation("androidx.annotation:annotation-experimental:1.4.1")
     // Java 8+ APIs on older Android for flutter_local_notifications (D-143).
