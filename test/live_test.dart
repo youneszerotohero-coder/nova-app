@@ -230,6 +230,9 @@ void main() {
       expect(join(<String, Object?>{'renew_after_seconds': 900}).renewAfter.inSeconds, 240);
       expect(join(<String, Object?>{'renew_after_seconds': 2}).renewAfter.inSeconds, 15);
       expect(join(<String, Object?>{'url_protection': 'signed'}).signedUrls, isTrue);
+      // D-172: a URL signed for the whole Live never forces a reload.
+      expect(join(<String, Object?>{'url_protection': 'session'}).signedUrls, isFalse);
+      expect(join(<String, Object?>{'url_protection': 'none'}).signedUrls, isFalse);
     });
 
     test('the clear join parses the cdn shape', () {

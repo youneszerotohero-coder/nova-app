@@ -205,6 +205,8 @@ class LiveJoin {
       fairplayCertificateUrl: drm.str('fairplay_certificate_url'),
       maxHeight: protection['max_height'] is int ? protection['max_height'] as int : null,
       renewAfter: Duration(seconds: seconds),
+      // D-172: `session` URLs are signed for the whole Live and identical on
+      // every renewal, so they renew like `none`; only `signed` reloads.
       signedUrls: data.str('url_protection') == 'signed',
       clear: data.str('mode') == 'cdn',
       manifestUrl: data.str('manifest_url'),
@@ -224,8 +226,10 @@ class LiveJoin {
   final int? maxHeight;
   final Duration renewAfter;
 
-  /// Signed CDN URLs expire with the token, so renewal must reload the
-  /// stream instead of only swapping the licence token.
+  /// `url_protection: signed`: the CDN URLs expire with the authorization, so
+  /// renewal must reload the stream instead of only swapping the licence
+  /// token. False for `none` and for `session` (D-172: one URL signed until
+  /// 3 h after the Live's scheduled end, the same at every renewal).
   final bool signedUrls;
 
   /// The clear HLS stream (`mode: cdn`), protected by the watermark only.
