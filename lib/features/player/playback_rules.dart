@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
+
 /// Playback rules shared with the web player
 /// (website-front `components/protected-video-player.tsx`), kept pure so
 /// they are unit-tested without a device.
@@ -166,6 +168,68 @@ String? clearFallbackReason(String category, {bool capability = false}) {
   if (capability || const <String>{'ios_blocked', 'security'}.contains(category)) return 'no_drm';
   if (category == 'timeout' || category == 'delivery') return 'media_unavailable';
   return 'drm_error';
+}
+
+/// Owner decision 2026-10-30: a Lesson (or a past Live, D-132) cut by a
+/// transient network failure resumes by itself at the same second, with a
+/// fresh authorization (a new playback session before any progress is
+/// saved, freshly signed media URLs): up to three attempts after 2, 5 and
+/// 10 s under a "Reconnecting…" notice, then the usual error screen.
+///
+/// Only network and timeout failures of the media download qualify, read
+/// from the native player's own code:
+/// * Android (Media3): 2000 `IO_UNSPECIFIED`, 2001
+///   `IO_NETWORK_CONNECTION_FAILED`, 2002 `IO_NETWORK_CONNECTION_TIMEOUT`,
+///   2004 `IO_BAD_HTTP_STATUS` (a CDN 5xx, or a signed URL that expired);
+/// * iPhone (AVFoundation, `NSURLErrorDomain`): -1001 timed out, -1003
+///   host not found, -1004 cannot connect, -1005 connection lost, -1006
+///   DNS failure, -1009 offline, -1011 bad server response;
+/// * PC app (Shaka): 1001 `BAD_HTTP_STATUS`, 1002 `HTTP_ERROR`, 1003
+///   `TIMEOUT`.
+/// Never a DRM or licence failure (`kind` `drm`, even a licence request
+/// that timed out), a decoder, capability or output failure, an expired
+/// session or a withdrawn access: those keep today's handling. A failed
+/// re-authorization counts as a further attempt only when the request
+/// never reached the server (no network).
+class VideoAutoResume {
+  VideoAutoResume._();
+
+  static const List<Duration> delays = <Duration>[
+    Duration(seconds: 2),
+    Duration(seconds: 5),
+    Duration(seconds: 10),
+  ];
+
+  /// After this much playback past the second it resumed at, a later cut
+  /// gets three fresh attempts.
+  static const Duration recovered = Duration(seconds: 30);
+
+  static const Set<int> androidCodes = <int>{2000, 2001, 2002, 2004};
+  static const Set<int> iosCodes = <int>{-1001, -1003, -1004, -1005, -1006, -1009, -1011};
+  static const Set<int> windowsCodes = <int>{1001, 1002, 1003};
+
+  /// The wait before automatic attempt [done] + 1, or null once the three
+  /// attempts are spent.
+  static Duration? delay(int done) => done >= 0 && done < delays.length ? delays[done] : null;
+
+  /// True when the native player's failure ([category], [kind] and [code]
+  /// as the native player reported them) is a transient network failure.
+  static bool qualifies({
+    required String? category,
+    required String? kind,
+    required int code,
+    TargetPlatform? platform,
+  }) {
+    if (category != 'delivery' && category != 'timeout') return false;
+    if (kind == 'drm' || kind == 'decoder') return false;
+    final Set<int> codes = switch (platform ?? defaultTargetPlatform) {
+      TargetPlatform.android => androidCodes,
+      TargetPlatform.iOS => iosCodes,
+      TargetPlatform.windows => windowsCodes,
+      _ => const <int>{},
+    };
+    return codes.contains(code);
+  }
 }
 
 /// Watches a protected picture that never starts although media is

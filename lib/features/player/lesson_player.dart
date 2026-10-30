@@ -31,6 +31,9 @@ enum _Stage { idle, checking, playing, failed }
 /// DRM — iPhone until FairPlay, Android without hardware Widevine, or a
 /// DRM/decoder failure at runtime — continues on the clear HLS copy with
 /// the watermark; mode C serves that copy to everyone.
+///
+/// Owner decision 2026-10-30: a network cut while watching resumes by itself
+/// at the same second ([VideoAutoResume]), with a fresh authorization.
 class LessonPlayer extends StatefulWidget {
   const LessonPlayer({
     super.key,
@@ -63,6 +66,29 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
   _Stage _stage = _Stage.idle;
   String _phaseKey = 'player.phaseAccess';
   String? _failure;
+
+  /// Automatic resumes since the picture last played well
+  /// ([VideoAutoResume], owner decision 2026-10-30).
+  int _autoResumes = 0;
+  Timer? _autoResumeTimer;
+
+  /// An automatic resume is waiting or starting: "Reconnecting…" instead
+  /// of an error, until the picture plays again.
+  bool _reconnecting = false;
+
+  /// An attempt due while NOVA was off screen runs on its return, so no
+  /// video starts behind another app.
+  VoidCallback? _resumeWhenBack;
+
+  /// Time since the cut being recovered, for its trace.
+  final Stopwatch _cutClock = Stopwatch();
+
+  /// The second the last automatic resume started from.
+  Duration? _resumedFrom;
+
+  /// The clear-copy reason [_auth] was asked with: an automatic resume
+  /// keeps the same delivery.
+  String? _authRequested;
 
   /// The failure is shown with neutral wording (clear copy, or modes B/C):
   /// it never speaks of protected media (D-077).
@@ -129,6 +155,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
     WidgetsBinding.instance.removeObserver(this);
     CaptureMonitor.instance.removeListener(_onCapture);
     _clearRetry?.cancel();
+    _autoResumeTimer?.cancel();
     _teardown();
     super.dispose();
   }
@@ -137,7 +164,13 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (leftScreen(state)) _pauseAndSave();
+    if (leftScreen(state)) {
+      _pauseAndSave();
+    } else {
+      final VoidCallback? attempt = _resumeWhenBack;
+      _resumeWhenBack = null;
+      attempt?.call();
+    }
   }
 
   /// iOS screen recording/mirroring: stop protected playback (the app
@@ -155,6 +188,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
 
   void _reset() {
     _clearRetry?.cancel();
+    _stopAutoResume();
     _teardown();
     setState(() {
       _stage = _Stage.idle;
@@ -201,14 +235,97 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
 
   // Start ---------------------------------------------------------------
 
-  Future<void> _checkAndPlay() => _begin();
+  /// The Student's own start or retry: three fresh automatic resumes.
+  Future<void> _checkAndPlay() {
+    _stopAutoResume();
+    return _begin();
+  }
+
+  void _stopAutoResume() {
+    _autoResumeTimer?.cancel();
+    _resumeWhenBack = null;
+    _reconnecting = false;
+    _autoResumes = 0;
+    _resumedFrom = null;
+  }
+
+  /// Plans the next automatic resume at [at] after a network cut
+  /// ([VideoAutoResume]); false once the three attempts are spent, and the
+  /// caller shows the error. The new start asks for a new authorization,
+  /// hence a new playback session, before any progress is saved.
+  bool _autoResume(String category, {required String phase, required Duration at, int? code, int? httpStatus}) {
+    final Duration? delay = VideoAutoResume.delay(_autoResumes);
+    if (delay == null) {
+      if (_autoResumes > 0) {
+        _traceAutoResume('exhausted', category: category, phase: phase, code: code, httpStatus: httpStatus,
+            waitedMs: _cutClock.elapsedMilliseconds);
+      }
+      return false;
+    }
+    if (_autoResumes == 0) {
+      _cutClock
+        ..reset()
+        ..start();
+    }
+    _autoResumes++;
+    _traceAutoResume('scheduled', category: category, phase: phase, code: code, httpStatus: httpStatus,
+        waitedMs: delay.inMilliseconds);
+    final String? requested = _authRequested;
+    _clearRetry?.cancel();
+    _teardown();
+    _resumeWhenBack = null;
+    setState(() {
+      _stage = _Stage.checking;
+      _failure = null;
+      _reconnecting = true;
+    });
+    void attempt() {
+      if (mounted && _reconnecting && _stage == _Stage.checking) {
+        _begin(clearReason: requested, resumeAt: at, reconnect: true);
+      }
+    }
+
+    _autoResumeTimer?.cancel();
+    _autoResumeTimer = Timer(delay, () {
+      final AppLifecycleState? life = WidgetsBinding.instance.lifecycleState;
+      if (life != null && leftScreen(life)) {
+        _resumeWhenBack = attempt;
+      } else {
+        attempt();
+      }
+    });
+    return true;
+  }
+
+  void _traceAutoResume(String reason, {String? category, String? phase, int? code, int? httpStatus, int? waitedMs}) {
+    final PlaybackAuthorization? auth = _auth;
+    reportPlaybackDiagnostic(
+      _diagnosticsApi,
+      content: _content,
+      contentId: _contentId,
+      event: 'auto_resume',
+      reason: reason,
+      category: category,
+      phase: phase,
+      code: code,
+      httpStatus: httpStatus,
+      attempt: _autoResumes,
+      waitedMs: waitedMs,
+      drm: auth != null && !auth.clear,
+      neutral: _neutral,
+      clear: auth?.clear ?? false,
+    );
+  }
 
   /// Authorizes and starts playback. [clearReason] asks for the clear copy
   /// (`no_drm` / `drm_error`), defaulting to this session's remembered
   /// fallback; [resumeAt] continues where a failed DRM picture stopped.
-  Future<void> _begin({String? clearReason, Duration? resumeAt}) async {
+  /// [reconnect]: an automatic resume after a network cut, at [resumeAt]
+  /// whatever the delivery.
+  Future<void> _begin({String? clearReason, Duration? resumeAt, bool reconnect = false}) async {
     final AppState app = AppScope.of(context);
     _clearRetry?.cancel();
+    _autoResumeTimer?.cancel();
     _teardown();
     setState(() {
       _stage = _Stage.checking;
@@ -239,13 +356,18 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
         ClearDeliveryMemory.video = null;
         ClearDeliveryMemory.videoMode = 'drm_only';
         if (noDrm != null) return _fail(noDrm);
-        return _begin();
+        return _begin(resumeAt: reconnect ? resumeAt : null, reconnect: reconnect);
       }
       if (error.code == 'VIDEO_CLEAR_COPY_UNAVAILABLE') {
         _fail('clear_unavailable', clear: true, phase: 'authorizing', httpStatus: error.status);
         _clearRetry = Timer(clearUnavailableRetry, () {
           if (mounted && _stage == _Stage.failed) _begin(clearReason: requested, resumeAt: resumeAt);
         });
+        return;
+      }
+      // No network yet: the automatic resume tries again.
+      if (reconnect && error.isNetwork &&
+          _autoResume('timeout', phase: 'authorizing', at: resumeAt ?? Duration(seconds: _start))) {
         return;
       }
       return _fail(
@@ -287,7 +409,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
           category: refusal,
           phase: 'capability',
         );
-        return _begin(clearReason: 'no_drm');
+        return _begin(clearReason: 'no_drm', resumeAt: resumeAt, reconnect: reconnect);
       }
     }
 
@@ -296,12 +418,14 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
     // D-134: the server's resume is the last second seen, also for a
     // finished Lesson; `watch_again` no longer restarts it at 0.
     final int start = safeResumeSeconds(
-      auth.clear && resumeAt != null ? resumeAt.inSeconds : auth.resumeSeconds,
+      (auth.clear || reconnect) && resumeAt != null ? resumeAt.inSeconds : auth.resumeSeconds,
       auth.durationSeconds,
     );
     final ProtectedVideoController video = ProtectedVideoController()..addListener(_onVideo);
+    if (reconnect) _resumedFrom = Duration(seconds: start);
     setState(() {
       _auth = auth;
+      _authRequested = requested;
       _authLesson = widget.lesson.id;
       _fairPlay = support == DrmSupport.fairplay;
       _playReadyHardware = support == DrmSupport.hardware && auth.playreadyHardware;
@@ -362,8 +486,9 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
     final String? reason = auth != null && !auth.clear && auth.clearDeliveryAvailable
         ? clearFallbackReason(category)
         : null;
+    // Before the picture reached the resume second it may still report 0.
+    final Duration at = _resumeReached ? state?.position ?? Duration.zero : Duration(seconds: _start);
     if (reason != null) {
-      final Duration at = state?.position ?? Duration.zero;
       if (reason != 'media_unavailable') ClearDeliveryMemory.video = reason;
       reportPlaybackDiagnostic(
         _diagnosticsApi,
@@ -379,11 +504,19 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
       _begin(clearReason: reason, resumeAt: at);
       return;
     }
+    if (state != null &&
+        VideoAutoResume.qualifies(category: state.errorCategory, kind: state.errorKind, code: state.errorCode) &&
+        _autoResume(category, phase: phase, at: at, code: state.errorCode)) {
+      return;
+    }
     _fail(category, clear: (auth?.clear ?? false) || _neutral, phase: phase, code: state?.errorCode);
   }
 
   void _fail(String category, {bool clear = false, String? phase, int? code, int? httpStatus}) {
     final bool protectedAttempt = !(_auth?.clear ?? true);
+    _autoResumeTimer?.cancel();
+    _resumeWhenBack = null;
+    _reconnecting = false;
     _teardown();
     // One trace per kind of failure: a copy still being prepared retries
     // every 20 s (web).
@@ -437,6 +570,16 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
 
     final int seconds = state.position.inSeconds;
     if (!_resumeReached && seconds >= _start - 2) _resumeReached = true;
+    if (_reconnecting && state.playing) {
+      _reconnecting = false;
+      _traceAutoResume('resumed', waitedMs: _cutClock.elapsedMilliseconds);
+    }
+    final Duration? resumedFrom = _resumedFrom;
+    if (resumedFrom != null && state.playing && state.position - resumedFrom >= VideoAutoResume.recovered) {
+      // Played well again: a later cut gets three fresh attempts.
+      _autoResumes = 0;
+      _resumedFrom = null;
+    }
     if (state.phase == 'ended') {
       _save(state.duration.inSeconds, force: true);
     } else if (!state.playing && state.phase == 'ready') {
@@ -476,8 +619,9 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
       widget.onProgress(row);
     } on ApiException catch (error) {
       // The progress session expired or was replaced: playback must be
-      // re-authorized before anything else is recorded.
-      if (error.code == 'PLAYBACK_SESSION_INVALID' && mounted && identical(_auth, report.auth)) {
+      // re-authorized before anything else is recorded (an automatic
+      // resume is already doing so).
+      if (error.code == 'PLAYBACK_SESSION_INVALID' && mounted && identical(_auth, report.auth) && !_reconnecting) {
         _fail('session_expired');
       }
     } finally {
@@ -659,11 +803,20 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
         ),
       ),
       if (state.phase == 'buffering' || state.phase == 'idle')
-        const Center(
-          child: SizedBox(
-            width: 36,
-            height: 36,
-            child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 36,
+                height: 36,
+                child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+              ),
+              if (_reconnecting) ...[
+                const SizedBox(height: 12),
+                Text(context.tr('live.reconnecting'), style: _noticeStyle),
+              ],
+            ],
           ),
         ),
       Positioned.fill(
@@ -698,6 +851,13 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
       ),
     ];
   }
+
+  static const TextStyle _noticeStyle = TextStyle(
+    fontFamily: 'Geist',
+    fontWeight: FontWeight.w600,
+    fontSize: 13,
+    color: Colors.white,
+  );
 
   Widget _center(Widget child) => Center(
         child: Padding(padding: const EdgeInsets.all(20), child: child),
@@ -746,14 +906,9 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
         ),
         const SizedBox(height: 14),
         Text(
-          context.tr(_phaseKey),
+          context.tr(_reconnecting ? 'live.reconnecting' : _phaseKey),
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontFamily: 'Geist',
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-            color: Colors.white,
-          ),
+          style: _noticeStyle,
         ),
       ],
     );

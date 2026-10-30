@@ -5,7 +5,8 @@ import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:nova_mobile/core/api/nova_api.dart';
 
-/// One canned response.
+/// One canned response; status 0 is a request that never reaches the
+/// server (no network).
 class FakeResponse {
   const FakeResponse(this.status, [this.body, this.headers = const {}]);
 
@@ -75,6 +76,9 @@ class FakeBackend implements HttpClientAdapter {
         ? (queued.length > 1 ? queued.removeAt(0) : queued.first)
         : (query.isEmpty ? null : routes['${options.method} $path?$query']) ??
             routes['${options.method} $path'];
+    if (response?.status == 0) {
+      throw DioException.connectionError(requestOptions: options, reason: 'No network');
+    }
     if (response == null) {
       return _json(404, <String, Object>{
         'error': <String, String>{'code': 'NOT_FOUND', 'message': 'No route $path'},

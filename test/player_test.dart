@@ -187,6 +187,49 @@ void main() {
       expect(playerFailureKey('clear_unavailable', clear: true), 'player.err.clear_unavailable');
     });
 
+    test('owner decision 2026-10-30: only network and timeout cuts of the media resume by themselves', () {
+      bool android(String category, int code, {String kind = 'other'}) =>
+          VideoAutoResume.qualifies(category: category, kind: kind, code: code, platform: TargetPlatform.android);
+      // Media3: connection failed, timeout, bad HTTP status, unspecified I/O.
+      expect(android('delivery', 2001), isTrue);
+      expect(android('timeout', 2002), isTrue);
+      expect(android('delivery', 2004), isTrue);
+      expect(android('delivery', 2000), isTrue);
+      // Never DRM, licence, decoder, a behind-live or unknown failure.
+      expect(android('license', 6004, kind: 'drm'), isFalse);
+      expect(android('expired', 6008, kind: 'drm'), isFalse);
+      expect(android('decode', 4003, kind: 'decoder'), isFalse);
+      expect(android('capability', 4001, kind: 'decoder'), isFalse);
+      expect(android('output', 6006, kind: 'drm'), isFalse);
+      expect(android('delivery', 1002), isFalse);
+      expect(android('delivery', 2003), isFalse);
+      expect(android('delivery', 0), isFalse);
+      expect(VideoAutoResume.qualifies(category: null, kind: null, code: 2001, platform: TargetPlatform.android), isFalse);
+      // iPhone: NSURLError network codes; a FairPlay licence that timed out stays a licence failure.
+      bool ios(String category, int code, {String kind = 'other'}) =>
+          VideoAutoResume.qualifies(category: category, kind: kind, code: code, platform: TargetPlatform.iOS);
+      expect(ios('timeout', -1001), isTrue);
+      expect(ios('delivery', -1009), isTrue);
+      expect(ios('delivery', -1005), isTrue);
+      expect(ios('timeout', -1001, kind: 'drm'), isFalse);
+      expect(ios('delivery', -11800), isFalse);
+      expect(ios('decode', -11821, kind: 'decoder'), isFalse);
+      // PC app (Shaka): bad HTTP status, HTTP error, timeout.
+      bool windows(String category, int code, {String kind = 'other'}) =>
+          VideoAutoResume.qualifies(category: category, kind: kind, code: code, platform: TargetPlatform.windows);
+      expect(windows('delivery', 1002), isTrue);
+      expect(windows('timeout', 1003), isTrue);
+      expect(windows('license', 6007, kind: 'drm'), isFalse);
+    });
+
+    test('owner decision 2026-10-30: three automatic resumes after 2, 5 and 10 s, then none', () {
+      expect(VideoAutoResume.delay(0), const Duration(seconds: 2));
+      expect(VideoAutoResume.delay(1), const Duration(seconds: 5));
+      expect(VideoAutoResume.delay(2), const Duration(seconds: 10));
+      expect(VideoAutoResume.delay(3), isNull);
+      expect(VideoAutoResume.delay(-1), isNull);
+    });
+
     test('D-165: paused videos say for how long, also on the clear copy', () {
       expect(playbackPausedCategory(<String, dynamic>{'until': '2026-10-29T23:00:00+00:00', 'reason': 'day'}), 'paused_day');
       expect(playbackPausedCategory(<String, dynamic>{'reason': 'hour'}), 'paused_hour');
@@ -620,6 +663,228 @@ void main() {
       );
       expect(players.created.single['clear'], isFalse);
       expect(ClearDeliveryMemory.video, isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
+    });
+  });
+
+  group('Automatic resume after a network cut (owner decision 2026-10-30)', () {
+    setUpAll(loadNovaFonts);
+    setUp(ClearDeliveryMemory.reset);
+
+    late FakeBackend backend;
+    late FakeNativePlayers players;
+    const MethodChannel drm = MethodChannel('nova/drm');
+
+    Future<void> pumpLesson(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1170, 2532);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(drm, (MethodCall call) async => 'L1');
+      addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(drm, null));
+      players = FakeNativePlayers()..install();
+      addTearDown(players.uninstall);
+      final AppState app = installFixtureApp(learning: LearningStore(fakeApi(backend)));
+      app.setLang(NovaLang.en);
+      final Course course = HomeData.popularCourses.firstWhere((Course c) => c.owned);
+      await tester.pumpWidget(
+        AppScope(
+          state: app,
+          child: MaterialApp(
+            theme: NovaTheme.light,
+            home: LessonScreen(course: ValueNotifier<Course>(course), index: 0),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> frames(WidgetTester tester) async {
+      for (int i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
+
+    void position(int ms) => players.emit(<String, Object?>{
+          'event': 'position', 'position': ms, 'duration': 1620400, 'buffered': ms + 20000, 'liveOffset': -1,
+        });
+
+    List<Map<String, dynamic>> traces(String event) => <Map<String, dynamic>>[
+          for (final FakeRequest r in backend.requests.where((FakeRequest r) => r.path == '/playback-diagnostics'))
+            if ((r.data! as Map<String, dynamic>)['event'] == event) r.data! as Map<String, dynamic>,
+        ];
+
+    int authorizations() => backend.requests.where((FakeRequest r) => r.path == '/lessons/0/playback').length;
+
+    testWidgets('a cut resumes at the same second with a new playback session before any progress is saved', (tester) async {
+      backend = FakeBackend(
+        <String, FakeResponse>{
+          'PUT /lessons/0/progress': const FakeResponse(200, <String, Object?>{'data': <String, Object?>{}}),
+          'POST /playback-diagnostics': const FakeResponse(204),
+        },
+        sequences: <String, List<FakeResponse>>{
+          'POST /lessons/0/playback': <FakeResponse>[
+            FakeResponse(200, <String, Object?>{'data': _authorization()}),
+            FakeResponse(200, <String, Object?>{'data': <String, Object?>{..._authorization(), 'progress_session': 'q' * 64}}),
+          ],
+        },
+      );
+      await pumpLesson(tester);
+
+      await tester.tap(find.text('Play'));
+      await frames(tester);
+      expect(players.created.single['startMs'], 312000);
+      players.emit(<String, Object?>{'event': 'playing', 'value': true});
+      position(400000);
+      await frames(tester);
+
+      // Media3 2001: the network dropped while the Student watched.
+      players.emit(<String, Object?>{'event': 'error', 'category': 'delivery', 'kind': 'other', 'code': 2001});
+      await frames(tester);
+      expect(find.text('Reconnecting…'), findsOneWidget);
+      expect(find.text('Try again'), findsNothing);
+      expect(find.textContaining('could not be loaded'), findsNothing);
+      expect(authorizations(), 1);
+      final Map<String, dynamic> scheduled = traces('auto_resume').single;
+      expect(scheduled, containsPair('reason', 'scheduled'));
+      expect(scheduled, containsPair('code', 2001));
+      expect(scheduled, containsPair('attempt', 1));
+      expect(scheduled, containsPair('waited_ms', 2000));
+
+      await tester.pump(const Duration(seconds: 2));
+      await frames(tester);
+      // A fresh authorization, and the picture continues at the second it stopped.
+      expect(authorizations(), 2);
+      expect(players.created, hasLength(2));
+      expect(players.created.last['startMs'], 400000);
+      expect(find.text('Reconnecting…'), findsOneWidget);
+
+      players.emit(<String, Object?>{'event': 'playing', 'value': true});
+      position(401000);
+      await frames(tester);
+      expect(find.text('Reconnecting…'), findsNothing);
+      expect(traces('auto_resume').last, containsPair('reason', 'resumed'));
+      position(416000);
+      await frames(tester);
+
+      // Progress saved after the cut belongs to the new playback session,
+      // requested only after the new authorization.
+      final int secondAuthorization = backend.requests.lastIndexWhere((FakeRequest r) => r.path == '/lessons/0/playback');
+      final List<FakeRequest> saves = backend.requests.where((FakeRequest r) => r.path == '/lessons/0/progress').toList();
+      expect(saves.map((FakeRequest r) => (r.data! as Map<String, dynamic>)['position_seconds']), <int>[400, 416]);
+      expect(saves.first.data, containsPair('playback_session', 'p' * 64));
+      expect(saves.last.data, containsPair('playback_session', 'q' * 64));
+      expect(backend.requests.indexOf(saves.last), greaterThan(secondAuthorization));
+      expect(traces('error_shown'), isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('after three failed automatic resumes the usual error screen shows; a retry starts afresh', (tester) async {
+      backend = FakeBackend(<String, FakeResponse>{
+        'POST /lessons/0/playback': FakeResponse(200, <String, Object?>{'data': _authorization()}),
+        'PUT /lessons/0/progress': const FakeResponse(200, <String, Object?>{'data': <String, Object?>{}}),
+        'POST /playback-diagnostics': const FakeResponse(204),
+      });
+      await pumpLesson(tester);
+
+      await tester.tap(find.text('Play'));
+      await frames(tester);
+      for (final int wait in <int>[2, 5, 10]) {
+        final int before = authorizations();
+        players.emit(<String, Object?>{'event': 'error', 'category': 'timeout', 'kind': 'other', 'code': 2002});
+        await frames(tester);
+        expect(find.text('Reconnecting…'), findsOneWidget);
+        await tester.pump(Duration(seconds: wait) - const Duration(milliseconds: 300));
+        expect(authorizations(), before);
+        await tester.pump(const Duration(milliseconds: 300));
+        await frames(tester);
+        expect(authorizations(), before + 1);
+      }
+      expect(authorizations(), 4);
+      expect(players.created, hasLength(4));
+      expect(players.created.last['startMs'], 312000);
+
+      players.emit(<String, Object?>{'event': 'error', 'category': 'timeout', 'kind': 'other', 'code': 2002});
+      await frames(tester);
+      expect(find.text('Reconnecting…'), findsNothing);
+      expect(find.text('The connection is too slow. Check your internet and retry.'), findsOneWidget);
+      expect(traces('auto_resume').map((Map<String, dynamic> t) => '${t['reason']} ${t['attempt']}'),
+          <String>['scheduled 1', 'scheduled 2', 'scheduled 3', 'exhausted 3']);
+      expect(traces('error_shown').single, containsPair('category', 'timeout'));
+
+      // Nothing more by itself; the Student's retry gets three fresh attempts.
+      await tester.pump(const Duration(seconds: 30));
+      expect(authorizations(), 4);
+      await tester.tap(find.text('Try again'));
+      await frames(tester);
+      expect(authorizations(), 5);
+      players.emit(<String, Object?>{'event': 'error', 'category': 'delivery', 'kind': 'other', 'code': 2001});
+      await frames(tester);
+      expect(find.text('Reconnecting…'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('a licence or decoder failure shows its error at once, as before', (tester) async {
+      backend = FakeBackend(<String, FakeResponse>{
+        'POST /lessons/0/playback': FakeResponse(200, <String, Object?>{'data': _authorization()}),
+        'POST /playback-diagnostics': const FakeResponse(204),
+      });
+      await pumpLesson(tester);
+
+      await tester.tap(find.text('Play'));
+      await frames(tester);
+      players.emit(<String, Object?>{'event': 'error', 'category': 'decode', 'kind': 'decoder', 'code': 4003});
+      await frames(tester);
+      await tester.pump(const Duration(seconds: 3));
+
+      expect(find.text('Reconnecting…'), findsNothing);
+      expect(find.text('Try again'), findsOneWidget);
+      expect(authorizations(), 1);
+      expect(traces('auto_resume'), isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('no network at the new authorization counts as the next attempt', (tester) async {
+      backend = FakeBackend(
+        <String, FakeResponse>{
+          'PUT /lessons/0/progress': const FakeResponse(200, <String, Object?>{'data': <String, Object?>{}}),
+          'POST /playback-diagnostics': const FakeResponse(204),
+        },
+        sequences: <String, List<FakeResponse>>{
+          'POST /lessons/0/playback': <FakeResponse>[
+            FakeResponse(200, <String, Object?>{'data': _authorization()}),
+            const FakeResponse(0),
+            FakeResponse(200, <String, Object?>{'data': _authorization()}),
+          ],
+        },
+      );
+      await pumpLesson(tester);
+
+      await tester.tap(find.text('Play'));
+      await frames(tester);
+      players.emit(<String, Object?>{'event': 'playing', 'value': true});
+      position(500000);
+      await frames(tester);
+      players.emit(<String, Object?>{'event': 'error', 'category': 'delivery', 'kind': 'other', 'code': 2001});
+      await frames(tester);
+      await tester.pump(const Duration(seconds: 2));
+      await frames(tester);
+      expect(authorizations(), 2);
+      expect(find.text('Reconnecting…'), findsOneWidget);
+      expect(players.created, hasLength(1));
+
+      await tester.pump(const Duration(seconds: 5));
+      await frames(tester);
+      expect(authorizations(), 3);
+      expect(players.created, hasLength(2));
+      expect(players.created.last['startMs'], 500000);
+      expect(traces('auto_resume').map((Map<String, dynamic> t) => '${t['reason']} ${t['phase']} ${t['attempt']}'),
+          <String>['scheduled streaming 1', 'scheduled authorizing 2']);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(seconds: 1));
     });

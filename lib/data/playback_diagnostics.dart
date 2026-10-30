@@ -5,7 +5,9 @@ import '../core/api/nova_api.dart';
 /// `POST /playback-diagnostics` (D-077): why a player left DRM for the
 /// clear copy (`clear_fallback`) or which error screen the Student saw
 /// (`error_shown`), so the later DRM work knows which devices fail and
-/// where. Fixed codes only — never a URL, token or key id. Best effort:
+/// where; `auto_resume` (owner decision 2026-10-30) traces each automatic
+/// resume after a network cut: `scheduled` (attempt, wait), `resumed` (the
+/// picture plays again, time since the cut) or `exhausted`. Fixed codes only — never a URL, token or key id. Best effort:
 /// a trace never disturbs playback (web `lib/playback-diagnostics.ts`).
 void reportPlaybackDiagnostic(
   NovaApi? api, {
@@ -17,6 +19,8 @@ void reportPlaybackDiagnostic(
   String? phase,
   int? code,
   int? httpStatus,
+  int? attempt,
+  int? waitedMs,
   String? robustness,
   bool drm = false,
   bool neutral = true,
@@ -34,6 +38,8 @@ void reportPlaybackDiagnostic(
     // negative codes are left out.
     if (code != null && code >= -1 && code <= 100000) 'code': code,
     if (httpStatus != null && httpStatus > 0) 'http_status': httpStatus,
+    'attempt': attempt,
+    'waited_ms': waitedMs,
     if (drm)
       'drm': switch (defaultTargetPlatform) {
         TargetPlatform.iOS => 'fairplay',
