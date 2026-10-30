@@ -15,7 +15,17 @@ class LiveDetail {
     required this.handStatus,
     required this.muted,
     this.speaker,
+    this.audienceOpen = true,
+    this.audienceOpenedAt,
   });
+
+  /// D-128 (web `LIVE_REVEAL_DELAY_MS`): when the doors open, the newest
+  /// picture a Student can show was filmed about 10 s earlier. A Student
+  /// who waited in the room keeps waiting this long, so the Live they see
+  /// begins at "Start the Live", never the Professor getting ready; the
+  /// class clock is behind by the same delay, so it starts at 00:00 with
+  /// that first picture.
+  static const Duration revealDelay = Duration(seconds: 9);
 
   factory LiveDetail.fromJson(Json body) {
     final Json data = body.obj('data') ?? <String, dynamic>{};
@@ -28,6 +38,9 @@ class LiveDetail {
       handStatus: body.strOrNull('hand_status'),
       muted: body.flag('muted'),
       speaker: LiveSpeakerName.fromJson(body.obj('speaker')),
+      // Absent on servers before D-117: the doors are open.
+      audienceOpen: data.flag('audience_open', true),
+      audienceOpenedAt: data.date('audience_opened_at'),
     );
   }
 
@@ -46,9 +59,49 @@ class LiveDetail {
   /// current afterwards by `LiveSpeakerChanged` (D-073).
   final LiveSpeakerName? speaker;
 
+  /// D-117: false while a prepared Live runs behind closed doors (the
+  /// media runs, the Students wait); "Start the Live" opens them.
+  final bool audienceOpen;
+
+  /// When the doors opened (null while closed).
+  final DateTime? audienceOpenedAt;
+
   String get status => live.rawStatus;
+
+  /// The server's lifecycle is `live` (doors open or not).
   bool get isLive => status == 'live';
-  bool get isWaiting => status == 'scheduled' || status == 'starting';
+
+  /// D-117 (web `doorsClosed`): a prepared Live whose doors are still
+  /// closed. Students must not see it yet.
+  bool get doorsClosed => (status == 'starting' || status == 'live') && !audienceOpen;
+
+  /// The Students wait (web `LiveWaitingRoom`): scheduled, starting, or
+  /// prepared behind closed doors.
+  bool get isWaiting => status == 'scheduled' || status == 'starting' || doorsClosed;
+
+  /// The Student is in the waiting room (web `inWaitingRoom` before the
+  /// doors open): the room is open and the Live has not opened to them.
+  bool get inWaitingRoom => isWaiting && live.waitingRoomOpen;
+
+  /// D-128 (web `holdingReveal`): the doors just opened and a Student who
+  /// [waited] in the room still waits until [revealDelay] after.
+  bool holdsReveal({required bool waited, required DateTime serverNow}) {
+    final DateTime? opened = audienceOpenedAt;
+    return waited && isLive && !doorsClosed && opened != null && serverNow.isBefore(opened.add(revealDelay));
+  }
+
+  /// The broadcast is shown: live, doors open, reveal not held.
+  bool showsBroadcast({required bool waited, required DateTime serverNow}) =>
+      isLive && !doorsClosed && !holdsReveal(waited: waited, serverNow: serverNow);
+
+  /// The class clock (web `LiveStreamClock` with the Student delay): time
+  /// since the doors opened, minus [revealDelay], never negative.
+  Duration? classElapsed(DateTime serverNow) {
+    final DateTime? started = startedAt;
+    if (!isLive || started == null) return null;
+    final Duration elapsed = serverNow.difference(started) - revealDelay;
+    return elapsed.isNegative ? Duration.zero : elapsed;
+  }
   bool get isOver => const <String>{
         'ending',
         'processing_replay',

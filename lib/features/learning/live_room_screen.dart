@@ -60,6 +60,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
   _Hand _hand = _Hand.passive;
   LiveSpeaker? _speaker;
 
+  /// The Student waited in this room's waiting room (web
+  /// `wasInWaitingRoom`): the reveal is held after the doors open (D-128).
+  bool _waited = false;
+
   /// Who is speaking, as the other Students see it (D-073).
   LiveSpeakerName? _speakerName;
   bool _speakerFromRealtime = false;
@@ -114,6 +118,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
         _detail = detail;
         _loadError = null;
         if (detail.serverTime != null) _skew = detail.serverTime!.difference(DateTime.now());
+        if (detail.inWaitingRoom) _waited = true;
         // Realtime is the fresher source once it has spoken.
         if (!_speakerFromRealtime) _speakerName = detail.isLive ? detail.speaker : null;
       });
@@ -304,9 +309,11 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
   @override
   Widget build(BuildContext context) {
     final LiveDetail? detail = _detail;
-    final Widget? player = detail == null ? null : _player(detail);
-
-    final bool isLive = detail?.isLive ?? false;
+    // D-117: a prepared Live behind closed doors, and the D-128 reveal
+    // delay, are shown as the wait; the 1 s clock rebuild ends the delay.
+    final bool isLive = detail != null &&
+        detail.showsBroadcast(waited: _waited, serverNow: DateTime.now().add(_skew));
+    final Widget? player = detail == null ? null : _player(detail, broadcast: isLive);
 
     if (_fullscreen && player != null) {
       return PopScope(
@@ -379,7 +386,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
     );
   }
 
-  Widget? _player(LiveDetail detail) {
+  Widget? _player(LiveDetail detail, {required bool broadcast}) {
     final LiveSpeaker? speaker = _speaker;
     if (detail.isLive && _hand == _Hand.interactive && speaker != null) {
       // D-066: no broadcast player exists while the Student speaks; the
@@ -389,7 +396,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
         child: LiveSpeakingStage(liveId: _id, speaker: speaker, fullscreen: _fullscreen),
       );
     }
-    if (detail.isLive) {
+    if (broadcast) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(_fullscreen ? 0 : 18),
         child: LivePlayer(
@@ -406,6 +413,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
   }
 
   Widget _statusCard(BuildContext context, LiveDetail detail) {
+    if (detail.isLive && !detail.doorsClosed) {
+      // D-128: the doors just opened; the first picture is on its way.
+      return _message(context, null, context.tr('live.starting'));
+    }
     if (detail.isWaiting) {
       final DateTime? at = detail.live.scheduledAt;
       return _message(
@@ -465,10 +476,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
             'unavailable' => context.tr('live.interruptedShort'),
             _ => null,
           };
-    final DateTime? started = detail?.startedAt;
-    final String? clock = isLive && started != null
-        ? clockLabel(DateTime.now().add(_skew).difference(started))
-        : null;
+    final Duration? elapsed = isLive ? detail?.classElapsed(DateTime.now().add(_skew)) : null;
+    final String? clock = elapsed == null ? null : clockLabel(elapsed);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 20, 6),

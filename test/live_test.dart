@@ -32,6 +32,10 @@ import 'nova_font_loader.dart';
 ///
 /// D-132: once its recording is ready, a finished Live carries the
 /// [lessonId] it became in its Unit ([courseSlug]).
+///
+/// D-117: [audienceOpen] false is a prepared Live behind closed doors;
+/// [openedAt] is when "Start the Live" opened them (also `started_at`);
+/// [waitingRoom] says the room was open.
 Map<String, Object?> _detail(
   String status, {
   String? mediaState,
@@ -40,6 +44,10 @@ Map<String, Object?> _detail(
   Map<String, String>? speaker,
   int? lessonId,
   String courseSlug = 'physics-mechanics',
+  bool? audienceOpen,
+  String? openedAt,
+  bool waitingRoom = false,
+  String serverTime = '2026-09-24T18:10:00+00:00',
 }) =>
     <String, Object?>{
       'data': <String, Object?>{
@@ -50,9 +58,14 @@ Map<String, Object?> _detail(
         'teacher_name': 'Amel Khaldi',
         'attendees_count': 14,
         'scheduled_at': '2026-09-24T18:00:00+00:00',
-        'started_at': status == 'live' ? '2026-09-24T18:01:00+00:00' : null,
-        'server_time': '2026-09-24T18:10:00+00:00',
+        'started_at': status == 'live' && audienceOpen != false ? openedAt ?? '2026-09-24T18:01:00+00:00' : null,
+        'server_time': serverTime,
         'status': status,
+        'audience_open': ?audienceOpen,
+        'audience_opened_at': openedAt,
+        'waiting_room': waitingRoom
+            ? <String, Object?>{'opened_at': '2026-09-24T17:45:00+00:00', 'ends_at': '2026-09-24T18:00:00+00:00'}
+            : null,
         'media_state': mediaState,
         'comments_enabled': comments,
         'comment_max_length': 500,
@@ -391,6 +404,54 @@ void main() {
       expect(blind.observe(null), isTrue);
     });
 
+    group('D-117 closed doors and the D-128 reveal (web live-room.tsx)', () {
+      LiveDetail detail(String status, {bool? audienceOpen, String? openedAt, bool waitingRoom = true}) =>
+          LiveDetail.fromJson(_detail(status, audienceOpen: audienceOpen, openedAt: openedAt, waitingRoom: waitingRoom));
+      final DateTime opened = DateTime.utc(2026, 9, 24, 18, 2);
+
+      test('a prepared Live behind closed doors is a wait, not a broadcast', () {
+        for (final String status in <String>['starting', 'live']) {
+          final LiveDetail closed = detail(status, audienceOpen: false);
+          expect(closed.doorsClosed, isTrue, reason: status);
+          expect(closed.isWaiting, isTrue, reason: status);
+          expect(closed.inWaitingRoom, isTrue, reason: status);
+          expect(closed.showsBroadcast(waited: true, serverNow: opened), isFalse, reason: status);
+          expect(closed.showsBroadcast(waited: false, serverNow: opened), isFalse, reason: status);
+          expect(closed.classElapsed(opened), isNull, reason: status);
+        }
+        expect(detail('scheduled').isWaiting, isTrue);
+        expect(detail('scheduled', waitingRoom: false).inWaitingRoom, isFalse);
+      });
+
+      test('a server without the field, or a Live without waiting room, has its doors open', () {
+        final LiveDetail old = detail('live', waitingRoom: false);
+        expect(old.audienceOpen, isTrue);
+        expect(old.doorsClosed, isFalse);
+        expect(old.isWaiting, isFalse);
+        expect(old.showsBroadcast(waited: false, serverNow: opened), isTrue);
+      });
+
+      test('a Student who waited sees the Live 9 s after the doors opened, a late Student at once', () {
+        final LiveDetail open = detail('live', audienceOpen: true, openedAt: '2026-09-24T18:02:00+00:00');
+        expect(open.audienceOpenedAt!.isAtSameMomentAs(opened), isTrue);
+        expect(open.doorsClosed, isFalse);
+        expect(open.inWaitingRoom, isFalse);
+
+        final DateTime early = opened.add(const Duration(seconds: 8, milliseconds: 900));
+        expect(open.holdsReveal(waited: true, serverNow: early), isTrue);
+        expect(open.showsBroadcast(waited: true, serverNow: early), isFalse);
+        expect(open.showsBroadcast(waited: false, serverNow: early), isTrue);
+        expect(open.showsBroadcast(waited: true, serverNow: opened.add(LiveDetail.revealDelay)), isTrue);
+      });
+
+      test('the class clock starts at 00:00 with the first picture (Student delay)', () {
+        final LiveDetail open = detail('live', audienceOpen: true, openedAt: '2026-09-24T18:02:00+00:00');
+        expect(open.classElapsed(opened.add(const Duration(seconds: 5))), Duration.zero);
+        expect(open.classElapsed(opened.add(const Duration(seconds: 70))), const Duration(seconds: 61));
+        expect(detail('starting', audienceOpen: true).classElapsed(opened), isNull);
+      });
+    });
+
     test('the clear join parses the cdn shape', () {
       final LiveJoin parsed = LiveJoin.fromJson((_clearJoin.body! as Map<String, dynamic>)['data'] as Map<String, dynamic>);
       expect(parsed.clear, isTrue);
@@ -540,6 +601,61 @@ void main() {
 
       final FakeRequest ask = backend.requests.firstWhere((FakeRequest r) => r.path == '/lives/301/comments');
       expect(ask.data, <String, String>{'message': 'Can you repeat the second law?'});
+      await leave(tester);
+    });
+
+    testWidgets('D-117: behind closed doors the Student waits, then sees the Live 9 s after the doors open', (tester) async {
+      final FakeBackend backend = await pumpRoom(
+        tester,
+        <String, FakeResponse>{
+          'POST /lives/301/playback-policy': FakeResponse(200, _policy(mode: 'clear')),
+          'POST /lives/301/join': _clearJoin,
+        },
+        sequences: <String, List<FakeResponse>>{
+          'GET /lives/301': <FakeResponse>[
+            // Prepared: the media runs, the doors are closed.
+            FakeResponse(200, _detail('live', mediaState: 'ready', audienceOpen: false, waitingRoom: true)),
+            // "Start the Live" 2 s ago: the picture of that moment is not here yet.
+            FakeResponse(200, _detail('live', mediaState: 'ready', audienceOpen: true, openedAt: '2026-09-24T18:10:00+00:00',
+                waitingRoom: true, serverTime: '2026-09-24T18:10:02+00:00')),
+            // 12 s after the doors opened.
+            FakeResponse(200, _detail('live', mediaState: 'ready', audienceOpen: true, openedAt: '2026-09-24T18:10:00+00:00',
+                waitingRoom: true, serverTime: '2026-09-24T18:10:12+00:00')),
+          ],
+        },
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.textContaining('starts'), findsOneWidget);
+      expect(players.created, isEmpty);
+      expect(backend.requests.where((FakeRequest r) => r.path == '/lives/301/playback-policy'), isEmpty);
+      expect(find.textContaining('LIVE CLASS ·'), findsNothing);
+
+      // The room keeps asking while the doors are closed (8 s without realtime).
+      await tester.pump(const Duration(seconds: 8));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.textContaining('The broadcast is starting'), findsOneWidget);
+      expect(players.created, isEmpty);
+      expect(joins(backend), isEmpty);
+
+      await tester.pump(const Duration(seconds: 8));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(joins(backend), hasLength(1));
+      expect(players.created, hasLength(1));
+      // 12 s after the doors opened, minus the 9 s the picture takes.
+      expect(find.textContaining(RegExp(r'LIVE CLASS · 0:0[34]')), findsOneWidget);
+      await leave(tester);
+    });
+
+    testWidgets('D-117: a Student arriving after the doors opened sees the Live at once', (tester) async {
+      final FakeBackend backend = await pumpRoom(tester, <String, FakeResponse>{
+        'GET /lives/301': FakeResponse(200, _detail('live', mediaState: 'ready', audienceOpen: true,
+            openedAt: '2026-09-24T18:10:00+00:00', waitingRoom: true, serverTime: '2026-09-24T18:10:02+00:00')),
+        'POST /lives/301/playback-policy': FakeResponse(200, _policy(mode: 'clear')),
+        'POST /lives/301/join': _clearJoin,
+      });
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(joins(backend), hasLength(1));
+      expect(players.created, hasLength(1));
       await leave(tester);
     });
 
