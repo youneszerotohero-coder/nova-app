@@ -192,6 +192,83 @@ class ProtectedStartWatch {
       buffered - position >= minBuffered;
 }
 
+/// A Live player that never starts, or stops for good, although the server
+/// says its media is ready. The native players report hard errors only: a
+/// player stuck loading (Media3 `STATE_BUFFERING`, AVPlayer
+/// `waitingToPlayAtSpecifiedRate`) waits forever, which Students fixed by
+/// leaving and opening the Live again. Progress is a playing picture or
+/// media loaded ahead of the playhead (a playhead that only jumps is a
+/// seek, not playback). The player is restarted with a fresh authorization
+/// (web 8 s first-frame watchdog) when, before it first plays, nothing
+/// progressed for [startTimeout] (10 s, then 15, 20 and 30 s for the next
+/// restarts, so a slow link still gets its chance) or it loaded without
+/// playing for three times as long; once it played, after [stallTimeout]
+/// without progress. Times come from the caller's ticks, so the rule is the
+/// same on a phone and under fake timers.
+class LivePlaybackWatch {
+  static const List<int> _startSeconds = <int>[10, 15, 20, 30];
+  static const Duration stallTimeout = Duration(seconds: 20);
+
+  /// Below this, more media ahead is jitter, not loading.
+  static const Duration _loaded = Duration(milliseconds: 500);
+
+  static Duration startTimeout(int restarts) =>
+      Duration(seconds: _startSeconds[restarts.clamp(0, _startSeconds.length - 1)]);
+
+  Duration _now = Duration.zero;
+  Duration _lastProgress = Duration.zero;
+  Duration _expectedSince = Duration.zero;
+  Duration? _ahead;
+
+  /// This player has played (a moving picture, not only a first frame).
+  bool played = false;
+
+  /// One observation per tick. [expected]: the player is meant to play
+  /// (not paused by the Student, the app leaving the screen or a capture,
+  /// and the server reports its media ready); otherwise the clocks restart.
+  void observe({
+    required Duration elapsed,
+    required bool expected,
+    required bool playing,
+    required Duration position,
+    required Duration buffered,
+  }) {
+    _now = elapsed;
+    // Media ahead of the playhead, not the buffered end: on Android both
+    // move back when the live window slides.
+    final Duration ahead = buffered - position;
+    final bool loaded = _ahead != null && ahead - _ahead! >= _loaded;
+    if (playing) played = true;
+    if (!expected) _expectedSince = elapsed;
+    if (!expected || playing || loaded) _lastProgress = elapsed;
+    _ahead = ahead;
+  }
+
+  /// Time without progress so far.
+  Duration get idle => _now - _lastProgress;
+
+  /// True when the player should be restarted; [restarts] counts the
+  /// watchdog restarts since the Live last played.
+  bool stuck({required int restarts}) {
+    if (played) return idle >= stallTimeout;
+    final Duration timeout = startTimeout(restarts);
+    return idle >= timeout || _now - _expectedSince >= timeout * 3;
+  }
+}
+
+/// The native player's state as an HTMLMediaElement `readyState`
+/// (telemetry `ready_state`, as the website reports it): 0 nothing loaded,
+/// 1 loading without a picture, 2 a picture but not enough to play, 3 ready
+/// but not playing, 4 playing.
+int liveReadyState({required String phase, required bool firstFrame, required bool playing}) {
+  if (playing) return 4;
+  return switch (phase) {
+    'ready' => 3,
+    'buffering' => firstFrame ? 2 : 1,
+    _ => 0,
+  };
+}
+
 /// Renewal failures retry after 15 s × failures, at most 60 s.
 Duration renewalRetryDelay(int failures) =>
     Duration(seconds: (15 * failures).clamp(15, 60));

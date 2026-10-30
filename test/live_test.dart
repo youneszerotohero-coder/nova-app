@@ -16,6 +16,8 @@ import 'package:nova_mobile/data/session_store.dart';
 import 'package:nova_mobile/features/learning/learn_screen.dart';
 import 'package:nova_mobile/features/learning/lesson_screen.dart';
 import 'package:nova_mobile/features/learning/live_room_screen.dart';
+import 'package:nova_mobile/features/learning/live_speaker.dart';
+import 'package:nova_mobile/features/learning/live_speaking_stage.dart';
 import 'package:nova_mobile/features/player/playback_rules.dart';
 import 'package:nova_mobile/features/shell/student_top_bar.dart';
 
@@ -69,6 +71,7 @@ Map<String, Object?> _policy({
   String mode = 'protected',
   bool clearDelivery = false,
   bool fairplay = false,
+  bool telemetry = false,
 }) =>
     mode == 'clear'
         ? <String, Object?>{
@@ -76,7 +79,7 @@ Map<String, Object?> _policy({
               'mode': 'clear',
               'clear_fallback_available': false,
               'delivery': 'clear',
-              'telemetry': false,
+              'telemetry': telemetry,
             },
           }
         : <String, Object?>{
@@ -232,6 +235,159 @@ void main() {
       expect(join(<String, Object?>{'url_protection': 'signed'}).signedUrls, isTrue);
     });
 
+    group('a Live player that does not play restarts by itself (2026-10-29 first-join bug)', () {
+      const Duration second = Duration(seconds: 1);
+
+      /// Feeds [watch] one tick per second from [from] for [seconds] ticks.
+      void feed(
+        LivePlaybackWatch watch,
+        int from,
+        int seconds, {
+        bool expected = true,
+        bool playing = false,
+        Duration position = const Duration(seconds: 14),
+        Duration Function(int tick)? buffered,
+      }) {
+        for (int tick = from; tick < from + seconds; tick++) {
+          watch.observe(
+            elapsed: second * (tick + 1),
+            expected: expected,
+            playing: playing,
+            position: position,
+            buffered: buffered?.call(tick) ?? position,
+          );
+        }
+      }
+
+      test('a first frame then nothing loaded: restarted after 10 s, not before', () {
+        final LivePlaybackWatch watch = LivePlaybackWatch();
+        feed(watch, 0, 9);
+        expect(watch.stuck(restarts: 0), isFalse);
+        feed(watch, 9, 1);
+        expect(watch.stuck(restarts: 0), isTrue);
+        expect(watch.played, isFalse);
+      });
+
+      test('the next restarts wait longer (15, 20, then 30 s) so a slow link gets its chance', () {
+        expect(LivePlaybackWatch.startTimeout(0), const Duration(seconds: 10));
+        expect(LivePlaybackWatch.startTimeout(1), const Duration(seconds: 15));
+        expect(LivePlaybackWatch.startTimeout(2), const Duration(seconds: 20));
+        expect(LivePlaybackWatch.startTimeout(9), const Duration(seconds: 30));
+        final LivePlaybackWatch watch = LivePlaybackWatch();
+        feed(watch, 0, 14);
+        expect(watch.stuck(restarts: 1), isFalse);
+        feed(watch, 14, 1);
+        expect(watch.stuck(restarts: 1), isTrue);
+      });
+
+      test('media loading ahead is progress, up to three times the wait without playing', () {
+        final LivePlaybackWatch watch = LivePlaybackWatch();
+        // 0.6 s more media every second, nothing plays.
+        feed(watch, 0, 29, buffered: (int tick) => const Duration(seconds: 14) + const Duration(milliseconds: 600) * tick);
+        expect(watch.stuck(restarts: 0), isFalse);
+        feed(watch, 29, 1, buffered: (int tick) => const Duration(seconds: 14) + const Duration(milliseconds: 600) * tick);
+        expect(watch.stuck(restarts: 0), isTrue);
+      });
+
+      test('the Android live window sliding is not progress', () {
+        final LivePlaybackWatch watch = LivePlaybackWatch();
+        // Position and buffered end move back together every 2 s.
+        for (int tick = 0; tick < 10; tick++) {
+          final Duration slide = Duration(seconds: 2 * (tick ~/ 2));
+          watch.observe(
+            elapsed: second * (tick + 1),
+            expected: true,
+            playing: false,
+            position: const Duration(seconds: 28) - slide,
+            buffered: const Duration(seconds: 28) - slide,
+          );
+        }
+        expect(watch.stuck(restarts: 0), isTrue);
+      });
+
+      test('once it played, a stall is restarted after 20 s without progress', () {
+        final LivePlaybackWatch watch = LivePlaybackWatch();
+        feed(watch, 0, 30, playing: true);
+        expect(watch.stuck(restarts: 0), isFalse);
+        feed(watch, 30, 19);
+        expect(watch.played, isTrue);
+        expect(watch.stuck(restarts: 0), isFalse);
+        feed(watch, 49, 1);
+        expect(watch.stuck(restarts: 0), isTrue);
+      });
+
+      test('paused by the Student, away from the screen or media not ready: never restarted', () {
+        final LivePlaybackWatch watch = LivePlaybackWatch();
+        feed(watch, 0, 120, expected: false);
+        expect(watch.stuck(restarts: 0), isFalse);
+        // Back to "should play": a full wait again.
+        feed(watch, 120, 9);
+        expect(watch.stuck(restarts: 0), isFalse);
+        feed(watch, 129, 1);
+        expect(watch.stuck(restarts: 0), isTrue);
+      });
+
+      test('ready_state follows the website (HTMLMediaElement)', () {
+        expect(liveReadyState(phase: 'idle', firstFrame: false, playing: false), 0);
+        expect(liveReadyState(phase: 'buffering', firstFrame: false, playing: false), 1);
+        expect(liveReadyState(phase: 'buffering', firstFrame: true, playing: false), 2);
+        expect(liveReadyState(phase: 'ready', firstFrame: true, playing: false), 3);
+        expect(liveReadyState(phase: 'ready', firstFrame: true, playing: true), 4);
+      });
+    });
+
+    test('the speaking stage shows the Professor only once a frame is on screen (D-073)', () {
+      PresenterPicture picture({
+        bool connected = true,
+        bool professorPresent = true,
+        bool cameraPublished = true,
+        bool cameraMuted = false,
+        bool subscribed = true,
+        bool pausedByServer = false,
+        bool frameShown = true,
+      }) =>
+          presenterPictureFor(
+            connected: connected,
+            professorPresent: professorPresent,
+            cameraPublished: cameraPublished,
+            cameraMuted: cameraMuted,
+            subscribed: subscribed,
+            pausedByServer: pausedByServer,
+            frameShown: frameShown,
+          );
+
+      expect(picture(), PresenterPicture.showing);
+      expect(picture(connected: false), PresenterPicture.connecting);
+      expect(picture(professorPresent: false), PresenterPicture.connecting);
+      expect(picture(subscribed: false), PresenterPicture.connecting);
+      expect(picture(frameShown: false), PresenterPicture.connecting);
+      expect(picture(cameraPublished: false), PresenterPicture.paused);
+      expect(picture(cameraMuted: true), PresenterPicture.paused);
+      expect(picture(pausedByServer: true), PresenterPicture.paused);
+    });
+
+    test('a frame counts as shown only when decoded after the renderer was attached', () {
+      final PresenterFrameWatch frames = PresenterFrameWatch();
+      // Frames decoded before the stage existed are not on screen.
+      expect(frames.observe(120), isFalse);
+      expect(frames.observe(120), isFalse);
+      expect(frames.observe(121), isTrue);
+      expect(frames.observe(121), isTrue);
+
+      // Stats appear late: the first number is the baseline.
+      final PresenterFrameWatch late = PresenterFrameWatch();
+      expect(late.observe(null), isFalse);
+      expect(late.observe(0), isFalse);
+      expect(late.observe(1), isTrue);
+
+      // A phone whose stats never answer is shown the picture, as before.
+      final PresenterFrameWatch blind = PresenterFrameWatch();
+      for (int i = 1; i < PresenterFrameWatch.blindLimit; i++) {
+        expect(blind.observe(null), isFalse);
+      }
+      expect(blind.observe(null), isTrue);
+    });
+
     test('the clear join parses the cdn shape', () {
       final LiveJoin parsed = LiveJoin.fromJson((_clearJoin.body! as Map<String, dynamic>)['data'] as Map<String, dynamic>);
       expect(parsed.clear, isTrue);
@@ -341,6 +497,30 @@ void main() {
     Iterable<FakeRequest> joins(FakeBackend backend) =>
         backend.requests.where((FakeRequest r) => r.path == '/lives/301/join');
 
+    /// Every telemetry event the player sent (the rest is flushed on leaving).
+    List<Map<String, dynamic>> telemetry(FakeBackend backend) => <Map<String, dynamic>>[
+          for (final FakeRequest r in backend.requests.where((FakeRequest r) => r.path == '/lives/301/playback-telemetry'))
+            for (final Object? event in (r.data! as Map<String, Object?>)['events']! as List<Object?>)
+              event! as Map<String, dynamic>,
+        ];
+
+    /// The clear Live of the apps (D-152) with telemetry on.
+    Map<String, FakeResponse> clearLive() => <String, FakeResponse>{
+          'GET /lives/301': FakeResponse(200, _detail('live', mediaState: 'ready')),
+          'POST /lives/301/playback-policy': FakeResponse(200, _policy(mode: 'clear', telemetry: true)),
+          'POST /lives/301/join': _clearJoin,
+          'POST /lives/301/playback-telemetry': const FakeResponse(204),
+        };
+
+    /// One native `position` report: the playhead, and media loaded to [buffered].
+    Map<String, Object?> position(int ms, {int? buffered}) => <String, Object?>{
+          'event': 'position',
+          'position': ms,
+          'duration': 0,
+          'buffered': buffered ?? ms,
+          'liveOffset': 14000,
+        };
+
     testWidgets('a scheduled live waits, and questions go privately to the team', (tester) async {
       final FakeBackend backend = await pumpRoom(tester, <String, FakeResponse>{
         'GET /lives/301': FakeResponse(200, _detail('scheduled')),
@@ -409,6 +589,121 @@ void main() {
       expect(joins(backend).single.data, isNull);
       expect(players.created.single['clear'], isTrue);
       await leave(tester);
+    });
+
+    testWidgets('a player that shows a first frame and never plays restarts itself (first-join bug)', (tester) async {
+      final FakeBackend backend = await pumpRoom(tester, clearLive());
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(players.created, hasLength(1));
+
+      // What the app telemetry showed in Lives 55–64: a first frame, then
+      // nothing loaded ahead and nothing playing, until the Student left.
+      players.emit(<String, Object?>{'event': 'state', 'state': 'buffering'});
+      players.emit(<String, Object?>{'event': 'firstFrame'});
+      for (int i = 0; i < 9; i++) {
+        players.emit(position(14000));
+        await tester.pump(const Duration(seconds: 1));
+      }
+      expect(players.created, hasLength(1), reason: 'not before 10 s');
+
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(joins(backend), hasLength(2));
+      expect(players.created, hasLength(2));
+      expect(players.created.last['clear'], isTrue);
+
+      // The fresh player plays, as after leaving and opening the Live again.
+      players.emit(<String, Object?>{'event': 'playing', 'value': true});
+      await tester.pump(const Duration(milliseconds: 100));
+      await leave(tester);
+
+      final List<Map<String, dynamic>> events = telemetry(backend);
+      final Map<String, dynamic> error = events.singleWhere((Map<String, dynamic> e) => e['type'] == 'error');
+      expect(error['error_category'], liveFailureCodes['first_frame_timeout']);
+      expect(error['buffer_ahead_s'], 0);
+      expect(error['edge_distance_s'], 14);
+      expect(error['ready_state'], 2);
+      final Map<String, dynamic> reload = events.singleWhere((Map<String, dynamic> e) => e['type'] == 'reload');
+      expect(reload['error_code'], liveReloadHardRecover);
+      expect(reload['attempt'], 1);
+      final List<Map<String, dynamic>> ready = events.where((Map<String, dynamic> e) => e['type'] == 'ready').toList();
+      expect(ready, hasLength(2));
+      expect(ready.first.containsKey('error_code'), isFalse);
+      expect(ready.last['error_code'], liveReloadHardRecover);
+      final Map<String, dynamic> playing = events.singleWhere((Map<String, dynamic> e) => e['type'] == 'playing');
+      expect(playing['error_code'], liveReloadHardRecover);
+      expect(playing['first_frame_ms'], isA<num>());
+      expect(playing['startup_ms'], isA<num>());
+    });
+
+    testWidgets('a player still loading on a slow link is left alone', (tester) async {
+      final FakeBackend backend = await pumpRoom(tester, clearLive());
+      await tester.pump(const Duration(milliseconds: 200));
+      players.emit(<String, Object?>{'event': 'state', 'state': 'buffering'});
+      for (int i = 0; i < 25; i++) {
+        players.emit(position(14000, buffered: 14000 + 600 * i));
+        await tester.pump(const Duration(seconds: 1));
+      }
+      expect(joins(backend), hasLength(1));
+      expect(players.created, hasLength(1));
+      await leave(tester);
+    });
+
+    testWidgets('a stall after playing is measured, then restarted after 20 s', (tester) async {
+      final FakeBackend backend = await pumpRoom(tester, clearLive());
+      await tester.pump(const Duration(milliseconds: 200));
+      players.emit(<String, Object?>{'event': 'firstFrame'});
+      players.emit(<String, Object?>{'event': 'state', 'state': 'ready'});
+      players.emit(<String, Object?>{'event': 'playing', 'value': true});
+      await tester.pump(const Duration(seconds: 2));
+
+      // A short stall that recovers by itself.
+      players.emit(<String, Object?>{'event': 'playing', 'value': false});
+      players.emit(<String, Object?>{'event': 'state', 'state': 'buffering'});
+      await tester.pump(const Duration(seconds: 2));
+      players.emit(<String, Object?>{'event': 'state', 'state': 'ready'});
+      players.emit(<String, Object?>{'event': 'playing', 'value': true});
+      await tester.pump(const Duration(seconds: 2));
+
+      // A stall that does not.
+      players.emit(<String, Object?>{'event': 'playing', 'value': false});
+      players.emit(<String, Object?>{'event': 'state', 'state': 'buffering'});
+      await tester.pump(const Duration(seconds: 15));
+      expect(players.created, hasLength(1));
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(joins(backend), hasLength(2));
+      expect(players.created, hasLength(2));
+      await leave(tester);
+
+      final List<Map<String, dynamic>> events = telemetry(backend);
+      final List<Map<String, dynamic>> waiting = events.where((Map<String, dynamic> e) => e['type'] == 'waiting').toList();
+      expect(waiting, hasLength(2));
+      final List<Map<String, dynamic>> playing = events.where((Map<String, dynamic> e) => e['type'] == 'playing').toList();
+      expect(playing.first.containsKey('first_frame_ms'), isTrue);
+      expect(playing[1]['stall_count'], 1);
+      expect(playing[1]['stall_ms'], isA<num>());
+      final Map<String, dynamic> error = events.singleWhere((Map<String, dynamic> e) => e['type'] == 'error');
+      expect(error['error_category'], liveFailureCodes['timeout']);
+      expect(events.singleWhere((Map<String, dynamic> e) => e['type'] == 'reload')['error_code'], liveReloadHardRecover);
+    });
+
+    testWidgets('a Live the Student paused is neither a stall nor restarted', (tester) async {
+      final FakeBackend backend = await pumpRoom(tester, clearLive());
+      await tester.pump(const Duration(milliseconds: 200));
+      players.emit(<String, Object?>{'event': 'firstFrame'});
+      players.emit(<String, Object?>{'event': 'state', 'state': 'ready'});
+      players.emit(<String, Object?>{'event': 'playing', 'value': true});
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byIcon(Icons.pause_rounded));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(players.commands[players.lastId]!.map((MethodCall c) => c.method), contains('pause'));
+      players.emit(<String, Object?>{'event': 'playing', 'value': false});
+      await tester.pump(const Duration(seconds: 40));
+      expect(joins(backend), hasLength(1));
+      await leave(tester);
+      expect(telemetry(backend).where((Map<String, dynamic> e) => e['type'] == 'waiting' || e['type'] == 'reload'), isEmpty);
     });
 
     testWidgets('mode B: a DRM decoder failure continues on the clear stream', (tester) async {
@@ -727,4 +1022,58 @@ void main() {
       }
     });
   });
+
+  group('Speaking stage (D-073)', () {
+    setUpAll(loadNovaFonts);
+
+    testWidgets('never a black screen: connecting, then the picture, or a paused notice', (tester) async {
+      final AppState app = installFixtureApp();
+      app.setLang(NovaLang.en);
+      final _StageSpeaker speaker = _StageSpeaker();
+      await tester.pumpWidget(
+        AppScope(
+          state: app,
+          child: MaterialApp(
+            theme: NovaTheme.light,
+            home: Scaffold(body: LiveSpeakingStage(liveId: 301, speaker: speaker, fullscreen: false)),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Accepted, the room connects: the stage says so instead of black.
+      expect(find.text('Connecting to live conversation…'), findsOneWidget);
+      expect(find.text('Video paused, audio continues'), findsNothing);
+      expect(find.text('You are speaking'), findsOneWidget);
+
+      // The Professor's first frame is on screen.
+      speaker.show(PresenterPicture.showing);
+      await tester.pump();
+      expect(find.text('Connecting to live conversation…'), findsNothing);
+      expect(find.text('Video paused, audio continues'), findsNothing);
+
+      // The server paused the camera (downlink too weak): audio goes on.
+      speaker.show(PresenterPicture.paused);
+      await tester.pump();
+      expect(find.text('Video paused, audio continues'), findsOneWidget);
+      expect(find.text('Connecting to live conversation…'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  });
+}
+
+/// A speaker whose Professor picture the test sets; no LiveKit room.
+class _StageSpeaker extends LiveSpeaker {
+  _StageSpeaker() : super(onDropped: () {});
+
+  PresenterPicture _picture = PresenterPicture.connecting;
+
+  @override
+  PresenterPicture get presenterPicture => _picture;
+
+  void show(PresenterPicture picture) {
+    _picture = picture;
+    changes.value++;
+  }
 }
