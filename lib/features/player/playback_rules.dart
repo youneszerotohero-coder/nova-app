@@ -269,6 +269,19 @@ int liveReadyState({required String phase, required bool firstFrame, required bo
   };
 }
 
+/// The native players follow the Live 12 s behind its edge (D-065) and
+/// catch up by themselves at up to 1.08×; past this distance the broadcast
+/// kept during a speaking turn has drifted.
+const Duration liveReturnDriftLimit = Duration(seconds: 20);
+
+/// When a speaking turn ends (owner decision 2026-10-30), the kept
+/// broadcast is shown again where it is, unless it drifted: not playing
+/// (paused for a weak downlink, stalled), an unknown distance from the
+/// edge, or more than [liveReturnDriftLimit] behind it. Then it goes back
+/// to the live edge first.
+bool liveReturnNeedsEdge({required bool playing, required Duration? liveOffset}) =>
+    !playing || liveOffset == null || liveOffset > liveReturnDriftLimit;
+
 /// Renewal failures retry after 15 s × failures, at most 60 s.
 Duration renewalRetryDelay(int failures) =>
     Duration(seconds: (15 * failures).clamp(15, 60));

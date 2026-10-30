@@ -18,6 +18,7 @@ import 'package:nova_mobile/features/learning/lesson_screen.dart';
 import 'package:nova_mobile/features/learning/live_room_screen.dart';
 import 'package:nova_mobile/features/learning/live_speaker.dart';
 import 'package:nova_mobile/features/learning/live_speaking_stage.dart';
+import 'package:nova_mobile/features/player/live_player.dart';
 import 'package:nova_mobile/features/player/playback_rules.dart';
 import 'package:nova_mobile/features/shell/student_top_bar.dart';
 
@@ -352,6 +353,16 @@ void main() {
       });
     });
 
+    test('after a speaking turn the kept broadcast returns to the live edge only if it drifted (owner, 2026-10-30)', () {
+      // Playing about 12–14 s behind the edge, as the native players follow it.
+      expect(liveReturnNeedsEdge(playing: true, liveOffset: const Duration(seconds: 14)), isFalse);
+      expect(liveReturnNeedsEdge(playing: true, liveOffset: liveReturnDriftLimit), isFalse);
+      // Drifted, paused for a weak downlink or stalled, or an unknown distance.
+      expect(liveReturnNeedsEdge(playing: true, liveOffset: const Duration(seconds: 21)), isTrue);
+      expect(liveReturnNeedsEdge(playing: false, liveOffset: const Duration(seconds: 12)), isTrue);
+      expect(liveReturnNeedsEdge(playing: true, liveOffset: null), isTrue);
+    });
+
     test('the speaking stage shows the Professor only once a frame is on screen (D-073)', () {
       PresenterPicture picture({
         bool connected = true,
@@ -474,6 +485,7 @@ void main() {
       String? widevine = 'L1',
       bool withSession = false,
       bool pushed = false,
+      LiveSpeaker? speaker,
     }) async {
       tester.view.physicalSize = const Size(1170, 2532);
       tester.view.devicePixelRatio = 3.0;
@@ -531,14 +543,20 @@ void main() {
                       body: Center(
                         child: TextButton(
                           onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                            builder: (_) => LiveRoomScreen(live: HomeData.lives.first),
+                            builder: (_) => LiveRoomScreen(
+                              live: HomeData.lives.first,
+                              speakerFactory: speaker == null ? null : (_) => speaker,
+                            ),
                           )),
                           child: const Text('Open the room'),
                         ),
                       ),
                     ),
                   )
-                : LiveRoomScreen(live: HomeData.lives.first),
+                : LiveRoomScreen(
+                    live: HomeData.lives.first,
+                    speakerFactory: speaker == null ? null : (_) => speaker,
+                  ),
           ),
         ),
       );
@@ -942,6 +960,153 @@ void main() {
       await leave(tester);
     });
 
+    group('speaking turn: the broadcast is kept muted under the stage (owner decision 2026-10-30)', () {
+      /// The clear Live of the apps, with the speaker grant and hand routes.
+      Map<String, FakeResponse> speakingLive() => <String, FakeResponse>{
+            ...clearLive(),
+            'POST /lives/301/speaker': const FakeResponse(200, <String, Object?>{
+              'data': <String, String>{'url': 'wss://livekit.test', 'token': 'lk'},
+            }),
+            'DELETE /lives/301/raise-hand': const FakeResponse(204),
+          };
+
+      /// The broadcast plays, then the teaching team accepts the hand
+      /// (seen at the next 8 s poll: no realtime in tests).
+      Future<FakeBackend> speak(WidgetTester tester, _RoomSpeaker speaker) async {
+        final FakeBackend backend = await pumpRoom(tester, speakingLive(), speaker: speaker);
+        await tester.pump(const Duration(milliseconds: 200));
+        players.emit(<String, Object?>{'event': 'firstFrame'});
+        players.emit(<String, Object?>{'event': 'state', 'state': 'ready'});
+        players.emit(<String, Object?>{'event': 'playing', 'value': true});
+        players.emit(position(30000));
+        await tester.pump(const Duration(milliseconds: 100));
+        backend.routes['GET /lives/301'] = FakeResponse(200, _detail('live', mediaState: 'ready', hand: 'accepted'));
+        await tester.pump(const Duration(seconds: 8));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.text('You are speaking'), findsOneWidget);
+        return backend;
+      }
+
+      /// The teaching team removes the speaking Student (owner test, Live 65).
+      Future<void> endTurn(WidgetTester tester, FakeBackend backend) async {
+        backend.routes['GET /lives/301'] = FakeResponse(200, _detail('live', mediaState: 'ready'));
+        await tester.pump(const Duration(seconds: 8));
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(find.text('You are speaking'), findsNothing);
+      }
+
+      List<MethodCall> sent(int id) => players.commands[id] ?? <MethodCall>[];
+      List<Object?> volumes(int id) => <Object?>[
+            for (final MethodCall c in sent(id))
+              if (c.method == 'setVolume') (c.arguments as Map<Object?, Object?>)['volume'],
+          ];
+
+      testWidgets('speaking mutes the broadcast without releasing it; its end shows it again without a new join',
+          (tester) async {
+        final _RoomSpeaker speaker = _RoomSpeaker();
+        final FakeBackend backend = await speak(tester, speaker);
+        final int id = players.lastId;
+
+        // Muted and hidden under the stage, not disposed: LiveKit is the only voice.
+        expect(find.byType(LivePlayer), findsOneWidget);
+        expect(volumes(id), <Object?>[0.0]);
+        expect(sent(id).map((MethodCall c) => c.method), isNot(contains('release')));
+
+        // A long turn: nothing joins, nothing restarts.
+        await tester.pump(const Duration(seconds: 40));
+        expect(joins(backend), hasLength(1));
+        expect(players.created, hasLength(1));
+
+        // The conversation closes before the broadcast is heard again.
+        List<Object?>? volumesAtClose;
+        speaker.onClose = () => volumesAtClose = volumes(id);
+        await endTurn(tester, backend);
+        expect(volumesAtClose, <Object?>[0.0]);
+        expect(joins(backend), hasLength(1), reason: 'no new join');
+        expect(players.created, hasLength(1), reason: 'the same native player');
+        expect(volumes(id), <Object?>[0.0, 1.0]);
+        final List<String> methods = sent(id).map((MethodCall c) => c.method).toList();
+        expect(methods.last, 'play');
+        // 14 s behind the edge: shown where it is, no seek.
+        expect(methods, isNot(contains('seekToLiveEdge')));
+        expect(methods, isNot(contains('release')));
+        await leave(tester);
+      });
+
+      testWidgets('a broadcast that fails during the turn is released, and the end starts a fresh one', (tester) async {
+        final _RoomSpeaker speaker = _RoomSpeaker();
+        final FakeBackend backend = await speak(tester, speaker);
+        final int id = players.lastId;
+
+        players.emit(<String, Object?>{'event': 'error', 'category': 'delivery', 'kind': 'network', 'code': 2001});
+        await tester.pump(const Duration(seconds: 30));
+        expect(sent(id).map((MethodCall c) => c.method), contains('release'));
+        expect(joins(backend), hasLength(1), reason: 'no join while the Student speaks');
+        expect(players.created, hasLength(1));
+        expect(find.text('You are speaking'), findsOneWidget);
+
+        await endTurn(tester, backend);
+        expect(joins(backend), hasLength(2));
+        expect(players.created, hasLength(2));
+        await leave(tester);
+      });
+
+      testWidgets('the app going to the background during the turn releases the broadcast; the end starts a fresh one',
+          (tester) async {
+        final _RoomSpeaker speaker = _RoomSpeaker();
+        final FakeBackend backend = await speak(tester, speaker);
+        final int id = players.lastId;
+
+        // Only valid transitions: to the background, then back.
+        for (final AppLifecycleState state in <AppLifecycleState>[
+          AppLifecycleState.inactive,
+          AppLifecycleState.hidden,
+          AppLifecycleState.paused,
+        ]) {
+          tester.binding.handleAppLifecycleStateChanged(state);
+        }
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(sent(id).map((MethodCall c) => c.method), contains('release'));
+        for (final AppLifecycleState state in <AppLifecycleState>[
+          AppLifecycleState.hidden,
+          AppLifecycleState.inactive,
+          AppLifecycleState.resumed,
+        ]) {
+          tester.binding.handleAppLifecycleStateChanged(state);
+        }
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(joins(backend), hasLength(1));
+
+        await endTurn(tester, backend);
+        expect(joins(backend), hasLength(2));
+        expect(players.created, hasLength(2));
+        await leave(tester);
+      });
+
+      testWidgets('a weak downlink pauses the hidden broadcast; the end brings it back at the live edge', (tester) async {
+        final _RoomSpeaker speaker = _RoomSpeaker();
+        final FakeBackend backend = await speak(tester, speaker);
+        final int id = players.lastId;
+
+        speaker.setDownlinkWeak(true);
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(sent(id).map((MethodCall c) => c.method), contains('pause'));
+        // Paused on purpose: not a stall, not restarted; paused for the whole turn.
+        speaker.setDownlinkWeak(false);
+        await tester.pump(const Duration(seconds: 40));
+        expect(sent(id).where((MethodCall c) => c.method == 'play'), isEmpty);
+        expect(joins(backend), hasLength(1));
+        expect(players.created, hasLength(1));
+
+        await endTurn(tester, backend);
+        expect(joins(backend), hasLength(1));
+        final List<String> methods = sent(id).map((MethodCall c) => c.method).toList();
+        expect(methods.sublist(methods.length - 3), <String>['setVolume', 'seekToLiveEdge', 'play']);
+        expect(volumes(id).last, 1.0);
+        await leave(tester);
+      });
+    });
+
     testWidgets('the other Students see who is speaking', (tester) async {
       await pumpRoom(tester, <String, FakeResponse>{
         'GET /lives/301': FakeResponse(
@@ -1193,6 +1358,34 @@ class _StageSpeaker extends LiveSpeaker {
 
   void show(PresenterPicture picture) {
     _picture = picture;
+    changes.value++;
+  }
+}
+
+/// The accepted Student's speaker in the room tests: no LiveKit room; the
+/// test says when the server paused the Professor's camera.
+class _RoomSpeaker extends LiveSpeaker {
+  _RoomSpeaker() : super(onDropped: () {});
+
+  bool _weak = false;
+
+  /// Called when the room closes the conversation.
+  VoidCallback? onClose;
+
+  @override
+  Future<void> connect(SpeakerGrant grant) async {}
+
+  @override
+  Future<void> close() {
+    onClose?.call();
+    return super.close();
+  }
+
+  @override
+  bool get downlinkWeak => _weak;
+
+  void setDownlinkWeak(bool weak) {
+    _weak = weak;
     changes.value++;
   }
 }

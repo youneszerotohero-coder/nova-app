@@ -34,6 +34,15 @@ enum _LiveStage { connecting, waiting, recovering, interrupted, playing, nameReq
 /// delivery) are retried forever with jittered back-off up to 15 s; the
 /// only final messages are a device that cannot play at all in mode A,
 /// and a withdrawn access (401/403/404/410), which refreshes the room.
+///
+/// Speaking turn (owner decision 2026-10-30, amends D-066 for the apps):
+/// while [suspended] the player is kept, muted and hidden under the
+/// speaking stage, so the turn's end shows it again at once, without a new
+/// join (back at the live edge only if it drifted, [liveReturnNeedsEdge]).
+/// During the turn nothing joins: a player that fails or stalls, needs a
+/// fresh start, or whose app goes to the background is released instead,
+/// and the turn's end starts a fresh one (D-066 as before). A weak
+/// downlink ([downlinkWeak]) pauses it for the rest of the turn.
 class LivePlayer extends StatefulWidget {
   const LivePlayer({
     super.key,
@@ -42,6 +51,8 @@ class LivePlayer extends StatefulWidget {
     required this.onWithdrawn,
     this.fullscreen = false,
     this.onToggleFullscreen,
+    this.suspended = false,
+    this.downlinkWeak = false,
   });
 
   final LiveSession live;
@@ -53,6 +64,14 @@ class LivePlayer extends StatefulWidget {
   final VoidCallback onWithdrawn;
   final bool fullscreen;
   final VoidCallback? onToggleFullscreen;
+
+  /// The Student is speaking: muted, hidden, nothing joins.
+  final bool suspended;
+
+  /// The speaking stage's downlink cannot carry the Professor's camera
+  /// ([LiveSpeaker.downlinkWeak]): the suspended player pauses until the
+  /// turn ends, leaving the bandwidth to the conversation.
+  final bool downlinkWeak;
 
   @override
   State<LivePlayer> createState() => _LivePlayerState();
@@ -73,6 +92,12 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
 
   /// Paused because the app left the screen: back at the live edge on return.
   bool _pausedAway = false;
+
+  /// Paused for a weak downlink during the speaking turn, until it ends.
+  bool _pausedForDownlink = false;
+
+  /// Released during the speaking turn: its end starts a fresh player.
+  bool _freshAfterTurn = false;
   LiveJoin? _join;
   ProtectedVideoController? _video;
   LiveTelemetry? _telemetry;
@@ -147,6 +172,14 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(LivePlayer old) {
     super.didUpdateWidget(old);
+    if (widget.suspended && !old.suspended) _suspend();
+    if (!widget.suspended && old.suspended) return _endTurn();
+    if (widget.suspended && widget.downlinkWeak && !_pausedForDownlink) {
+      // Latched for the turn: playing again would compete with the
+      // conversation for the same weak link.
+      _pausedForDownlink = true;
+      _video?.pause();
+    }
     // Media came back after an interruption: rejoin (web resumeWaiting).
     if (_stage == _LiveStage.interrupted && widget.mediaState != 'unavailable') {
       _retry?.cancel();
@@ -169,6 +202,8 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (leftScreen(state)) {
+      // In the background during a speaking turn: released (owner, 2026-10-30).
+      if (widget.suspended && state != AppLifecycleState.inactive) return _releaseForTurn();
       _pausedAway = true;
       _video?.pause();
     } else if (state == AppLifecycleState.resumed && _pausedAway) {
@@ -183,6 +218,54 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
 
   void _onCapture() {
     if (CaptureMonitor.instance.captured) _video?.pause();
+  }
+
+  // Speaking turn -------------------------------------------------------
+
+  void _suspend() {
+    _hideTimer?.cancel();
+    _video?.setVolume(0);
+    if (widget.downlinkWeak) {
+      _pausedForDownlink = true;
+      _video?.pause();
+    }
+    _set(() => _controls = false);
+  }
+
+  /// No join during the turn: whatever would start a player releases this
+  /// one, and the turn's end starts a fresh one.
+  void _releaseForTurn() {
+    _retry?.cancel();
+    _teardown();
+    _freshAfterTurn = true;
+    // A fresh start, not the reload of a failure (telemetry).
+    _reloadClock = null;
+    _reloadCode = null;
+    _reloadReady = false;
+    _set(() => _stage = _LiveStage.connecting);
+  }
+
+  /// The turn ended: the kept player is shown and heard again at once.
+  void _endTurn() {
+    final bool paused = _pausedForDownlink;
+    _pausedForDownlink = false;
+    final ProtectedVideoController? video = _video;
+    if (_freshAfterTurn || video == null || _stage != _LiveStage.playing) {
+      _freshAfterTurn = false;
+      if (_stage == _LiveStage.nameRequired) return;
+      return unawaited(_start());
+    }
+    video.setVolume(_muted ? 0 : 1);
+    _pausedByStudent = false;
+    if (!_pausedAway && !CaptureMonitor.instance.captured) {
+      final VideoState state = video.value;
+      if (liveReturnNeedsEdge(playing: state.playing && !paused, liveOffset: state.liveOffset)) {
+        video.seekToLiveEdge();
+      }
+      video.play();
+    }
+    _set(() => _controls = true);
+    _scheduleHide();
   }
 
   /// Stops the current playback; the telemetry session survives.
@@ -216,6 +299,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
 
   Future<void> _start({bool recovering = false}) async {
     if (_loading || _disposed) return;
+    if (widget.suspended) return _releaseForTurn();
     _loading = true;
     _retry?.cancel();
     _teardown();
@@ -290,6 +374,12 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
         // The server answered another delivery than asked: start again.
         _loading = false;
         return _retryLater(httpStatus: 0);
+      }
+      if (widget.suspended) {
+        // The Student started speaking during the join: a player started
+        // now would be heard before it could be muted.
+        _loading = false;
+        return _releaseForTurn();
       }
 
       _candidate = candidate;
@@ -401,6 +491,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   /// Transient failure: "reconnecting", then another attempt.
   void _retryLater({int httpStatus = 0, int errorCode = 0}) {
     if (_disposed) return;
+    if (widget.suspended) return _releaseForTurn();
     _retryAttempts++;
     _beginReload(liveReloadRetryLater, <String, num>{
       'attempt': _retryAttempts,
@@ -449,6 +540,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   bool get _expectedToPlay =>
       !_pausedByStudent &&
       !_pausedAway &&
+      !_pausedForDownlink &&
       !CaptureMonitor.instance.captured &&
       (widget.mediaState == null || widget.mediaState == 'ready');
 

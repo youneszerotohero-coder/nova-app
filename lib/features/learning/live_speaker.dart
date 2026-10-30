@@ -75,9 +75,10 @@ class PresenterFrameWatch {
 /// allows no camera — echo cancellation, noise suppression and gain
 /// control on. One automatic reconnect after 750 ms, then [onDropped].
 ///
-/// While speaking, the protected broadcast is released (D-066) and the
-/// Student watches and hears the Professor over this connection
-/// ([presenterVideo], D-073).
+/// While speaking, the Student watches and hears the Professor over this
+/// connection ([presenterVideo], D-073); the broadcast player is kept muted
+/// and hidden under the stage (owner decision 2026-10-30, amends D-066 for
+/// the apps), so LiveKit is the only audible source.
 ///
 /// iPhone screen recording or mirroring (owner decision 2026-10-29): the
 /// recording is black but would still carry the class's voices, so the
@@ -167,6 +168,15 @@ class LiveSpeaker {
       pausedByServer: camera != null && _pausedByServer.contains(camera.sid),
       frameShown: track != null && track.sid != null && track.sid == _shownTrack,
     );
+  }
+
+  /// The server paused the Professor's camera for this Student because
+  /// their downlink cannot carry it (D-065 `allow_pause`): the weak
+  /// downlink the room uses to pause the hidden broadcast (owner decision
+  /// 2026-10-30). A camera the Professor switched off is not one.
+  bool get downlinkWeak {
+    final RemoteTrackPublication<RemoteVideoTrack>? camera = _presenterCamera;
+    return camera != null && _pausedByServer.contains(camera.sid);
   }
 
   /// The stage rendered [track]'s first frame.

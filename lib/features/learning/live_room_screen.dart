@@ -32,9 +32,12 @@ enum _Hand { passive, pending, connecting, interactive }
 /// conception — and raise-hand to speak with the microphone once the
 /// teaching team accepts.
 class LiveRoomScreen extends StatefulWidget {
-  const LiveRoomScreen({super.key, required this.live});
+  const LiveRoomScreen({super.key, required this.live, @visibleForTesting this.speakerFactory});
 
   final LiveSession live;
+
+  /// Tests: a speaker without a LiveKit room.
+  final LiveSpeaker Function(VoidCallback onDropped)? speakerFactory;
 
   @override
   State<LiveRoomScreen> createState() => _LiveRoomScreenState();
@@ -59,6 +62,13 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
 
   _Hand _hand = _Hand.passive;
   LiveSpeaker? _speaker;
+
+  /// The speaking stage's downlink cannot carry the Professor's camera
+  /// ([LiveSpeaker.downlinkWeak]).
+  bool _downlinkWeak = false;
+
+  /// The turn is ending: the conversation is closing.
+  bool _endingHand = false;
 
   /// The Student waited in this room's waiting room (web
   /// `wasInWaitingRoom`): the reveal is held after the doors open (D-128).
@@ -247,10 +257,31 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
   }
 
   Future<void> _lowerHand() async {
-    await _speaker?.close();
-    _speaker = null;
+    await _closeSpeaker();
     if (mounted) setState(() => _hand = _Hand.passive);
     await _retryBusy(() => _store.lowerHand(_id));
+  }
+
+  /// The team lowered the hand or removed the speaking Student.
+  Future<void> _endHand() async {
+    if (_endingHand) return;
+    _endingHand = true;
+    await _closeSpeaker();
+    _endingHand = false;
+    if (mounted) setState(() => _hand = _Hand.passive);
+  }
+
+  /// The conversation closes before the turn ends (LiveKit's voices and, on
+  /// iPhone, its audio session), so the kept broadcast is never heard over
+  /// it (owner decision 2026-10-30). Bounded: a conversation that cannot
+  /// close does not hold the broadcast back.
+  Future<void> _closeSpeaker() async {
+    final LiveSpeaker? speaker = _speaker;
+    if (speaker == null) return;
+    speaker.changes.removeListener(_onSpeakerChanges);
+    await speaker.close().timeout(const Duration(seconds: 2), onTimeout: () {}).catchError((Object _) {});
+    if (identical(_speaker, speaker)) _speaker = null;
+    _downlinkWeak = false;
   }
 
   void _applyHandStatus(String? status) {
@@ -260,21 +291,19 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
       case 'accepted':
         if (_hand != _Hand.connecting && _hand != _Hand.interactive) _connectSpeaker();
       default:
-        if (_hand != _Hand.passive) {
-          _speaker?.close();
-          _speaker = null;
-          if (mounted) setState(() => _hand = _Hand.passive);
-        }
+        if (_hand != _Hand.passive) unawaited(_endHand());
     }
   }
 
   Future<void> _connectSpeaker() async {
     setState(() => _hand = _Hand.connecting);
-    final LiveSpeaker speaker = LiveSpeaker(onDropped: () {
+    void dropped() {
       if (!mounted) return;
       novaToast(context, context.tr('live.speakerDropped'), icon: Icons.mic_off_rounded);
       _lowerHand().catchError((Object _) {});
-    });
+    }
+
+    final LiveSpeaker speaker = widget.speakerFactory?.call(dropped) ?? LiveSpeaker(onDropped: dropped);
     try {
       final SpeakerGrant grant = await _retryBusy(() => _store.speaker(_id));
       await speaker.connect(grant);
@@ -284,7 +313,11 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
         return;
       }
       _speaker = speaker;
-      setState(() => _hand = _Hand.interactive);
+      speaker.changes.addListener(_onSpeakerChanges);
+      setState(() {
+        _hand = _Hand.interactive;
+        _downlinkWeak = speaker.downlinkWeak;
+      });
     } catch (error) {
       await speaker.close();
       if (!mounted) return;
@@ -295,6 +328,11 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
       );
       await _lowerHand().catchError((Object _) {});
     }
+  }
+
+  void _onSpeakerChanges() {
+    final bool weak = _speaker?.downlinkWeak ?? false;
+    if (weak != _downlinkWeak && mounted) setState(() => _downlinkWeak = weak);
   }
 
   // Fullscreen ----------------------------------------------------------
@@ -388,28 +426,40 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
 
   Widget? _player(LiveDetail detail, {required bool broadcast}) {
     final LiveSpeaker? speaker = _speaker;
-    if (detail.isLive && _hand == _Hand.interactive && speaker != null) {
-      // D-066: no broadcast player exists while the Student speaks; the
-      // Professor stays full size over the conversation (D-073).
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(_fullscreen ? 0 : 18),
-        child: LiveSpeakingStage(liveId: _id, speaker: speaker, fullscreen: _fullscreen),
-      );
-    }
-    if (broadcast) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(_fullscreen ? 0 : 18),
-        child: LivePlayer(
-          key: _playerKey,
-          live: detail.live,
-          mediaState: detail.mediaState,
-          onWithdrawn: _load,
-          fullscreen: _fullscreen,
-          onToggleFullscreen: () => _setFullscreen(!_fullscreen),
-        ),
-      );
-    }
-    return null;
+    final bool speaking = detail.isLive && _hand == _Hand.interactive && speaker != null;
+    if (!broadcast && !speaking) return null;
+    // While the Student speaks the Professor stays full size over the
+    // conversation (D-073), and the broadcast player is kept under the
+    // stage, muted and hidden, so the turn's end shows it again at once
+    // (owner decision 2026-10-30, amends D-066 for the apps). The tree is
+    // the same in both states: the native player is never moved.
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(_fullscreen ? 0 : 18),
+      child: Stack(
+        fit: StackFit.passthrough,
+        children: [
+          if (broadcast)
+            IgnorePointer(
+              ignoring: speaking,
+              child: ExcludeSemantics(
+                excluding: speaking,
+                child: LivePlayer(
+                  key: _playerKey,
+                  live: detail.live,
+                  mediaState: detail.mediaState,
+                  onWithdrawn: _load,
+                  fullscreen: _fullscreen,
+                  onToggleFullscreen: () => _setFullscreen(!_fullscreen),
+                  suspended: speaking,
+                  downlinkWeak: speaking && _downlinkWeak,
+                ),
+              ),
+            ),
+          if (speaking)
+            LiveSpeakingStage(key: ObjectKey(speaker), liveId: _id, speaker: speaker, fullscreen: _fullscreen),
+        ],
+      ),
+    );
   }
 
   Widget _statusCard(BuildContext context, LiveDetail detail) {
