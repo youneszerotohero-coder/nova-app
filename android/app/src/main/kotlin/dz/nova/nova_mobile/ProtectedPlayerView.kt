@@ -80,6 +80,9 @@ class ProtectedPlayerView(
     /** HTTP status of the last licence exchange (telemetry `license_status`). */
     private var licenseStatus = 0
 
+    /** A frame was rendered: replayed to a listener that came later. */
+    private var firstFrameRendered = false
+
     private val ticker = object : Runnable {
         override fun run() {
             if (released) return
@@ -102,17 +105,7 @@ class ProtectedPlayerView(
         player.setVideoSurfaceView(surface)
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
-                emit(
-                    mapOf(
-                        "event" to "state",
-                        "state" to when (state) {
-                            Player.STATE_BUFFERING -> "buffering"
-                            Player.STATE_READY -> "ready"
-                            Player.STATE_ENDED -> "ended"
-                            else -> "idle"
-                        },
-                    ),
-                )
+                emit(mapOf("event" to "state", "state" to stateName(state)))
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -120,6 +113,7 @@ class ProtectedPlayerView(
             }
 
             override fun onRenderedFirstFrame() {
+                firstFrameRendered = true
                 emit(mapOf("event" to "firstFrame"))
             }
 
@@ -297,8 +291,21 @@ class ProtectedPlayerView(
         main.post { sink?.success(event) }
     }
 
+    private fun stateName(state: Int): String = when (state) {
+        Player.STATE_BUFFERING -> "buffering"
+        Player.STATE_READY -> "ready"
+        Player.STATE_ENDED -> "ended"
+        else -> "idle"
+    }
+
     override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
         sink = events
+        // The player started loading when the view was created, before
+        // Flutter listened: what it already did is replayed, or a fast start
+        // would look like a player that never plays.
+        emit(mapOf("event" to "state", "state" to stateName(player.playbackState)))
+        emit(mapOf("event" to "playing", "value" to player.isPlaying))
+        if (firstFrameRendered) emit(mapOf("event" to "firstFrame"))
         emit(mapOf("event" to "tracks", "heights" to videoHeights(player.currentTracks)))
         main.post(ticker)
     }

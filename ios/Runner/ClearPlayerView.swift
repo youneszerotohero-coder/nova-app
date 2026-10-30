@@ -372,6 +372,20 @@ final class ClearPlayerView: NSObject, FlutterPlatformView, FlutterStreamHandler
 
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
     sink = events
+    // The player started loading when the view was created, before Flutter
+    // listened, and events sent without a listener are lost: what it already
+    // did is replayed, or a fast start would look like a player that never
+    // plays (and the first frame would never be reported).
+    if player.currentItem?.status == .readyToPlay {
+      emit(["event": "state", "state": "ready"])
+    }
+    if player.timeControlStatus == .waitingToPlayAtSpecifiedRate {
+      emit(["event": "state", "state": "buffering"])
+    }
+    emit(["event": "playing", "value": player.timeControlStatus == .playing])
+    if firstFrameSent {
+      emit(["event": "firstFrame"])
+    }
     emitTracks()
     return nil
   }

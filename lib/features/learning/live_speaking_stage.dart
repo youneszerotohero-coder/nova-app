@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:livekit_client/livekit_client.dart' show VideoTrack, VideoTrackRenderer, VideoViewFit;
+import 'package:livekit_client/livekit_client.dart' show RemoteVideoTrack, VideoTrackRenderer, VideoViewFit;
 
 import '../../core/utils/screen_awake.dart';
 import '../../core/i18n/nova_strings.dart';
@@ -51,6 +51,9 @@ class LiveSpeakerLabel extends StatelessWidget {
 /// The speaking Student's view (D-073): the Professor's camera full size
 /// over the LiveKit conversation, the identity watermark, and only a small
 /// "You are speaking" pill; "Tap to hear" when the audio did not start.
+/// Until the camera's first frame is on screen it says it is connecting
+/// (owner test 2026-10-29: ~20 s of black screen), and a camera the server
+/// paused or the Professor switched off says so; never a black picture.
 class LiveSpeakingStage extends StatefulWidget {
   const LiveSpeakingStage({
     super.key,
@@ -96,14 +99,23 @@ class _LiveSpeakingStageState extends State<LiveSpeakingStage> {
       child: ValueListenableBuilder<int>(
         valueListenable: widget.speaker.changes,
         builder: (BuildContext context, int _, Widget? child) {
-          final VideoTrack? video = widget.speaker.presenterVideo;
+          final RemoteVideoTrack? video = widget.speaker.presenterVideo;
+          final PresenterPicture picture = widget.speaker.presenterPicture;
           final WatermarkSpot spot = liveWatermarkSpots[_spot];
           return Stack(
             fit: StackFit.expand,
             children: [
+              // Mounted under the notices so its first frame is ready the
+              // moment they give way.
               if (video != null)
-                VideoTrackRenderer(video, fit: VideoViewFit.contain)
-              else
+                _ProfessorCamera(
+                  key: ObjectKey(video),
+                  track: video,
+                  onShown: () => widget.speaker.presenterFrameShown(video),
+                ),
+              if (picture == PresenterPicture.connecting)
+                const _ConnectingNotice()
+              else if (picture == PresenterPicture.paused)
                 const _VideoPausedNotice(),
               LayoutBuilder(
                 builder: (BuildContext context, BoxConstraints box) => IgnorePointer(
@@ -207,6 +219,94 @@ class _LiveSpeakingStageState extends State<LiveSpeakingStage> {
   }
 }
 
+/// The Professor's camera, reported shown once a frame was decoded while
+/// the renderer is attached ([PresenterFrameWatch], receiver stats every
+/// 300 ms).
+class _ProfessorCamera extends StatefulWidget {
+  const _ProfessorCamera({super.key, required this.track, required this.onShown});
+
+  final RemoteVideoTrack track;
+  final VoidCallback onShown;
+
+  @override
+  State<_ProfessorCamera> createState() => _ProfessorCameraState();
+}
+
+class _ProfessorCameraState extends State<_ProfessorCamera> {
+  final PresenterFrameWatch _frames = PresenterFrameWatch();
+  Timer? _poll;
+  bool _reading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _poll = Timer.periodic(const Duration(milliseconds: 300), (_) => _read());
+  }
+
+  Future<void> _read() async {
+    if (_reading) return;
+    _reading = true;
+    num? decoded;
+    try {
+      decoded = (await widget.track.getReceiverStats())?.framesDecoded;
+    } catch (_) {
+      // No stats this time: counted as a reading without an answer.
+    }
+    _reading = false;
+    if (mounted && _frames.observe(decoded)) {
+      _poll?.cancel();
+      widget.onShown();
+    }
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => VideoTrackRenderer(widget.track, fit: VideoViewFit.contain);
+}
+
+/// Before the Professor's first frame: the conversation is connecting.
+class _ConnectingNotice extends StatelessWidget {
+  const _ConnectingNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.black,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 30,
+                height: 30,
+                child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                context.tr('live.connectingConversation'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontFamily: 'Geist',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// The Professor's picture is not arriving (the downlink cannot carry it,
 /// or the camera is off): the conversation continues with audio.
 class _VideoPausedNotice extends StatelessWidget {
@@ -214,36 +314,40 @@ class _VideoPausedNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.videocam_off_rounded, size: 28, color: Colors.white),
-            const SizedBox(height: 10),
-            Text(
-              context.tr('live.videoPaused'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontFamily: 'Geist',
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-                color: Colors.white,
+    // Over the last frame, if there was one.
+    return ColoredBox(
+      color: Colors.black.withValues(alpha: 0.78),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.videocam_off_rounded, size: 28, color: Colors.white),
+              const SizedBox(height: 10),
+              Text(
+                context.tr('live.videoPaused'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontFamily: 'Geist',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Colors.white,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              context.tr('live.videoPausedBody'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontFamily: 'Geist',
-                fontSize: 11.5,
-                height: 1.4,
-                color: NovaColors.textMutedOnDark,
+              const SizedBox(height: 4),
+              Text(
+                context.tr('live.videoPausedBody'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontFamily: 'Geist',
+                  fontSize: 11.5,
+                  height: 1.4,
+                  color: NovaColors.textMutedOnDark,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

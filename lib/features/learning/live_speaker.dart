@@ -9,6 +9,66 @@ import 'package:livekit_client/livekit_client.dart';
 
 import '../../data/live_store.dart';
 
+/// What the speaking stage shows of the Professor (D-073).
+enum PresenterPicture {
+  /// Not received yet: the room connects, the camera is subscribed or its
+  /// first frame is on its way. Never a black screen.
+  connecting,
+
+  /// The Professor's camera, moving.
+  showing,
+
+  /// No camera picture (camera off, or paused by the server because the
+  /// downlink cannot carry it); the conversation goes on with audio.
+  paused,
+}
+
+/// [PresenterPicture] from what the LiveKit room reports, kept pure so it is
+/// unit-tested without a room.
+PresenterPicture presenterPictureFor({
+  required bool connected,
+  required bool professorPresent,
+  required bool cameraPublished,
+  required bool cameraMuted,
+  required bool subscribed,
+  required bool pausedByServer,
+  required bool frameShown,
+}) {
+  if (!connected || !professorPresent) return PresenterPicture.connecting;
+  if (!cameraPublished || cameraMuted || pausedByServer) return PresenterPicture.paused;
+  if (!subscribed || !frameShown) return PresenterPicture.connecting;
+  return PresenterPicture.showing;
+}
+
+/// Whether the stage's renderer has shown the Professor's camera: a frame
+/// decoded after the renderer was attached (frames decoded before it are
+/// not on screen). Fed with `framesDecoded` of the receiver's stats; a
+/// phone whose stats never give it shows the picture after [blindLimit]
+/// readings, as before.
+class PresenterFrameWatch {
+  static const int blindLimit = 30;
+
+  num? _baseline;
+  int _blind = 0;
+
+  /// True once a new frame was decoded since the first observation.
+  bool shown = false;
+
+  bool observe(num? framesDecoded) {
+    if (framesDecoded == null) {
+      if (++_blind >= blindLimit) shown = true;
+      return shown;
+    }
+    final num? baseline = _baseline;
+    if (baseline == null) {
+      _baseline = framesDecoded;
+    } else if (framesDecoded > baseline) {
+      shown = true;
+    }
+    return shown;
+  }
+}
+
 /// The accepted Student's microphone in the Live (web `useLiveRoom`,
 /// Student role): LiveKit with the microphone only — the backend grant
 /// allows no camera — echo cancellation, noise suppression and gain
@@ -37,22 +97,65 @@ class LiveSpeaker {
   bool _retried = false;
   bool _closing = false;
 
+  /// The camera track whose first frame the stage rendered.
+  String? _shownTrack;
+
+  /// Camera publications the server said it paused (allocator, D-065
+  /// `allow_pause`). A publication starts "paused" in the SDK until the
+  /// server speaks, so only an explicit pause counts.
+  final Set<String> _pausedByServer = <String>{};
+
+  static const AudioCaptureOptions _microphone = AudioCaptureOptions(
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  );
+
   bool get connected => _room?.connectionState == ConnectionState.connected;
 
   static bool get _iOS => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   /// The Professor's camera, the main picture of the stage; null while it
   /// is not received (e.g. paused because the downlink cannot carry it).
-  VideoTrack? get presenterVideo {
+  RemoteVideoTrack? get presenterVideo {
+    final RemoteTrackPublication<RemoteVideoTrack>? publication = _presenterCamera;
+    final RemoteVideoTrack? track = publication?.track;
+    return publication != null && track != null && !publication.muted ? track : null;
+  }
+
+  RemoteTrackPublication<RemoteVideoTrack>? get _presenterCamera {
     final Room? room = _room;
     if (room == null) return null;
     for (final RemoteParticipant participant in room.remoteParticipants.values) {
       for (final RemoteTrackPublication<RemoteVideoTrack> publication in participant.videoTrackPublications) {
-        final RemoteVideoTrack? track = publication.track;
-        if (publication.source == TrackSource.camera && track != null && !publication.muted) return track;
+        if (publication.source == TrackSource.camera) return publication;
       }
     }
     return null;
+  }
+
+  /// What the stage shows: "connecting" until the first frame of the
+  /// Professor's camera is on screen, never a black picture.
+  PresenterPicture get presenterPicture {
+    final Room? room = _room;
+    final RemoteTrackPublication<RemoteVideoTrack>? camera = _presenterCamera;
+    final RemoteVideoTrack? track = camera?.track;
+    return presenterPictureFor(
+      connected: room != null && room.connectionState == ConnectionState.connected,
+      professorPresent: room != null && room.remoteParticipants.isNotEmpty,
+      cameraPublished: camera != null,
+      cameraMuted: camera?.muted ?? false,
+      subscribed: track != null,
+      pausedByServer: camera != null && _pausedByServer.contains(camera.sid),
+      frameShown: track != null && track.sid != null && track.sid == _shownTrack,
+    );
+  }
+
+  /// The stage rendered [track]'s first frame.
+  void presenterFrameShown(VideoTrack track) {
+    if (track.sid == null || track.sid == _shownTrack) return;
+    _shownTrack = track.sid;
+    changes.value++;
   }
 
   Future<void> connect(SpeakerGrant grant) async {
@@ -61,16 +164,20 @@ class LiveSpeaker {
     if (_iOS) await _configureAppleAudio();
     final Room room = Room(
       roomOptions: const RoomOptions(
-        adaptiveStream: true,
+        // Not adaptive: the Professor publishes one layer (D-065), so the
+        // only effect of adaptive stream was to keep the camera switched
+        // off until the stage was on screen, i.e. after the microphone was
+        // published, and only then to ask the Professor for a keyframe
+        // (seconds of black on a slow studio link). The camera now flows
+        // from its subscription, while the microphone is published.
+        adaptiveStream: false,
         dynacast: true,
-        defaultAudioCaptureOptions: AudioCaptureOptions(
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        ),
+        defaultAudioCaptureOptions: _microphone,
       ),
     );
     _room = room;
+    _shownTrack = null;
+    _pausedByServer.clear();
     void changed() => changes.value++;
     _events = room.createListener()
       ..on<RoomDisconnectedEvent>((_) => _onDisconnected())
@@ -78,12 +185,39 @@ class LiveSpeaker {
       ..on<TrackUnsubscribedEvent>((_) => changed())
       ..on<TrackMutedEvent>((_) => changed())
       ..on<TrackUnmutedEvent>((_) => changed())
+      ..on<TrackStreamStateUpdatedEvent>((TrackStreamStateUpdatedEvent event) {
+        if (event.streamState == StreamState.paused) {
+          _pausedByServer.add(event.publication.sid);
+        } else {
+          _pausedByServer.remove(event.publication.sid);
+        }
+        changed();
+      })
+      ..on<TrackPublishedEvent>((_) => changed())
+      ..on<TrackUnpublishedEvent>((_) => changed())
+      ..on<ParticipantConnectedEvent>((_) => changed())
       ..on<ParticipantDisconnectedEvent>((_) => changed())
       ..on<AudioPlaybackStatusChanged>((AudioPlaybackStatusChanged event) {
         audioBlocked.value = !event.isPlaying;
       });
-    await room.connect(grant.url, grant.token);
-    await room.localParticipant?.setMicrophoneEnabled(true);
+    // The microphone (and its permission prompt) is captured while the room
+    // connects rather than after it; a capture left over by a failure stops.
+    final List<Object?> ready = await Future.wait<Object?>(
+      <Future<Object?>>[
+        room.connect(grant.url, grant.token),
+        LocalAudioTrack.create(_microphone),
+      ],
+      cleanUp: (Object? value) {
+        if (value is LocalAudioTrack) unawaited(value.stop());
+      },
+    );
+    final LocalAudioTrack microphone = ready[1]! as LocalAudioTrack;
+    try {
+      await room.localParticipant!.publishAudioTrack(microphone);
+    } catch (_) {
+      unawaited(microphone.stop());
+      rethrow;
+    }
     if (!room.canPlaybackAudio) audioBlocked.value = true;
     changed();
   }

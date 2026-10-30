@@ -312,6 +312,19 @@ const Map<String, int> liveFailureCodes = <String, int>{
   'first_frame_timeout': 13,
 };
 
+/// `error_code` of a Live `reload` event: why the player reloaded (web
+/// `LIVE_RELOAD_CODES`, website-front `lib/live-telemetry.ts`). The native
+/// error that caused it, when any, is in `error_data_code`. The next `ready`
+/// and the next `playing` after a reload carry its `error_code` and
+/// `startup_ms` = milliseconds since that reload (the first of a burst)
+/// started. The app's start/stall watchdog reloads with 9002, after an
+/// `error` event whose `error_category` is 13 (never started) or 9 (stalled).
+const int liveReloadHardRecover = 9002;
+const int liveReloadRetryLater = 9003;
+const int liveReloadExpired = 9006;
+const int liveReloadClearFallback = 9007;
+const int liveReloadRenewal = 9008;
+
 /// Why a device plays the clear Live stream (telemetry `fallback_reason`,
 /// web `LIVE_FALLBACK_*`, D-070).
 const int liveFallbackCapability = 1;

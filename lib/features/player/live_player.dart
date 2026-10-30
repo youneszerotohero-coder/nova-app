@@ -62,6 +62,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   static const Set<int> _withdrawn = <int>{401, 403, 404, 410};
   static const Duration _sampleEvery = Duration(seconds: 30);
   static const Duration _expiryReloadInterval = Duration(seconds: 30);
+  static const Duration _watchEvery = Duration(seconds: 1);
 
   final Random _random = Random();
   _LiveStage _stage = _LiveStage.connecting;
@@ -82,6 +83,32 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   Timer? _watermarkTimer;
   Timer? _hideTimer;
   Timer? _startWatch;
+
+  /// Start/stall watchdog of the current native player (LivePlaybackWatch).
+  Timer? _watch;
+  LivePlaybackWatch? _playback;
+  Duration _watchElapsed = Duration.zero;
+
+  /// Watchdog restarts since the Live last played (longer waits each time).
+  int _watchRestarts = 0;
+
+  /// Since the player opened: the first picture's `first_frame_ms` (web).
+  final Stopwatch _opened = Stopwatch();
+  bool _firstPlayRecorded = false;
+
+  /// The current native player has played; a stall in progress.
+  bool _playerPlayed = false;
+  Stopwatch? _stall;
+  int _stallCount = 0;
+
+  /// The reload in progress (web `reload`): its code, since when, and
+  /// whether its `ready` was recorded.
+  int? _reloadCode;
+  Stopwatch? _reloadClock;
+  bool _reloadReady = false;
+
+  /// Paused with the play button: not a stall.
+  bool _pausedByStudent = false;
   final Stopwatch _notReadyWaited = Stopwatch();
   int _notReadyAttempts = 0;
   int _retryAttempts = 0;
@@ -113,6 +140,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     CaptureMonitor.instance.addListener(_onCapture);
+    _opened.start();
     _start();
   }
 
@@ -146,6 +174,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     } else if (state == AppLifecycleState.resumed && _pausedAway) {
       _pausedAway = false;
       if (_stage == _LiveStage.playing) {
+        _pausedByStudent = false;
         _video?.seekToLiveEdge();
         _video?.play();
       }
@@ -163,6 +192,10 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     _watermarkTimer?.cancel();
     _hideTimer?.cancel();
     _startWatch?.cancel();
+    _watch?.cancel();
+    _playback = null;
+    _playerPlayed = false;
+    _stall = null;
     final ProtectedVideoController? video = _video;
     if (video != null) {
       video
@@ -266,8 +299,12 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
         ..stop()
         ..reset();
       _play(join);
+      final Stopwatch? reload = _reloadClock;
+      _reloadReady = reload != null;
       _telemetry?.record('ready', <String, num>{
-        'startup_ms': startup.elapsedMilliseconds,
+        // After a reload: the time since that reload started, and why (web).
+        'startup_ms': reload?.elapsedMilliseconds ?? startup.elapsedMilliseconds,
+        if (reload != null) 'error_code': _reloadCode!,
         'policy_ms': policyClock.elapsedMilliseconds,
         'join_ms': joinClock.elapsedMilliseconds,
         'delivery_mode': clear ? 1 : 0,
@@ -338,14 +375,37 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     );
   }
 
+  /// A `reload` event with its cause (web `beginReload`); the first reload
+  /// of a burst is the one the next `ready` and `playing` measure from.
+  void _beginReload(int code, [Map<String, num> fields = const <String, num>{}]) {
+    _telemetry?.record('reload', <String, num>{...fields, 'error_code': code});
+    if (_reloadClock == null) {
+      _reloadCode = code;
+      _reloadClock = Stopwatch()..start();
+      _reloadReady = false;
+    }
+  }
+
+  /// The finished reload's fields for a `playing` event, once its `ready`
+  /// was recorded; the reload is then over.
+  Map<String, num> _takeReload() {
+    final Stopwatch? clock = _reloadClock;
+    if (clock == null || !_reloadReady) return const <String, num>{};
+    final Map<String, num> fields = <String, num>{'startup_ms': clock.elapsedMilliseconds, 'error_code': _reloadCode!};
+    _reloadClock = null;
+    _reloadCode = null;
+    _reloadReady = false;
+    return fields;
+  }
+
   /// Transient failure: "reconnecting", then another attempt.
   void _retryLater({int httpStatus = 0, int errorCode = 0}) {
     if (_disposed) return;
     _retryAttempts++;
-    _telemetry?.record('reload', <String, num>{
+    _beginReload(liveReloadRetryLater, <String, num>{
       'attempt': _retryAttempts,
       'http_status': httpStatus,
-      'error_code': errorCode,
+      'error_data_code': errorCode,
       ..._deliveryField,
     });
     _teardown();
@@ -365,6 +425,8 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   void _play(LiveJoin join) {
     final ProtectedVideoController video = ProtectedVideoController()..addListener(_onVideo);
     _qualityApplied = false;
+    // A new native player starts playing by itself.
+    _pausedByStudent = false;
     _set(() {
       _join = join;
       _video = video;
@@ -378,6 +440,101 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     _sampler = Timer.periodic(_sampleEvery, (_) => _sample());
     video.setVolume(_muted ? 0 : 1);
     if (!join.clear && (_policy?.clearAvailable ?? false)) _watchProtectedStart(video);
+    _watchPlayback(video);
+  }
+
+  /// The player is meant to play: not paused by the Student, by the app
+  /// leaving the screen or by a capture, and its media is ready server-side
+  /// (while it prepares or recovers, waiting is the truth, D-065).
+  bool get _expectedToPlay =>
+      !_pausedByStudent &&
+      !_pausedAway &&
+      !CaptureMonitor.instance.captured &&
+      (widget.mediaState == null || widget.mediaState == 'ready');
+
+  /// Bug of 2026-10-29 (Lives 55–64: 14–32 % of app sessions): a native
+  /// player can load the Live and never play, without any error; only
+  /// leaving and opening the Live again helped. The same reload now
+  /// happens by itself ([LivePlaybackWatch]).
+  void _watchPlayback(ProtectedVideoController video) {
+    _watch?.cancel();
+    final LivePlaybackWatch watch = LivePlaybackWatch();
+    _playback = watch;
+    _watchElapsed = Duration.zero;
+    _watch = Timer.periodic(_watchEvery, (_) {
+      if (_disposed || _video != video || _playback != watch || _loading) return;
+      _watchElapsed += _watchEvery;
+      final VideoState state = video.value;
+      watch.observe(
+        elapsed: _watchElapsed,
+        expected: _expectedToPlay,
+        playing: state.playing,
+        position: state.position,
+        buffered: state.buffered,
+      );
+      // Mode B: the protected start watch decides first (D-077).
+      if (_startWatch?.isActive ?? false) return;
+      if (watch.stuck(restarts: _watchRestarts)) _restartStuck(video, state, played: watch.played);
+    });
+  }
+
+  void _restartStuck(ProtectedVideoController video, VideoState state, {required bool played}) {
+    _watch?.cancel();
+    video.removeListener(_onVideo);
+    _watchRestarts++;
+    _telemetry?.record('error', <String, num>{
+      'error_category': liveFailureCodes[played ? 'timeout' : 'first_frame_timeout']!,
+      ..._mediaFields(state),
+      ..._deliveryField,
+    });
+    _beginReload(liveReloadHardRecover, <String, num>{'attempt': _watchRestarts, ..._deliveryField});
+    _start(recovering: true);
+  }
+
+  /// What the native player holds, for `sample`, `waiting` and `error`.
+  Map<String, num> _mediaFields(VideoState state) => <String, num>{
+        'buffer_ahead_s': (state.buffered - state.position).inMilliseconds / 1000,
+        if (state.liveOffset != null) 'edge_distance_s': state.liveOffset!.inMilliseconds / 1000,
+        'current_time_s': state.position.inMilliseconds / 1000,
+        'ready_state': liveReadyState(phase: state.phase, firstFrame: state.firstFrame, playing: state.playing),
+      };
+
+  /// Web `playing`/`waiting` telemetry: the first moving picture
+  /// (`first_frame_ms` since the player opened), the first one after a
+  /// reload (`startup_ms` since it started, `error_code`), and stalls
+  /// (`waiting`, then `playing` with `stall_ms`).
+  void _observePlayback(VideoState state) {
+    if (state.playing) {
+      _watchRestarts = 0;
+      final Stopwatch? stall = _stall;
+      if (!_firstPlayRecorded) {
+        _firstPlayRecorded = true;
+        _telemetry?.record('playing', <String, num>{
+          'first_frame_ms': _opened.elapsedMilliseconds,
+          ..._takeReload(),
+          ..._deliveryField,
+        });
+      } else if (stall != null) {
+        _stallCount++;
+        _telemetry?.record('playing', <String, num>{
+          'stall_ms': stall.elapsedMilliseconds,
+          'stall_count': _stallCount,
+          ..._takeReload(),
+        });
+      } else if (!_playerPlayed) {
+        final Map<String, num> reloaded = _takeReload();
+        if (reloaded.isNotEmpty) _telemetry?.record('playing', reloaded);
+      }
+      _stall = null;
+      _playerPlayed = true;
+    } else if (_playerPlayed && _stall == null && state.phase == 'buffering' && _expectedToPlay) {
+      _stall = Stopwatch()..start();
+      final Map<String, num> media = _mediaFields(state);
+      _telemetry?.record('waiting', <String, num>{
+        'buffer_ahead_s': media['buffer_ahead_s']!,
+        'ready_state': media['ready_state']!,
+      });
+    }
   }
 
   /// Mode B: a protected picture that never starts although media is
@@ -441,7 +598,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     if (reason != liveFallbackMediaUnavailable) ClearDeliveryMemory.live = true;
     _clearForThisLive = true;
     _fallbackReason = reason;
-    _telemetry?.record('reload', <String, num>{'fallback_reason': reason, 'delivery_mode': 1});
+    _beginReload(liveReloadClearFallback, <String, num>{'fallback_reason': reason, 'delivery_mode': 1});
     _telemetry?.flush();
     reportPlaybackDiagnostic(
         _store.api,
@@ -470,7 +627,10 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     if (current == null || _disposed) return;
     if (_loading) return _scheduleRenewal(renewalRetryDelay(1));
     // Signed media URLs expire with the authorization: a fresh start.
-    if (current.signedUrls) return _start(recovering: true);
+    if (current.signedUrls) {
+      _beginReload(liveReloadRenewal, _deliveryField);
+      return _start(recovering: true);
+    }
     bool restart = false;
     try {
       final LivePolicy policy = await _store.policy(widget.live.id);
@@ -515,7 +675,10 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
         _scheduleRenewal(renewalRetryDelay(_renewalFailures));
       }
     }
-    if (restart) unawaited(_start(recovering: true));
+    if (restart) {
+      _beginReload(liveReloadRenewal, _deliveryField);
+      unawaited(_start(recovering: true));
+    }
   }
 
   void _renewed(LiveJoin join) {
@@ -537,6 +700,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
         _qualityApplied = true;
         video.setQuality(state.heights.contains(_quality) ? _quality : 0);
       }
+      _observePlayback(state);
       _set(() {});
       return;
     }
@@ -593,6 +757,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
         if (last == null || now.difference(last) >= _expiryReloadInterval) {
           _lastExpiryReload = now;
           _telemetry?.record('expired');
+          _beginReload(liveReloadExpired, <String, num>{'error_data_code': state.errorCode});
           _start(recovering: true);
         } else {
           _retryLater(errorCode: state.errorCode);
@@ -601,7 +766,11 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
         // Two quick reloads, then the regular back-off (web hardRecover).
         if (_quickReloads < 2) {
           _quickReloads++;
-          _telemetry?.record('reload', <String, num>{'attempt': _quickReloads});
+          _beginReload(liveReloadHardRecover, <String, num>{
+            'attempt': _quickReloads,
+            'error_data_code': state.errorCode,
+            ..._deliveryField,
+          });
           _start(recovering: true);
         } else {
           _retryLater(errorCode: state.errorCode);
@@ -616,8 +785,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     final VideoState? state = _video?.value;
     if (state == null || !state.firstFrame) return;
     _telemetry?.record('sample', <String, num>{
-      'buffer_ahead_s': (state.buffered - state.position).inMilliseconds / 1000,
-      if (state.liveOffset != null) 'edge_distance_s': state.liveOffset!.inMilliseconds / 1000,
+      ..._mediaFields(state),
       if (_quality > 0) 'height': _quality,
     });
   }
@@ -646,8 +814,10 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     final ProtectedVideoController? video = _video;
     if (video == null) return;
     if (video.value.playing) {
+      _pausedByStudent = true;
       video.pause();
     } else {
+      _pausedByStudent = false;
       // Rejoin the edge rather than resuming minutes behind the class.
       video
         ..seekToLiveEdge()

@@ -1346,6 +1346,12 @@ const Map<String, Map<String, String>> K = {
   },
   // Speaking (D-073).
   'live.youAreSpeaking': {'en': 'You are speaking', 'fr': 'Tu parles', 'ar': 'أنت تتحدث'},
+  // Website `live.connecting_conversation`.
+  'live.connectingConversation': {
+    'en': 'Connecting to live conversation…',
+    'fr': 'Connexion à la conversation en direct…',
+    'ar': 'راحنا نوصلوك بالحوار…',
+  },
   'live.studentSpeaking': {'en': '{name} is speaking', 'fr': '{name} parle', 'ar': '{name} يتحدث'},
   'live.aStudentSpeaking': {'en': 'A student is speaking', 'fr': 'Un élève parle', 'ar': 'طالب يتحدث'},
   'live.tapToHear': {
