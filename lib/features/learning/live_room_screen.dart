@@ -641,7 +641,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
                   const Icon(Icons.visibility_rounded, size: 13, color: NovaColors.textMutedOnDark),
                   const SizedBox(width: 5),
                   Text(
-                    '${_viewers ?? detail?.live.attendees ?? 1}',
+                    // D-181: the Students watching now (presence, else the server's count), never the attended total.
+                    '${_viewers ?? detail?.live.watchingNow ?? '—'}',
                     style: const TextStyle(
                       fontFamily: 'Geist',
                       fontWeight: FontWeight.w700,

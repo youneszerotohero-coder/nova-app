@@ -35,6 +35,10 @@ class ReverbClient {
   final Map<String, List<ReverbListener>> _listeners = <String, List<ReverbListener>>{};
   final Map<String, int> _presenceCounts = <String, int>{};
 
+  /// Members of each presence channel: user id → counted as a viewer (D-181: Students only; a member without the
+  /// `viewer` flag, from a server before D-181, still counts).
+  final Map<String, Map<String, bool>> _presenceMembers = <String, Map<String, bool>>{};
+
   /// True while the socket is open and identified.
   final ValueNotifier<bool> connected = ValueNotifier<bool>(false);
 
@@ -79,6 +83,7 @@ class ReverbClient {
     _socketId = null;
     connected.value = false;
     _presenceCounts.clear();
+    _presenceMembers.clear();
   }
 
   /// Listens on [channel] (`private-…`, `presence-…` or public). Returns
@@ -92,6 +97,7 @@ class ReverbClient {
       if (listeners.isEmpty) {
         _listeners.remove(channel);
         _presenceCounts.remove(channel);
+        _presenceMembers.remove(channel);
         _send('pusher:unsubscribe', <String, String>{'channel': channel});
       }
     };
@@ -119,11 +125,23 @@ class ReverbClient {
         _send('pusher:pong', <String, dynamic>{});
       case 'pusher_internal:subscription_succeeded':
         final Json? presence = data.obj('presence');
-        if (presence != null) _setPresence(channel, presence.integer('count'));
+        if (presence != null) {
+          // The full member list again after every (re)subscription: replace, never merge.
+          final Map<String, bool> members = _presenceMembers[channel] = <String, bool>{};
+          final Object? hash = presence['hash'];
+          if (hash is Map) {
+            hash.forEach((Object? id, Object? info) => members['$id'] = isViewer(info));
+            _setPresence(channel, members.values.where((bool viewer) => viewer).length);
+          } else {
+            _setPresence(channel, presence.integer('count'));
+          }
+        }
       case 'pusher_internal:member_added':
-        _setPresence(channel, (_presenceCounts[channel] ?? 0) + 1);
+        (_presenceMembers[channel] ??= <String, bool>{})['${data['user_id']}'] = isViewer(data['user_info']);
+        _setPresence(channel, _presenceMembers[channel]!.values.where((bool viewer) => viewer).length);
       case 'pusher_internal:member_removed':
-        _setPresence(channel, ((_presenceCounts[channel] ?? 1) - 1).clamp(0, 1 << 30));
+        _presenceMembers[channel]?.remove('${data['user_id']}');
+        _setPresence(channel, (_presenceMembers[channel] ?? const <String, bool>{}).values.where((bool viewer) => viewer).length);
       case 'pusher:error':
         break;
       default:
@@ -135,6 +153,9 @@ class ReverbClient {
         }
     }
   }
+
+  /// D-181: Admins in the studio or the console are present on a Live's channel but are never viewers.
+  static bool isViewer(Object? info) => !(info is Map && info['viewer'] == false);
 
   void _setPresence(String channel, int count) {
     _presenceCounts[channel] = count;

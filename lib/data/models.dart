@@ -293,6 +293,7 @@ class LiveSession {
     this.commentMaxLength = 500,
     this.lessonId,
     this.waitingRoomOpen = false,
+    this.watchingNow,
   });
 
   factory LiveSession.fromJson(Json json) {
@@ -312,6 +313,7 @@ class LiveSession {
         _ => LiveStatus.scheduled,
       },
       attendees: json.integer('attendees_count'),
+      watchingNow: json['watching_now'] == null ? null : json.integer('watching_now'),
       scene: sceneFor(json.integer('course_id')),
       scheduledAt: json.date('scheduled_at'),
       scheduledLabel: json.date('scheduled_at') == null
@@ -337,7 +339,12 @@ class LiveSession {
   /// Backend lifecycle: scheduled|starting|live|ending|processing_replay|
   /// ended|cancelled|failed.
   final String rawStatus;
+
+  /// Distinct Students who joined this Live at least once, also those who left (never "watching now").
   final int attendees;
+
+  /// D-181: the Students watching right now, only while the Live runs (null otherwise).
+  final int? watchingNow;
   final NovaScene scene;
   final DateTime? scheduledAt;
   final String? scheduledLabel;

@@ -234,7 +234,8 @@ class LiveTicket extends StatelessWidget {
                     children: [
                       const Icon(Icons.people_alt_outlined, size: 14, color: Colors.white),
                       const SizedBox(width: 5),
-                      Text('${live.attendees}', style: NovaTypography.textTheme.labelMedium!.copyWith(color: Colors.white)),
+                      // D-181: a running Live shows the Students watching now, any other one the Students who attended.
+                      Text('${live.status == LiveStatus.live ? live.watchingNow ?? 0 : live.attendees}', style: NovaTypography.textTheme.labelMedium!.copyWith(color: Colors.white)),
                     ],
                   ),
                 ),
