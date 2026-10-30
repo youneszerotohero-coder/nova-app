@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
+import '../../core/security/capture_shield.dart';
 import '../../core/utils/screen_awake.dart';
 import '../../data/chat_store.dart';
 
@@ -111,8 +112,14 @@ enum VoiceState { idle, loading, playing, paused }
 
 /// One voice note plays at a time, app-wide (starting another stops the
 /// first); the speed (1×, 1.5×, 2×) is kept from one note to the next.
+///
+/// iPhone screen recording or mirroring (owner decision 2026-10-29): the
+/// recording is black but would still carry the sound, so the note pauses
+/// while the screen is captured and resumes when the capture stops.
 class ChatVoicePlayer extends ChangeNotifier {
-  ChatVoicePlayer._();
+  ChatVoicePlayer._() {
+    CaptureMonitor.instance.addListener(_onCapture);
+  }
 
   static final ChatVoicePlayer instance = ChatVoicePlayer._();
 
@@ -128,6 +135,11 @@ class ChatVoicePlayer extends ChangeNotifier {
   Duration _duration = Duration.zero;
   double _speed = 1;
   int _request = 0;
+
+  /// Paused by a screen capture (not by the user): resumes when it stops.
+  bool _heldByCapture = false;
+
+  static bool get _captured => CaptureMonitor.instance.captured;
 
   /// The note being played or paused (its message key).
   String? get current => _current;
@@ -155,6 +167,7 @@ class ChatVoicePlayer extends ChangeNotifier {
         _state = VoiceState.idle;
         _position = Duration.zero;
         _current = null;
+        _heldByCapture = false;
         notifyListeners();
       }));
     return _engine = created;
@@ -164,12 +177,19 @@ class ChatVoicePlayer extends ChangeNotifier {
   /// local path when [local]) the first time.
   Future<void> toggle(String key, {required Future<String> Function() source, required bool local, Duration known = Duration.zero}) async {
     if (key == _current && _state == VoiceState.playing) {
+      _heldByCapture = false;
       _state = VoiceState.paused;
       notifyListeners();
       await _ready.pause();
       return;
     }
     if (key == _current && _state == VoiceState.paused) {
+      if (_captured) {
+        // Silent while the screen is captured: it plays once that stops.
+        _heldByCapture = true;
+        return;
+      }
+      _heldByCapture = false;
       _state = VoiceState.playing;
       notifyListeners();
       await _ready.resume();
@@ -180,6 +200,7 @@ class ChatVoicePlayer extends ChangeNotifier {
 
   Future<void> start(String key, {required Future<String> Function() source, required bool local, Duration known = Duration.zero, double from = 0}) async {
     final int request = ++_request;
+    _heldByCapture = false;
     if (_current != null) await _ready.stop();
     _current = key;
     _state = VoiceState.loading;
@@ -193,6 +214,8 @@ class ChatVoicePlayer extends ChangeNotifier {
       if (request != _request) return;
       _state = VoiceState.playing;
       if (from > 0 && known > Duration.zero) await _ready.seek(known * from);
+      // The capture began while the note was loading.
+      if (request == _request && _captured) await _hold();
     } catch (_) {
       if (request != _request) return;
       _state = VoiceState.idle;
@@ -224,15 +247,39 @@ class ChatVoicePlayer extends ChangeNotifier {
     if (_current == null || (key != null && key != _current)) return;
     _request++;
     _current = null;
+    _heldByCapture = false;
     _state = VoiceState.idle;
     _position = Duration.zero;
     notifyListeners();
     await _engine?.stop();
   }
 
+  /// Screen recording or mirroring started or stopped (iPhone).
+  void _onCapture() {
+    if (_captured) {
+      // A note still loading is held by [start] once it plays.
+      if (_state == VoiceState.playing) _hold().catchError((Object _) {});
+      return;
+    }
+    if (!_heldByCapture) return;
+    _heldByCapture = false;
+    if (_current == null || _state != VoiceState.paused) return;
+    _state = VoiceState.playing;
+    notifyListeners();
+    _ready.resume().catchError((Object _) {});
+  }
+
+  Future<void> _hold() async {
+    _heldByCapture = true;
+    _state = VoiceState.paused;
+    notifyListeners();
+    await _ready.pause();
+  }
+
   @visibleForTesting
   void reset() {
     _request++;
+    _heldByCapture = false;
     for (final StreamSubscription<Object?> s in _subscriptions) {
       s.cancel();
     }

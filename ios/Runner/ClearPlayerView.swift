@@ -9,9 +9,10 @@ import UIKit
 /// `nova/protected_player_<id>/events`.
 ///
 /// Protection is FairPlay when protected, the identity watermark Flutter
-/// draws above this view, and `CaptureGuard` (recording/mirroring stops
-/// playback). AirPlay is disabled so the picture never leaves the
-/// watermarked screen.
+/// draws above this view, the secure layer this view sits in like all of
+/// Flutter (`SecureCapture`: black in screenshots and recordings), and
+/// `CaptureGuard` (recording/mirroring stops playback). AirPlay is
+/// disabled so the picture never leaves the watermarked screen.
 final class ClearPlayerFactory: NSObject, FlutterPlatformViewFactory {
   private let messenger: FlutterBinaryMessenger
 

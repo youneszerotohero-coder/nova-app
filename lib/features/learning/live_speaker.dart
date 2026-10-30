@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:livekit_client/livekit_client.dart';
 
+import '../../core/security/capture_shield.dart';
 import '../../data/live_store.dart';
 
 /// What the speaking stage shows of the Professor (D-073).
@@ -77,8 +78,20 @@ class PresenterFrameWatch {
 /// While speaking, the protected broadcast is released (D-066) and the
 /// Student watches and hears the Professor over this connection
 /// ([presenterVideo], D-073).
+///
+/// iPhone screen recording or mirroring (owner decision 2026-10-29): the
+/// recording is black but would still carry the class's voices, so the
+/// remote audio is silenced while the screen is captured and comes back
+/// when the capture stops. The Student's own microphone is unchanged.
 class LiveSpeaker {
-  LiveSpeaker({required this.onDropped});
+  LiveSpeaker({
+    required this.onDropped,
+    @visibleForTesting Future<void> Function(bool silent)? silenceRemoteAudio,
+  }) {
+    _silenceRemoteAudio = silenceRemoteAudio ?? _silenceRoomAudio;
+    CaptureMonitor.instance.addListener(_onCapture);
+    _onCapture();
+  }
 
   /// The connection is gone for good; the room lowers the hand and
   /// returns the Student to the broadcast.
@@ -96,6 +109,11 @@ class LiveSpeaker {
   SpeakerGrant? _grant;
   bool _retried = false;
   bool _closing = false;
+  late final Future<void> Function(bool silent) _silenceRemoteAudio;
+  bool _silent = false;
+
+  /// True while the remote audio is silenced by a screen capture.
+  bool get remoteAudioSilenced => _silent;
 
   /// The camera track whose first frame the stage rendered.
   String? _shownTrack;
@@ -181,7 +199,11 @@ class LiveSpeaker {
     void changed() => changes.value++;
     _events = room.createListener()
       ..on<RoomDisconnectedEvent>((_) => _onDisconnected())
-      ..on<TrackSubscribedEvent>((_) => changed())
+      ..on<TrackSubscribedEvent>((TrackSubscribedEvent event) {
+        // A voice that arrives during a capture starts silenced.
+        if (_silent) _silenceTrack(event.publication, event.track, true).catchError((Object _) {});
+        changed();
+      })
       ..on<TrackUnsubscribedEvent>((_) => changed())
       ..on<TrackMutedEvent>((_) => changed())
       ..on<TrackUnmutedEvent>((_) => changed())
@@ -218,8 +240,39 @@ class LiveSpeaker {
       unawaited(microphone.stop());
       rethrow;
     }
+    // Accepted while the screen is already recorded: the class starts silent.
+    if (_silent) await _silenceRemoteAudio(true);
     if (!room.canPlaybackAudio) audioBlocked.value = true;
     changed();
+  }
+
+  /// Screen recording or mirroring started or stopped (iPhone).
+  void _onCapture() {
+    final bool silent = CaptureMonitor.instance.captured;
+    if (silent == _silent) return;
+    _silent = silent;
+    _silenceRemoteAudio(silent).catchError((Object _) {});
+  }
+
+  Future<void> _silenceRoomAudio(bool silent) async {
+    final Room? room = _room;
+    if (room == null) return;
+    for (final RemoteParticipant participant in room.remoteParticipants.values) {
+      for (final RemoteTrackPublication<RemoteAudioTrack> publication in participant.audioTrackPublications) {
+        await _silenceTrack(publication, publication.track, silent);
+      }
+    }
+  }
+
+  /// At once on the phone — a disabled WebRTC track plays at volume 0 —
+  /// and on the server, which stops (or resumes) forwarding it. The
+  /// WebRTC track is set directly: LiveKit's `Track.disable()` does
+  /// nothing before the track has started, which comes after
+  /// [TrackSubscribedEvent].
+  static Future<void> _silenceTrack(RemoteTrackPublication publication, Track? track, bool silent) async {
+    if (track is! RemoteAudioTrack) return;
+    track.mediaStreamTrack.enabled = !silent;
+    await (silent ? publication.disable() : publication.enable());
   }
 
   /// iPhone: the conversation plays through the loudspeaker (not the
@@ -277,6 +330,7 @@ class LiveSpeaker {
 
   Future<void> close() async {
     _closing = true;
+    CaptureMonitor.instance.removeListener(_onCapture);
     await _dispose();
     if (_iOS) {
       // Hand the audio session back so the broadcast plays as media again.

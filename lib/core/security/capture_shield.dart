@@ -13,9 +13,13 @@ import '../widgets/nova_toast.dart';
 ///
 /// Android is covered natively by `FLAG_SECURE` (MainActivity), which
 /// blacks out screenshots, recordings and the recents thumbnail, so
-/// nothing here fires there. iOS cannot block capture: `CaptureGuard`
+/// nothing here fires there. On iOS the app is drawn in the system's
+/// secure layer (`SecureCapture`, owner decision 2026-10-29), so
+/// screenshots and recordings come out black; `CaptureGuard` still
 /// reports recording/mirroring and screenshots over `nova/capture`, and
-/// this monitor turns them into state the UI and the players obey.
+/// this monitor turns them into state the UI, the players and the audio
+/// outputs obey — the second layer, and the only one if the secure layer
+/// is unavailable.
 class CaptureMonitor extends ChangeNotifier {
   CaptureMonitor._();
 
@@ -25,12 +29,19 @@ class CaptureMonitor extends ChangeNotifier {
 
   StreamSubscription<dynamic>? _subscription;
   bool _captured = false;
+  bool? _secureLayer;
   final StreamController<void> _screenshots =
       StreamController<void>.broadcast();
 
   /// True while the screen is being recorded, mirrored or AirPlayed.
-  /// Protected players must stop and the app stays blurred.
+  /// Protected players must stop, audible outputs pause and the app
+  /// stays blurred.
   bool get captured => _captured;
+
+  /// iOS: true once the app is confirmed in the secure layer, false when
+  /// it fell back to detection only (a future iOS without the secure
+  /// text canvas); null until reported, and on Android.
+  bool? get secureLayer => _secureLayer;
 
   /// Fires after a screenshot was taken (iOS reports it after the fact).
   Stream<void> get screenshots => _screenshots.stream;
@@ -43,9 +54,17 @@ class CaptureMonitor extends ChangeNotifier {
         if (event is! Map) return;
         if (event['captured'] is bool) setCaptured(event['captured'] as bool);
         if (event['screenshot'] == true) _screenshots.add(null);
+        if (event['secure'] is bool) _onSecureLayer(event['secure'] as bool, event['reason']);
       },
       onError: (Object _) {},
     );
+  }
+
+  void _onSecureLayer(bool secure, Object? reason) {
+    _secureLayer = secure;
+    if (!secure) {
+      debugPrint('Capture protection: secure layer unavailable ($reason); blur, pause and warning only');
+    }
   }
 
   @visibleForTesting
@@ -53,6 +72,16 @@ class CaptureMonitor extends ChangeNotifier {
     if (value == _captured) return;
     _captured = value;
     notifyListeners();
+  }
+
+  /// Back to a fresh, stopped monitor (tests start it again with a
+  /// mocked channel).
+  @visibleForTesting
+  Future<void> debugReset() async {
+    await _subscription?.cancel();
+    _subscription = null;
+    _secureLayer = null;
+    setCaptured(false);
   }
 }
 
