@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nova_mobile/core/api/api_error_text.dart';
 import 'package:nova_mobile/core/api/api_exception.dart';
+import 'package:nova_mobile/core/api/nova_api.dart';
 import 'package:nova_mobile/core/state/app_state.dart';
 import 'package:nova_mobile/core/theme/nova_theme.dart';
 import 'package:nova_mobile/core/utils/phone.dart';
 import 'package:nova_mobile/core/widgets/hero_style.dart';
 import 'package:nova_mobile/data/account_store.dart';
 import 'package:nova_mobile/data/catalog_store.dart';
+import 'package:nova_mobile/data/learning_store.dart';
 import 'package:nova_mobile/data/models.dart';
 import 'package:nova_mobile/data/session_store.dart';
 import 'package:nova_mobile/features/auth/auth_gateway_screen.dart';
@@ -16,6 +19,7 @@ import 'package:nova_mobile/features/auth/change_password_screen.dart';
 import 'package:nova_mobile/features/auth/login_screen.dart';
 import 'package:nova_mobile/features/auth/phone_step_screen.dart';
 import 'package:nova_mobile/features/auth/register_screen.dart';
+import 'package:nova_mobile/features/learning/lesson_screen.dart';
 import 'package:nova_mobile/features/shell/app_gate.dart';
 import 'package:nova_mobile/features/shell/shell_screen.dart';
 import 'package:nova_mobile/features/shell/student_top_bar.dart';
@@ -362,6 +366,89 @@ void main() {
     await tester.tap(find.byType(BackPill));
     await tester.pumpAndSettle();
     expect(find.byType(AuthGatewayScreen), findsOneWidget);
+  });
+
+  group('account opened on another device (owner decision 2026-10-30)', () {
+    const String replacedText = 'Your account was just opened on another device. Sign in again to continue.';
+    final FakeResponse replaced = _error(401, 'SESSION_REPLACED', 'This Student account signed in on another device.');
+    final Map<String, Object?> student = <String, Object?>{
+      'id': 9,
+      'role': 'student',
+      'phone': '0555123456',
+      'next_required_step': 'phone',
+      'student': <String, Object?>{'first_name': 'Ines', 'last_name': 'Benali'},
+    };
+
+    testWidgets('a 401 SESSION_REPLACED during a Lesson leads to sign-in, which says why', (tester) async {
+      final FakeBackend backend = FakeBackend(<String, FakeResponse>{
+        'GET /auth/me': FakeResponse(200, <String, Object?>{'data': student}),
+        'POST /lessons/0/playback': replaced,
+        'POST /playback-diagnostics': replaced,
+      });
+      final NovaApi api = fakeApi(backend);
+      final SessionStore session = SessionStore(api);
+      await tester.runAsync(session.boot);
+      final AppState base = installFixtureApp();
+      final AppState state = AppState.seeded(
+        session: session,
+        catalog: base.catalog,
+        learning: LearningStore(api),
+        commerce: base.commerce,
+        account: base.account,
+        lang: NovaLang.en,
+      );
+      AppState.instance = state;
+      await _pump(tester, state, const AppGate());
+
+      // The Student watches a Lesson when another device signs in.
+      const MethodChannel drm = MethodChannel('nova/drm');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(drm, (MethodCall call) async => 'L1');
+      addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(drm, null));
+      final Course course = HomeData.popularCourses.firstWhere((Course c) => c.owned);
+      tester.state<NavigatorState>(find.byType(Navigator).first).push(MaterialPageRoute<void>(
+        builder: (_) => LessonScreen(course: ValueNotifier<Course>(course), index: 0),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Play'));
+      for (int i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+
+      expect(session.status, SessionStatus.signedOut);
+      expect(find.byType(LessonScreen), findsNothing);
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(find.text(replacedText), findsOneWidget);
+      expect(find.textContaining('playback session'), findsNothing);
+
+      // Back leads to the gateway (sign in, register or browse).
+      await tester.tap(find.byType(BackPill));
+      await tester.pumpAndSettle();
+      expect(find.byType(AuthGatewayScreen), findsOneWidget);
+    });
+
+    testWidgets('a session replaced while the app was closed is explained at launch too', (tester) async {
+      final SessionStore session = SessionStore(fakeApi(FakeBackend(<String, FakeResponse>{'GET /auth/me': replaced})));
+      final AppState state = _install(session);
+      tester.view.physicalSize = const Size(1170, 6000);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(AppScope(state: state, child: MaterialApp(theme: NovaTheme.light, home: const AppGate())));
+      await tester.runAsync(session.boot);
+      await tester.pumpAndSettle();
+
+      expect(session.endedReason, ApiException.sessionReplaced);
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(find.text(replacedText), findsOneWidget);
+    });
+
+    testWidgets('the message reads in French and Arabic', (tester) async {
+      const ApiException error = ApiException(status: 401, code: 'SESSION_REPLACED', message: '…');
+      expect(await _text(tester, error, NovaLang.fr),
+          'Ton compte vient d’être ouvert sur un autre appareil. Reconnecte-toi pour continuer.');
+      expect(await _text(tester, error, NovaLang.ar), 'تم فتح حسابك للتو على جهاز آخر. أعد تسجيل الدخول للمتابعة.');
+    });
   });
 
   group('phone step (D-079)', () {

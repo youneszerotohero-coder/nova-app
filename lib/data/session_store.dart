@@ -88,6 +88,9 @@ class SessionStore extends ChangeNotifier {
         _status = SessionStatus.offline;
         notifyListeners();
       } else {
+        // Replaced while NOVA was closed: sign-in says why (owner
+        // decision 2026-10-30).
+        if (error.code == ApiException.sessionReplaced) _endedReason = error.code;
         await _signedOut();
       }
     }

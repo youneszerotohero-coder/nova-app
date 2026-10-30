@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../core/api/api_exception.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/push/push_host.dart';
 import '../../core/state/app_state.dart';
 import '../../core/widgets/hero_style.dart';
 import '../../data/session_store.dart';
 import '../auth/auth_gateway_screen.dart';
+import '../auth/auth_routes.dart';
 import '../auth/change_password_screen.dart';
 import '../auth/phone_step_screen.dart';
 import '../auth/register_screen.dart';
@@ -24,6 +28,11 @@ import 'splash_screen.dart';
 /// without an account" opens the Student space read-only for a visitor.
 /// D-143: a Teacher changes their temporary password first, then reaches the
 /// Teacher shell; tapped system notifications open over either space.
+///
+/// Owner decision 2026-10-30 (single session kept): a Student whose account
+/// was just opened on another device (`SESSION_REPLACED`, during a Lesson, a
+/// Live or anywhere else) lands on sign-in, which says why, with the gateway
+/// behind it.
 class AppGate extends StatefulWidget {
   const AppGate({super.key});
 
@@ -55,9 +64,15 @@ class _AppGateState extends State<AppGate> {
     final SessionStore session = app.session;
     final bool splash = session.status == SessionStatus.booting || _introDone != true;
     final Object key = splash ? 'splash' : (session.status, session.nextRequiredStep, app.guest);
+    final bool replaced = !splash &&
+        session.status == SessionStatus.signedOut &&
+        !app.guest &&
+        session.endedReason == ApiException.sessionReplaced;
     if (_lastKey != null && _lastKey != key) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) Navigator.of(context).popUntil((Route<dynamic> r) => r.isFirst);
+        if (!mounted) return;
+        Navigator.of(context).popUntil((Route<dynamic> r) => r.isFirst);
+        if (replaced) unawaited(openSignIn(context));
       });
     }
     _lastKey = key;

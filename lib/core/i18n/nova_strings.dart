@@ -1032,9 +1032,9 @@ const Map<String, Map<String, String>> K = {
     'ar': 'رقم الهاتف أو كلمة المرور غير صحيحة.',
   },
   'err.sessionReplaced': {
-    'en': 'You were signed out because your account signed in on another device.',
-    'fr': 'Tu as été déconnecté car ton compte s’est connecté sur un autre appareil.',
-    'ar': 'تم تسجيل خروجك لأن حسابك سجّل الدخول من جهاز آخر.',
+    'en': 'Your account was just opened on another device. Sign in again to continue.',
+    'fr': 'Ton compte vient d’être ouvert sur un autre appareil. Reconnecte-toi pour continuer.',
+    'ar': 'تم فتح حسابك للتو على جهاز آخر. أعد تسجيل الدخول للمتابعة.',
   },
   'err.studentOnly': {
     'en': 'This app is for Student accounts. Use the web console for administration.',
