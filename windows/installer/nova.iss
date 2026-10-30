@@ -4,7 +4,7 @@
 ;
 ; Built by .github/workflows/pc-app-windows.yml after `flutter build windows
 ; --release`:
-;   iscc /DAppVersion=0.5.1+19 /DFileVersion=0.5.1-19 /DNumericVersion=0.5.1.19
+;   iscc /DAppVersion=0.5.2+20 /DFileVersion=0.5.2-20 /DNumericVersion=0.5.2.20
 ;        /DWebView2Bootstrapper=<path to MicrosoftEdgeWebview2Setup.exe>
 ;        windows\installer\nova.iss
 ;
