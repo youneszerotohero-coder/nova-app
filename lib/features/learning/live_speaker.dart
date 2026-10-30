@@ -70,10 +70,26 @@ class PresenterFrameWatch {
   }
 }
 
+/// LiveKit ended the speaking turn itself (Live 66, 2026-10-30): the
+/// teaching team removed the Student or the room was deleted. Such a
+/// disconnection is final: never reconnected with the turn's grant.
+bool speakerTurnEndedBy(DisconnectReason? reason) =>
+    reason == DisconnectReason.participantRemoved || reason == DisconnectReason.roomDeleted;
+
+/// Only a lost connection is worth one reconnect: not the end of the turn,
+/// the same Student joining from another device, nor a disconnection the
+/// app asked for.
+bool speakerReconnectsAfter(DisconnectReason? reason) =>
+    !speakerTurnEndedBy(reason) &&
+    reason != DisconnectReason.duplicateIdentity &&
+    reason != DisconnectReason.clientInitiated;
+
 /// The accepted Student's microphone in the Live (web `useLiveRoom`,
 /// Student role): LiveKit with the microphone only — the backend grant
 /// allows no camera — echo cancellation, noise suppression and gain
-/// control on. One automatic reconnect after 750 ms, then [onDropped].
+/// control on. A lost connection gets one automatic reconnect after
+/// 750 ms, then [onDropped]; a turn LiveKit ended ([speakerTurnEndedBy])
+/// sets [removed] instead, and the room closes the stage.
 ///
 /// While speaking, the Student watches and hears the Professor over this
 /// connection ([presenterVideo], D-073); the broadcast player is kept muted
@@ -110,6 +126,11 @@ class LiveSpeaker {
   SpeakerGrant? _grant;
   bool _retried = false;
   bool _closing = false;
+  bool _removed = false;
+  Future<void>? _audioReady;
+
+  /// The teaching team ended the turn in LiveKit ([speakerTurnEndedBy]).
+  bool get removed => _removed;
   late final Future<void> Function(bool silent) _silenceRemoteAudio;
   bool _silent = false;
 
@@ -186,10 +207,25 @@ class LiveSpeaker {
     changes.value++;
   }
 
+  /// iPhone: the conversation's audio session, prepared from the moment
+  /// the hand is accepted, while the grant and the connection are on their
+  /// way rather than before them. Nothing is captured or published here.
+  void prepareAudio() {
+    _audioReady ??= _iOS ? _configureAppleAudio() : Future<void>.value();
+  }
+
   Future<void> connect(SpeakerGrant grant) async {
     _grant = grant;
     _closing = false;
-    if (_iOS) await _configureAppleAudio();
+    await open(grant);
+  }
+
+  /// One LiveKit connection with the microphone published: the first, and
+  /// the one reconnect after a lost connection.
+  @protected
+  @visibleForTesting
+  Future<void> open(SpeakerGrant grant) async {
+    prepareAudio();
     final Room room = Room(
       roomOptions: const RoomOptions(
         // Not adaptive: the Professor publishes one layer (D-065), so the
@@ -208,7 +244,7 @@ class LiveSpeaker {
     _pausedByServer.clear();
     void changed() => changes.value++;
     _events = room.createListener()
-      ..on<RoomDisconnectedEvent>((_) => _onDisconnected())
+      ..on<RoomDisconnectedEvent>((RoomDisconnectedEvent event) => disconnected(event.reason))
       ..on<TrackSubscribedEvent>((TrackSubscribedEvent event) {
         // A voice that arrives during a capture starts silenced.
         if (_silent) _silenceTrack(event.publication, event.track, true).catchError((Object _) {});
@@ -233,17 +269,23 @@ class LiveSpeaker {
         audioBlocked.value = !event.isPlaying;
       });
     // The microphone (and its permission prompt) is captured while the room
-    // connects rather than after it; a capture left over by a failure stops.
+    // connects rather than after it, once the iPhone audio session is set;
+    // a capture left over by a failure stops.
     final List<Object?> ready = await Future.wait<Object?>(
       <Future<Object?>>[
         room.connect(grant.url, grant.token),
-        LocalAudioTrack.create(_microphone),
+        _audioReady!.then((_) => LocalAudioTrack.create(_microphone)),
       ],
       cleanUp: (Object? value) {
         if (value is LocalAudioTrack) unawaited(value.stop());
       },
     );
     final LocalAudioTrack microphone = ready[1]! as LocalAudioTrack;
+    if (_closing || !identical(_room, room)) {
+      // The turn ended while connecting: nothing is published.
+      unawaited(microphone.stop());
+      return;
+    }
     try {
       await room.localParticipant!.publishAudioTrack(microphone);
     } catch (_) {
@@ -321,17 +363,32 @@ class LiveSpeaker {
     await _room?.localParticipant?.setMicrophoneEnabled(enabled);
   }
 
-  Future<void> _onDisconnected() async {
+  /// LiveKit closed the room connection ([RoomDisconnectedEvent]).
+  ///
+  /// Live 66 (2026-10-30): a Student the Admin removed started a new
+  /// LiveKit session 2–6 s later with the turn's grant, which the server
+  /// closed again — the removal was taken for a lost connection, and the
+  /// reconnect also went on after the stage had closed meanwhile.
+  @visibleForTesting
+  Future<void> disconnected(DisconnectReason? reason) async {
     if (_closing) return;
+    if (speakerTurnEndedBy(reason)) {
+      _removed = true;
+      changes.value++;
+      return;
+    }
     final SpeakerGrant? grant = _grant;
-    if (!_retried && grant != null) {
+    if (!_retried && grant != null && speakerReconnectsAfter(reason)) {
       _retried = true;
       await Future<void>.delayed(const Duration(milliseconds: 750));
+      // The turn ended meanwhile (realtime, or the Student lowered the hand).
+      if (_closing) return;
       try {
         await _dispose();
-        await connect(grant);
+        await open(grant);
         return;
       } catch (_) {
+        if (_closing) return;
         // Fall through to giving up.
       }
     }

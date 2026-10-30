@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/api/api_exception.dart';
@@ -20,6 +21,17 @@ import 'playback_rules.dart';
 import 'protected_video.dart';
 
 enum _LiveStage { connecting, waiting, recovering, interrupted, playing, nameRequired, failed }
+
+/// What the overlays above the native picture show: the only part of the
+/// player's state that changes the screen (2026-10-30, iPhone picture not
+/// fluid). Position reports never rebuild the tree holding the platform view.
+typedef _Overlay = ({bool busy, bool playing, bool qualities});
+
+_Overlay _overlayOf(VideoState state) => (
+      busy: state.phase == 'buffering' || !state.firstFrame,
+      playing: state.playing,
+      qualities: state.heights.isNotEmpty,
+    );
 
 /// Live playback, the mobile counterpart of the web `LiveHlsPlayer`:
 /// playback policy → device-matched Widevine candidate → join, then a
@@ -117,6 +129,9 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   /// Watchdog restarts since the Live last played (longer waits each time).
   int _watchRestarts = 0;
 
+  /// iPhone: the last drift seek, on the watchdog's clock ([liveDriftNeedsSeek]).
+  Duration? _lastDriftSeek;
+
   /// Since the player opened: the first picture's `first_frame_ms` (web).
   final Stopwatch _opened = Stopwatch();
   bool _firstPlayRecorded = false;
@@ -151,7 +166,11 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   /// 0 = automatic; a manual choice survives reconnections (web).
   int _quality = 0;
   bool _qualityApplied = false;
-  int _spot = 0;
+
+  /// Listened to by the overlays and the watermark only: changing them
+  /// never rebuilds the native picture's widget.
+  final ValueNotifier<_Overlay> _overlay = ValueNotifier<_Overlay>(_overlayOf(const VideoState()));
+  final ValueNotifier<int> _spot = ValueNotifier<int>(0);
   bool _muted = false;
   bool _controls = true;
   bool _loading = false;
@@ -196,6 +215,8 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     _telemetry?.stop();
     _retry?.cancel();
     _teardown();
+    _overlay.dispose();
+    _spot.dispose();
     super.dispose();
   }
 
@@ -515,6 +536,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
 
   void _play(LiveJoin join) {
     final ProtectedVideoController video = ProtectedVideoController()..addListener(_onVideo);
+    _overlay.value = _overlayOf(video.value);
     _qualityApplied = false;
     // A new native player starts playing by itself.
     _pausedByStudent = false;
@@ -553,6 +575,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     final LivePlaybackWatch watch = LivePlaybackWatch();
     _playback = watch;
     _watchElapsed = Duration.zero;
+    _lastDriftSeek = null;
     _watch = Timer.periodic(_watchEvery, (_) {
       if (_disposed || _video != video || _playback != watch || _loading) return;
       _watchElapsed += _watchEvery;
@@ -566,8 +589,26 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
       );
       // Mode B: the protected start watch decides first (D-077).
       if (_startWatch?.isActive ?? false) return;
-      if (watch.stuck(restarts: _watchRestarts)) _restartStuck(video, state, played: watch.played);
+      if (watch.stuck(restarts: _watchRestarts)) return _restartStuck(video, state, played: watch.played);
+      _keepNearEdge(video, state);
     });
+  }
+
+  /// iPhone: AVPlayer plays the Live at exactly 1.0× without catching up
+  /// by itself; one that fell far behind (stalls) is sent back to the edge
+  /// once. Android keeps Media3's own catch-up (D-065).
+  void _keepNearEdge(ProtectedVideoController video, VideoState state) {
+    if (defaultTargetPlatform != TargetPlatform.iOS || widget.suspended || !_expectedToPlay) return;
+    final Duration? last = _lastDriftSeek;
+    if (!liveDriftNeedsSeek(
+      playing: state.playing,
+      liveOffset: state.liveOffset,
+      sinceLastSeek: last == null ? null : _watchElapsed - last,
+    )) {
+      return;
+    }
+    _lastDriftSeek = _watchElapsed;
+    video.seekToLiveEdge();
   }
 
   void _restartStuck(ProtectedVideoController video, VideoState state, {required bool played}) {
@@ -793,7 +834,9 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
         video.setQuality(state.heights.contains(_quality) ? _quality : 0);
       }
       _observePlayback(state);
-      _set(() {});
+      // Not setState: a position report (each second) would rebuild the
+      // whole player, platform view included, for nothing on screen.
+      _overlay.value = _overlayOf(state);
       return;
     }
 
@@ -885,7 +928,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   void _cycleWatermark() {
     _watermarkTimer?.cancel();
     _watermarkTimer = Timer.periodic(const Duration(seconds: 12), (_) {
-      _set(() => _spot = (_spot + 1) % liveWatermarkSpots.length);
+      _spot.value = (_spot.value + 1) % liveWatermarkSpots.length;
     });
   }
 
@@ -982,14 +1025,18 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
               controller: video,
             ),
             _watermark(context),
-            if (video.value.phase == 'buffering' || !video.value.firstFrame)
-              const Center(
+            ValueListenableBuilder<_Overlay>(
+              valueListenable: _overlay,
+              builder: (BuildContext context, _Overlay overlay, Widget? spinner) =>
+                  overlay.busy ? spinner! : const SizedBox.shrink(),
+              child: const Center(
                 child: SizedBox(
                   width: 34,
                   height: 34,
                   child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
                 ),
               ),
+            ),
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
@@ -1002,7 +1049,13 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
             AnimatedOpacity(
               duration: const Duration(milliseconds: 200),
               opacity: _controls ? 1 : 0,
-              child: IgnorePointer(ignoring: !_controls, child: _liveControls(context, video.value)),
+              child: IgnorePointer(
+                ignoring: !_controls,
+                child: ValueListenableBuilder<_Overlay>(
+                  valueListenable: _overlay,
+                  builder: (BuildContext context, _Overlay overlay, _) => _liveControls(context, overlay),
+                ),
+              ),
             ),
           ] else
             _stageNotice(context),
@@ -1019,27 +1072,37 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   /// another place in the tree: without it a second player would start.
   final GlobalKey _boxKey = GlobalKey();
 
+  /// Its move every 12 s rebuilds and repaints the watermark alone.
   Widget _watermark(BuildContext context) {
     final StudentProfile? me = AppScope.of(context).profile;
-    final WatermarkSpot spot = liveWatermarkSpots[_spot];
+    final Widget mark = PlayerWatermark(
+      name: me?.fullName ?? '',
+      phone: me?.phone ?? '',
+      session: 'LIVE-${widget.live.id}',
+      strong: _clear || (_policy?.softwareFallback ?? false),
+    );
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints box) => IgnorePointer(
-        child: Stack(
-          children: [
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 1200),
-              curve: Curves.easeInOutCubic,
-              top: box.maxHeight * spot.top,
-              left: spot.right ? null : box.maxWidth * spot.inset,
-              right: spot.right ? box.maxWidth * spot.inset : null,
-              child: PlayerWatermark(
-                name: me?.fullName ?? '',
-                phone: me?.phone ?? '',
-                session: 'LIVE-${widget.live.id}',
-                strong: _clear || (_policy?.softwareFallback ?? false),
-              ),
-            ),
-          ],
+        child: RepaintBoundary(
+          child: ValueListenableBuilder<int>(
+            valueListenable: _spot,
+            child: mark,
+            builder: (BuildContext context, int index, Widget? mark) {
+              final WatermarkSpot spot = liveWatermarkSpots[index];
+              return Stack(
+                children: [
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 1200),
+                    curve: Curves.easeInOutCubic,
+                    top: box.maxHeight * spot.top,
+                    left: spot.right ? null : box.maxWidth * spot.inset,
+                    right: spot.right ? box.maxWidth * spot.inset : null,
+                    child: mark!,
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -1137,7 +1200,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     );
   }
 
-  Widget _liveControls(BuildContext context, VideoState state) {
+  Widget _liveControls(BuildContext context, _Overlay state) {
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -1185,7 +1248,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
                   color: Colors.white,
                 ),
               ),
-              if (state.heights.isNotEmpty)
+              if (state.qualities)
                 IconButton(
                   onPressed: _pickQuality,
                   tooltip: context.tr('player.quality'),

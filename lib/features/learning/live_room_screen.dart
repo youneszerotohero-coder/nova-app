@@ -63,6 +63,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
   _Hand _hand = _Hand.passive;
   LiveSpeaker? _speaker;
 
+  /// The speaker of an accepted hand until it is connected: the turn can
+  /// end meanwhile, and it must close too (Live 66, 2026-10-30).
+  LiveSpeaker? _connecting;
+
   /// The speaking stage's downlink cannot carry the Professor's camera
   /// ([LiveSpeaker.downlinkWeak]).
   bool _downlinkWeak = false;
@@ -110,7 +114,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
     }
     _presence?.call();
     _speaker?.close();
-    if (_hand == _Hand.pending || _hand == _Hand.interactive) {
+    _connecting?.close();
+    if (_hand == _Hand.pending || _hand == _Hand.interactive || _hand == _Hand.connecting) {
       _store.lowerHand(_id).catchError((Object _) {});
     }
     if (_fullscreen) exitPlayerFullscreen();
@@ -276,6 +281,11 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
   /// it (owner decision 2026-10-30). Bounded: a conversation that cannot
   /// close does not hold the broadcast back.
   Future<void> _closeSpeaker() async {
+    final LiveSpeaker? connecting = _connecting;
+    _connecting = null;
+    if (connecting != null) {
+      await connecting.close().timeout(const Duration(seconds: 2), onTimeout: () {}).catchError((Object _) {});
+    }
     final LiveSpeaker? speaker = _speaker;
     if (speaker == null) return;
     speaker.changes.removeListener(_onSpeakerChanges);
@@ -304,14 +314,23 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
     }
 
     final LiveSpeaker speaker = widget.speakerFactory?.call(dropped) ?? LiveSpeaker(onDropped: dropped);
+    _connecting = speaker;
+    // Accept → microphone published: the audio session is set while the
+    // grant is requested, then the connection and the microphone capture
+    // run together; only the publication waits for both.
+    speaker.prepareAudio();
     try {
       final SpeakerGrant grant = await _retryBusy(() => _store.speaker(_id));
+      // The turn ended while the grant was requested: already closed.
+      if (!identical(_connecting, speaker)) return;
       await speaker.connect(grant);
-      if (_detail?.muted ?? false) await speaker.setMicrophone(false);
-      if (!mounted) {
+      if (!identical(_connecting, speaker) || !mounted) {
+        // Ended while connecting: closed, never shown, never heard.
         await speaker.close();
         return;
       }
+      _connecting = null;
+      if (_detail?.muted ?? false) await speaker.setMicrophone(false);
       _speaker = speaker;
       speaker.changes.addListener(_onSpeakerChanges);
       setState(() {
@@ -319,8 +338,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
         _downlinkWeak = speaker.downlinkWeak;
       });
     } catch (error) {
+      final bool ended = !identical(_connecting, speaker);
+      if (!ended) _connecting = null;
       await speaker.close();
-      if (!mounted) return;
+      if (!mounted || ended) return;
       novaToast(
         context,
         error is ApiException ? apiErrorText(context, error) : context.tr('live.micUnavailable'),
@@ -331,6 +352,9 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
   }
 
   void _onSpeakerChanges() {
+    // The team removed the Student in LiveKit: the turn is over, even
+    // before (or without) the realtime event saying so.
+    if (_speaker?.removed ?? false) return unawaited(_endHand());
     final bool weak = _speaker?.downlinkWeak ?? false;
     if (weak != _downlinkWeak && mounted) setState(() => _downlinkWeak = weak);
   }
@@ -424,6 +448,35 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
     );
   }
 
+  LivePlayer? _lastPlayer;
+
+  /// The same widget while its inputs are unchanged, so the 1 s clock
+  /// rebuild of the room and its polls skip the player and its native
+  /// picture (2026-10-30, iPhone picture not fluid). The player reads only
+  /// the Live's id.
+  LivePlayer _livePlayer(LiveDetail detail, {required bool speaking}) {
+    final LivePlayer? last = _lastPlayer;
+    final bool weak = speaking && _downlinkWeak;
+    if (last != null &&
+        last.live.id == detail.live.id &&
+        last.mediaState == detail.mediaState &&
+        last.fullscreen == _fullscreen &&
+        last.suspended == speaking &&
+        last.downlinkWeak == weak) {
+      return last;
+    }
+    return _lastPlayer = LivePlayer(
+      key: _playerKey,
+      live: detail.live,
+      mediaState: detail.mediaState,
+      onWithdrawn: _load,
+      fullscreen: _fullscreen,
+      onToggleFullscreen: () => _setFullscreen(!_fullscreen),
+      suspended: speaking,
+      downlinkWeak: weak,
+    );
+  }
+
   Widget? _player(LiveDetail detail, {required bool broadcast}) {
     final LiveSpeaker? speaker = _speaker;
     final bool speaking = detail.isLive && _hand == _Hand.interactive && speaker != null;
@@ -443,16 +496,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
               ignoring: speaking,
               child: ExcludeSemantics(
                 excluding: speaking,
-                child: LivePlayer(
-                  key: _playerKey,
-                  live: detail.live,
-                  mediaState: detail.mediaState,
-                  onWithdrawn: _load,
-                  fullscreen: _fullscreen,
-                  onToggleFullscreen: () => _setFullscreen(!_fullscreen),
-                  suspended: speaking,
-                  downlinkWeak: speaking && _downlinkWeak,
-                ),
+                child: _livePlayer(detail, speaking: speaking),
               ),
             ),
           if (speaking)

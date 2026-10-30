@@ -52,8 +52,17 @@ private final class PlayerLayerView: UIView {
 }
 
 final class ClearPlayerView: NSObject, FlutterPlatformView, FlutterStreamHandler {
-  /// A Live plays this far behind the edge (web/Android live tuning).
-  private static let liveOffset = CMTime(seconds: 12, preferredTimescale: 600)
+  /// A Live starts (and returns to the edge) this far behind it: three
+  /// 2 s segments, Apple's own recommendation for such a playlist. It then
+  /// plays at exactly 1.0× (2026-10-30, iPhone picture not fluid): no
+  /// automatic catch-up; a Live that fell far behind is brought back by one
+  /// seek from Flutter (`liveDriftNeedsSeek`).
+  private static let liveOffset = CMTime(seconds: 6, preferredTimescale: 600)
+
+  /// Flutter reads the Live position once a second (watchdog, telemetry);
+  /// a Lesson's progress bar twice a second.
+  private static let liveTick = CMTime(seconds: 1, preferredTimescale: 600)
+  private static let vodTick = CMTime(seconds: 0.5, preferredTimescale: 600)
 
   private let container: PlayerLayerView
   private let player = AVPlayer()
@@ -145,7 +154,9 @@ final class ClearPlayerView: NSObject, FlutterPlatformView, FlutterStreamHandler
     let item = AVPlayerItem(asset: asset)
     if live {
       item.configuredTimeOffsetFromLive = ClearPlayerView.liveOffset
-      item.automaticallyPreservesTimeOffsetFromLive = true
+      // Not true: after each rebuffer it skipped the playhead forward to
+      // restore the offset, a visible jump in the picture.
+      item.automaticallyPreservesTimeOffsetFromLive = false
     }
     if let maxHeight = (params["maxHeight"] as? NSNumber)?.intValue, maxHeight > 0 {
       item.preferredMaximumResolution = ClearPlayerView.size(forHeight: maxHeight)
@@ -184,7 +195,7 @@ final class ClearPlayerView: NSObject, FlutterPlatformView, FlutterStreamHandler
       },
     ]
     timeObserver = player.addPeriodicTimeObserver(
-      forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
+      forInterval: live ? ClearPlayerView.liveTick : ClearPlayerView.vodTick,
       queue: .main
     ) { [weak self] _ in self?.tick() }
   }
@@ -307,7 +318,8 @@ final class ClearPlayerView: NSObject, FlutterPlatformView, FlutterStreamHandler
     let args = call.arguments as? [String: Any] ?? [:]
     switch call.method {
     case "play":
-      player.rate = speed
+      // A Live always plays at exactly 1.0×.
+      player.rate = live ? 1 : speed
     case "pause":
       player.pause()
     case "seekTo":
@@ -316,6 +328,8 @@ final class ClearPlayerView: NSObject, FlutterPlatformView, FlutterStreamHandler
     case "seekToLiveEdge":
       seekToLiveEdge()
     case "setSpeed":
+      // Lessons and Replays only: a Live never changes speed.
+      guard !live else { break }
       speed = (args["speed"] as? NSNumber)?.floatValue ?? 1
       if player.timeControlStatus != .paused { player.rate = speed }
     case "setVolume":

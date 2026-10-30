@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:livekit_client/livekit_client.dart' show DisconnectReason;
 import 'package:nova_mobile/core/api/nova_api.dart';
 import 'package:nova_mobile/core/state/app_state.dart';
 import 'package:nova_mobile/core/theme/nova_theme.dart';
@@ -20,6 +22,7 @@ import 'package:nova_mobile/features/learning/live_speaker.dart';
 import 'package:nova_mobile/features/learning/live_speaking_stage.dart';
 import 'package:nova_mobile/features/player/live_player.dart';
 import 'package:nova_mobile/features/player/playback_rules.dart';
+import 'package:nova_mobile/features/player/protected_video.dart';
 import 'package:nova_mobile/features/shell/student_top_bar.dart';
 
 import 'fixtures/fake_api.dart';
@@ -361,6 +364,114 @@ void main() {
       expect(liveReturnNeedsEdge(playing: true, liveOffset: const Duration(seconds: 21)), isTrue);
       expect(liveReturnNeedsEdge(playing: false, liveOffset: const Duration(seconds: 12)), isTrue);
       expect(liveReturnNeedsEdge(playing: true, liveOffset: null), isTrue);
+    });
+
+    test('iPhone: a Live more than 20 s behind goes back to the edge with one seek, never repeatedly (2026-10-30)', () {
+      // 6 s behind, or up to the limit after stalls: left alone, no catch-up.
+      expect(liveDriftNeedsSeek(playing: true, liveOffset: const Duration(seconds: 6)), isFalse);
+      expect(liveDriftNeedsSeek(playing: true, liveOffset: liveReturnDriftLimit), isFalse);
+      expect(liveDriftNeedsSeek(playing: true, liveOffset: const Duration(seconds: 21)), isTrue);
+      // Not playing (stall, pause) or an unknown distance: the watchdog's business.
+      expect(liveDriftNeedsSeek(playing: false, liveOffset: const Duration(seconds: 40)), isFalse);
+      expect(liveDriftNeedsSeek(playing: true, liveOffset: null), isFalse);
+      // At most one seek per 30 s.
+      expect(
+        liveDriftNeedsSeek(playing: true, liveOffset: const Duration(seconds: 25), sinceLastSeek: const Duration(seconds: 29)),
+        isFalse,
+      );
+      expect(
+        liveDriftNeedsSeek(playing: true, liveOffset: const Duration(seconds: 25), sinceLastSeek: liveDriftSeekEvery),
+        isTrue,
+      );
+    });
+
+    test('a speaking turn LiveKit ended is never reconnected (Live 66, 2026-10-30)', () {
+      expect(speakerTurnEndedBy(DisconnectReason.participantRemoved), isTrue);
+      expect(speakerTurnEndedBy(DisconnectReason.roomDeleted), isTrue);
+      for (final DisconnectReason reason in <DisconnectReason>[
+        DisconnectReason.participantRemoved,
+        DisconnectReason.roomDeleted,
+        DisconnectReason.duplicateIdentity,
+        DisconnectReason.clientInitiated,
+      ]) {
+        expect(speakerReconnectsAfter(reason), isFalse, reason: '$reason');
+      }
+      // A lost connection gets its one reconnect.
+      for (final DisconnectReason? reason in <DisconnectReason?>[
+        null,
+        DisconnectReason.unknown,
+        DisconnectReason.signalClose,
+        DisconnectReason.disconnected,
+        DisconnectReason.signalingConnectionFailure,
+        DisconnectReason.reconnectAttemptsExceeded,
+        DisconnectReason.joinFailure,
+      ]) {
+        expect(speakerTurnEndedBy(reason), isFalse, reason: '$reason');
+        expect(speakerReconnectsAfter(reason), isTrue, reason: '$reason');
+      }
+    });
+
+    group('LiveSpeaker disconnections (Live 66: a removed Student reconnected)', () {
+      const SpeakerGrant grant = SpeakerGrant(url: 'wss://livekit.test', token: 'lk');
+
+      testWidgets('removed by the team: no reconnect, the turn is reported over', (tester) async {
+        int dropped = 0;
+        final _LinkSpeaker speaker = _LinkSpeaker(() => dropped++);
+        int changes = 0;
+        speaker.changes.addListener(() => changes++);
+        await speaker.connect(grant);
+        expect(speaker.opens, 1);
+
+        await speaker.disconnected(DisconnectReason.participantRemoved);
+        await tester.pump(const Duration(seconds: 2));
+        expect(speaker.opens, 1, reason: 'no new LiveKit session with the turn grant');
+        expect(speaker.removed, isTrue);
+        expect(changes, 1);
+        expect(dropped, 0);
+        await speaker.close();
+      });
+
+      testWidgets('a lost connection gets one reconnect after 750 ms', (tester) async {
+        int dropped = 0;
+        final _LinkSpeaker speaker = _LinkSpeaker(() => dropped++);
+        await speaker.connect(grant);
+        unawaited(speaker.disconnected(DisconnectReason.signalClose));
+        await tester.pump(const Duration(milliseconds: 700));
+        expect(speaker.opens, 1);
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(speaker.opens, 2);
+        expect(speaker.removed, isFalse);
+        expect(dropped, 0);
+
+        // A second loss: given up, the room lowers the hand.
+        await speaker.disconnected(DisconnectReason.signalClose);
+        expect(speaker.opens, 2);
+        expect(dropped, 1);
+        await speaker.close();
+      });
+
+      testWidgets('closed during the reconnect wait (the turn ended): never reconnected', (tester) async {
+        int dropped = 0;
+        final _LinkSpeaker speaker = _LinkSpeaker(() => dropped++);
+        await speaker.connect(grant);
+        unawaited(speaker.disconnected(DisconnectReason.signalClose));
+        await tester.pump(const Duration(milliseconds: 300));
+        await speaker.close();
+        await tester.pump(const Duration(seconds: 2));
+        expect(speaker.opens, 1);
+        expect(dropped, 0);
+      });
+
+      testWidgets('the same Student joining elsewhere ends this conversation without a reconnect', (tester) async {
+        int dropped = 0;
+        final _LinkSpeaker speaker = _LinkSpeaker(() => dropped++);
+        await speaker.connect(grant);
+        await speaker.disconnected(DisconnectReason.duplicateIdentity);
+        await tester.pump(const Duration(seconds: 2));
+        expect(speaker.opens, 1);
+        expect(dropped, 1);
+        await speaker.close();
+      });
     });
 
     test('the speaking stage shows the Professor only once a frame is on screen (D-073)', () {
@@ -825,6 +936,119 @@ void main() {
       expect(events.singleWhere((Map<String, dynamic> e) => e['type'] == 'reload')['error_code'], liveReloadHardRecover);
     });
 
+    group('iPhone picture not fluid (Live 66, 2026-10-30)', () {
+      /// A playing Live [offsetMs] behind its edge.
+      Map<String, Object?> at(int ms, int offsetMs) => <String, Object?>{
+            'event': 'position',
+            'position': ms,
+            'duration': 0,
+            'buffered': ms + 4000,
+            'liveOffset': offsetMs,
+          };
+
+      Future<FakeBackend> playing(WidgetTester tester) async {
+        final FakeBackend backend = await pumpRoom(tester, clearLive());
+        await tester.pump(const Duration(milliseconds: 200));
+        players.emit(<String, Object?>{'event': 'firstFrame'});
+        players.emit(<String, Object?>{'event': 'state', 'state': 'ready'});
+        players.emit(<String, Object?>{'event': 'playing', 'value': true});
+        // The controls hide after 3 s.
+        await tester.pump(const Duration(seconds: 4));
+        return backend;
+      }
+
+      List<String> sent() => <String>[for (final MethodCall c in players.commands[players.lastId] ?? <MethodCall>[]) c.method];
+
+      testWidgets('position reports and the watermark move never rebuild the native picture', (tester) async {
+        await playing(tester);
+        final ProtectedVideoView picture = tester.widget<ProtectedVideoView>(find.byType(ProtectedVideoView));
+
+        for (int i = 0; i < 15; i++) {
+          players.emit(at(30000 + 1000 * i, 6000));
+          await tester.pump(const Duration(seconds: 1));
+        }
+        // The room's 1 s clock rebuilt the header and the watermark moved
+        // (every 12 s) meanwhile: the picture's widget stayed the same.
+        expect(identical(tester.widget<ProtectedVideoView>(find.byType(ProtectedVideoView)), picture), isTrue);
+
+        // What the overlays show still follows the player.
+        expect(find.byType(CircularProgressIndicator), findsNothing);
+        expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
+        players.emit(<String, Object?>{'event': 'playing', 'value': false});
+        players.emit(<String, Object?>{'event': 'state', 'state': 'buffering'});
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
+        players.emit(<String, Object?>{'event': 'tracks', 'heights': <int>[1080, 720]});
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.byIcon(Icons.tune_rounded), findsOneWidget);
+        expect(identical(tester.widget<ProtectedVideoView>(find.byType(ProtectedVideoView)), picture), isTrue);
+        await leave(tester);
+      });
+
+      testWidgets('iPhone: one seek back to the edge past 20 s behind, never a repeated jump', (tester) async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+        try {
+          final FakeBackend backend = await playing(tester);
+          expect(players.created.single['live'], isTrue);
+          for (int i = 0; i < 5; i++) {
+            players.emit(at(30000 + 1000 * i, 6000));
+            await tester.pump(const Duration(seconds: 1));
+          }
+          expect(sent(), isNot(contains('seekToLiveEdge')), reason: '6 s behind: left alone');
+
+          // Fell behind after stalls; the seek takes a while to show.
+          for (int i = 0; i < 20; i++) {
+            players.emit(at(40000 + 1000 * i, 25000));
+            await tester.pump(const Duration(seconds: 1));
+          }
+          expect(sent().where((String m) => m == 'seekToLiveEdge'), hasLength(1));
+          expect(sent(), isNot(contains('setSpeed')), reason: 'no speed change, exactly 1.0×');
+
+          // Back near the edge: nothing more.
+          for (int i = 0; i < 40; i++) {
+            players.emit(at(70000 + 1000 * i, 6000));
+            await tester.pump(const Duration(seconds: 1));
+          }
+          expect(sent().where((String m) => m == 'seekToLiveEdge'), hasLength(1));
+          expect(joins(backend), hasLength(1));
+          await leave(tester);
+        } finally {
+          debugDefaultTargetPlatformOverride = null;
+        }
+      });
+
+      testWidgets('Android keeps its own catch-up: no seek from Flutter', (tester) async {
+        await playing(tester);
+        for (int i = 0; i < 10; i++) {
+          players.emit(at(30000 + 1000 * i, 25000));
+          await tester.pump(const Duration(seconds: 1));
+        }
+        expect(sent(), isNot(contains('seekToLiveEdge')));
+        await leave(tester);
+      });
+
+      testWidgets('watchdog with one position a second, half a second out of step: loading is progress', (tester) async {
+        final FakeBackend backend = await pumpRoom(tester, clearLive());
+        await tester.pump(const Duration(milliseconds: 700));
+        players.emit(<String, Object?>{'event': 'state', 'state': 'buffering'});
+        for (int i = 0; i < 25; i++) {
+          players.emit(position(14000, buffered: 14000 + 600 * i));
+          await tester.pump(const Duration(seconds: 1));
+        }
+        expect(joins(backend), hasLength(1));
+
+        // Then nothing more arrives: restarted, as before.
+        for (int i = 0; i < 12; i++) {
+          players.emit(position(14000, buffered: 14000 + 600 * 24));
+          await tester.pump(const Duration(seconds: 1));
+        }
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(joins(backend), hasLength(2));
+        await leave(tester);
+      });
+    });
+
     testWidgets('a Live the Student paused is neither a stall nor restarted', (tester) async {
       final FakeBackend backend = await pumpRoom(tester, clearLive());
       await tester.pump(const Duration(milliseconds: 200));
@@ -1080,6 +1304,55 @@ void main() {
         await endTurn(tester, backend);
         expect(joins(backend), hasLength(2));
         expect(players.created, hasLength(2));
+        await leave(tester);
+      });
+
+      testWidgets('removed by the team in LiveKit: the stage closes, no reconnect, no new grant (Live 66)', (tester) async {
+        final _RoomSpeaker speaker = _RoomSpeaker();
+        final FakeBackend backend = await speak(tester, speaker);
+        final int id = players.lastId;
+        bool closed = false;
+        speaker.onClose = () => closed = true;
+
+        // The team removed the Student: the server ended the hand, and
+        // LiveKit says "participant removed" before any realtime event.
+        backend.routes['GET /lives/301'] = FakeResponse(200, _detail('live', mediaState: 'ready'));
+        await speaker.disconnected(DisconnectReason.participantRemoved);
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(closed, isTrue);
+        expect(find.text('You are speaking'), findsNothing);
+        expect(volumes(id), <Object?>[0.0, 1.0], reason: 'the broadcast is heard again');
+
+        await tester.pump(const Duration(seconds: 10));
+        Iterable<FakeRequest> calls(String method, String path) =>
+            backend.requests.where((FakeRequest r) => r.method == method && r.path == path);
+        expect(calls('POST', '/lives/301/speaker'), hasLength(1), reason: 'no new speaker grant');
+        expect(calls('DELETE', '/lives/301/raise-hand'), isEmpty, reason: 'the team already ended the turn');
+        expect(find.text('You are speaking'), findsNothing);
+        await leave(tester);
+      });
+
+      testWidgets('a turn that ends while the conversation connects is closed and never shown (Live 66)', (tester) async {
+        final _RoomSpeaker speaker = _RoomSpeaker()..connection = Completer<void>();
+        bool closed = false;
+        speaker.onClose = () => closed = true;
+        final FakeBackend backend = await pumpRoom(tester, speakingLive(), speaker: speaker);
+        await tester.pump(const Duration(milliseconds: 200));
+        backend.routes['GET /lives/301'] = FakeResponse(200, _detail('live', mediaState: 'ready', hand: 'accepted'));
+        await tester.pump(const Duration(seconds: 8));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(closed, isFalse);
+
+        // The team ends the turn before LiveKit connected.
+        backend.routes['GET /lives/301'] = FakeResponse(200, _detail('live', mediaState: 'ready'));
+        await tester.pump(const Duration(seconds: 8));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(closed, isTrue);
+
+        speaker.connection!.complete();
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.text('You are speaking'), findsNothing);
+        expect(backend.requests.where((FakeRequest r) => r.method == 'POST' && r.path == '/lives/301/speaker'), hasLength(1));
         await leave(tester);
       });
 
@@ -1362,6 +1635,17 @@ class _StageSpeaker extends LiveSpeaker {
   }
 }
 
+/// A speaker whose LiveKit connections are counted, not made: the real
+/// disconnection rules run.
+class _LinkSpeaker extends LiveSpeaker {
+  _LinkSpeaker(VoidCallback onDropped) : super(onDropped: onDropped);
+
+  int opens = 0;
+
+  @override
+  Future<void> open(SpeakerGrant grant) async => opens++;
+}
+
 /// The accepted Student's speaker in the room tests: no LiveKit room; the
 /// test says when the server paused the Professor's camera.
 class _RoomSpeaker extends LiveSpeaker {
@@ -1372,8 +1656,11 @@ class _RoomSpeaker extends LiveSpeaker {
   /// Called when the room closes the conversation.
   VoidCallback? onClose;
 
+  /// Set: the connection completes only when the test says so.
+  Completer<void>? connection;
+
   @override
-  Future<void> connect(SpeakerGrant grant) async {}
+  Future<void> connect(SpeakerGrant grant) async => connection?.future;
 
   @override
   Future<void> close() {

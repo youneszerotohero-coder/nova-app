@@ -83,6 +83,9 @@ class ProtectedPlayerView(
     /** A frame was rendered: replayed to a listener that came later. */
     private var firstFrameRendered = false
 
+    /** Flutter reads a Live's position once a second, a Lesson's twice. */
+    private val tickMs = if (params["live"] == true) 1_000L else 500L
+
     private val ticker = object : Runnable {
         override fun run() {
             if (released) return
@@ -95,7 +98,7 @@ class ProtectedPlayerView(
                     "liveOffset" to player.currentLiveOffset.let { if (it == C.TIME_UNSET) -1L else it },
                 ),
             )
-            main.postDelayed(this, 500)
+            main.postDelayed(this, tickMs)
         }
     }
 

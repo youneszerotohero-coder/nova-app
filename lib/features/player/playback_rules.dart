@@ -333,10 +333,29 @@ int liveReadyState({required String phase, required bool firstFrame, required bo
   };
 }
 
-/// The native players follow the Live 12 s behind its edge (D-065) and
-/// catch up by themselves at up to 1.08×; past this distance the broadcast
-/// kept during a speaking turn has drifted.
+/// Android follows the Live 12 s behind its edge (D-065) and catches up by
+/// itself at up to 1.08×; the iPhone follows it 6 s behind at exactly 1.0×
+/// (2026-10-30). Past this distance a Live has drifted: the broadcast kept
+/// during a speaking turn, or an iPhone that fell behind after stalls.
 const Duration liveReturnDriftLimit = Duration(seconds: 20);
+
+/// At most one drift seek per this period: the seek takes a moment to show
+/// in the reported distance, and a Live never jumps repeatedly.
+const Duration liveDriftSeekEvery = Duration(seconds: 30);
+
+/// iPhone (2026-10-30, picture not fluid): a playing Live more than
+/// [liveReturnDriftLimit] behind its edge goes back to it with one seek, a
+/// rare event, instead of AVPlayer's automatic catch-up. [sinceLastSeek] is
+/// null before the first one.
+bool liveDriftNeedsSeek({
+  required bool playing,
+  required Duration? liveOffset,
+  Duration? sinceLastSeek,
+}) =>
+    playing &&
+    liveOffset != null &&
+    liveOffset > liveReturnDriftLimit &&
+    (sinceLastSeek == null || sinceLastSeek >= liveDriftSeekEvery);
 
 /// When a speaking turn ends (owner decision 2026-10-30), the kept
 /// broadcast is shown again where it is, unless it drifted: not playing
