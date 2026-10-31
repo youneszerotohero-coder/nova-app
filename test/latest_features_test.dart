@@ -216,6 +216,25 @@ void main() {
       expect(find.text('This code is incorrect. 2 attempt(s) left.'), findsOneWidget);
     });
 
+    testWidgets('after its 3 codes the Student is sent to the administration (D-182)', (tester) async {
+      final FakeBackend backend = FakeBackend(<String, FakeResponse>{
+        'POST /auth/password/forgot': _error(403, 'PASSWORD_RESET_LOCKED', 'Vous avez utilisé vos 3 codes… — … — You have used your 3 reset codes.'),
+      });
+      await _pump(tester, _install(SessionStore(fakeApi(backend))), const LoginScreen());
+      await _tap(tester, 'Forgot your password?');
+      expect(find.text('Each account gets 3 codes in total. After that, only the NOVA administration can change your password.'),
+          findsOneWidget);
+      await tester.enterText(find.byType(TextField).first, '0555123456');
+      await _tap(tester, 'Send the code');
+
+      expect(find.text('You have used your 3 password reset codes. Contact the NOVA administration to change your password.'),
+          findsOneWidget);
+      expect(find.textContaining('Contact the administration'), findsOneWidget);
+      expect(find.textContaining('noova.elearning@gmail.com'), findsOneWidget);
+      // Still on the number: no code step.
+      expect(find.text('Verify'), findsNothing);
+    });
+
     testWidgets('code errors are explained in the Student language', (tester) async {
       Future<String> text(Object error, NovaLang lang) async {
         final AppState state = installFixtureApp()..setLang(lang);
@@ -250,16 +269,9 @@ void main() {
   });
 
   group('registration (D-093, D-098)', () {
-    Future<FakeBackend> pumpRegister(WidgetTester tester, {required bool verification}) async {
+    Future<FakeBackend> pumpRegister(WidgetTester tester) async {
       final FakeBackend backend = FakeBackend(<String, FakeResponse>{
         ..._references,
-        'GET /auth/registration-options': FakeResponse(200, <String, Object>{
-          'data': <String, Object>{'phone_verification_required': verification},
-        }),
-        'POST /auth/register/otp': _challenge,
-        'POST /auth/register/otp/verify': const FakeResponse(200, <String, Object>{
-          'data': <String, Object>{'verification_token': 'verified-1', 'expires_in': 600},
-        }),
         'POST /auth/register': const FakeResponse(201, <String, Object>{'data': <String, Object>{}}),
       });
       await _pump(
@@ -293,7 +305,7 @@ void main() {
 
     testWidgets('two steps as on the website; the terms are accepted before the account is created',
         (tester) async {
-      final FakeBackend backend = await pumpRegister(tester, verification: false);
+      final FakeBackend backend = await pumpRegister(tester);
 
       // Step 1 is checked before going on.
       await tester.enterText(find.byType(TextField).at(2), '0612');
@@ -323,49 +335,22 @@ void main() {
       expect(_body(_sent(backend, 'POST', '/auth/register'))['phone'], '0555123456');
     });
 
-    testWidgets('the phone is verified by a code before the account is created', (tester) async {
-      final FakeBackend backend = await pumpRegister(tester, verification: true);
+    testWidgets('no phone code is asked (D-182)', (tester) async {
+      final FakeBackend backend = await pumpRegister(tester);
       await fillForm(tester);
-
-      // Without the code step nothing is created.
-      await _tap(tester, 'Create my space');
-      expect(find.text('Verify your phone number with the code before creating your account.'), findsOneWidget);
-      expect(backend.requests.where((FakeRequest r) => r.path == '/auth/register'), isEmpty);
-
-      await _tap(tester, 'Send the code');
-      expect(_body(_sent(backend, 'POST', '/auth/register/otp')), <String, Object?>{
-        'phone': '0555123456',
-        'channel': 'sms',
-        'lang': 'en',
-      });
-      expect(find.text('A code was sent by SMS to \u20660555123456\u2069. It is valid for 5 minutes.'), findsOneWidget);
-
-      // The code is the only field of the school step.
-      await tester.enterText(find.byType(TextField).at(0), '654321');
-      await _tap(tester, 'Verify');
-      expect(find.text('Phone number verified.'), findsOneWidget);
-
-      await _tap(tester, 'Create my space');
-      final Map<String, Object?> register = _body(_sent(backend, 'POST', '/auth/register'));
-      expect(register['phone_verification_token'], 'verified-1');
-      expect(register['level_id'], 3);
-      expect(register['track_id'], 7);
-    });
-
-    testWidgets('with the switch off no code is asked', (tester) async {
-      final FakeBackend backend = await pumpRegister(tester, verification: false);
-      expect(find.text('Verify your phone number'), findsNothing);
-      await fillForm(tester);
+      expect(find.text('Send the code'), findsNothing);
       await _tap(tester, 'Create my space');
 
       final Map<String, Object?> register = _body(_sent(backend, 'POST', '/auth/register'));
       expect(register.containsKey('phone_verification_token'), isFalse);
-      expect(backend.requests.where((FakeRequest r) => r.path == '/auth/register/otp'), isEmpty);
+      expect(register['level_id'], 3);
+      expect(register['track_id'], 7);
+      expect(backend.requests.where((FakeRequest r) => r.path.contains('otp') || r.path == '/auth/registration-options'), isEmpty);
     });
 
     testWidgets('each level offers its own filières; a level without filière takes none',
         (tester) async {
-      await pumpRegister(tester, verification: false);
+      await pumpRegister(tester);
       await fillAccount(tester);
 
       await _pick(tester, 0, '1AS');
@@ -637,7 +622,7 @@ void main() {
     });
   });
 
-  testWidgets('Settings changes the password with a code sent to the Student (D-093)',
+  testWidgets('Settings changes the password with the current one, no code (D-182)',
       (tester) async {
     final Map<String, Object?> user = <String, Object?>{
       'id': 9,
@@ -646,9 +631,13 @@ void main() {
       'next_required_step': null,
       'student': <String, Object?>{'first_name': 'Ines', 'last_name': 'Benali'},
     };
-    final FakeBackend backend = FakeBackend(<String, FakeResponse>{
-      'POST /auth/password/otp': _challenge,
-      'PUT /auth/password': FakeResponse(200, <String, Object?>{'data': user}),
+    final FakeBackend backend = FakeBackend(<String, FakeResponse>{}, sequences: <String, List<FakeResponse>>{
+      'PUT /auth/password': <FakeResponse>[
+        _error(422, 'VALIDATION_FAILED', 'The current password is incorrect.', <String, Object>{
+          'current_password': <String>['The current password is incorrect.'],
+        }),
+        FakeResponse(200, <String, Object?>{'data': user}),
+      ],
     });
     final SessionStore session = SessionStore.seeded(
       StudentProfile.fromUser(user),
@@ -657,23 +646,21 @@ void main() {
     );
     await _pump(tester, _install(session), const SettingsScreen());
 
-    await _tap(tester, 'Send me a code');
-    expect(_body(_sent(backend, 'POST', '/auth/password/otp')), <String, Object?>{
-      'channel': 'sms',
-      'lang': 'en',
-    });
-
-    await tester.enterText(find.byType(TextField).at(0), '246810');
+    expect(find.text('Send me a code'), findsNothing);
+    await tester.enterText(find.byType(TextField).at(0), 'wrong-pass');
     await tester.enterText(find.byType(TextField).at(1), 'NovaSecure9!');
     await tester.enterText(find.byType(TextField).at(2), 'NovaSecure9!');
     await _tap(tester, 'Change the password');
+    expect(find.text('The current password is incorrect.'), findsOneWidget);
 
+    await tester.enterText(find.byType(TextField).at(0), 'OldSecure8!');
+    await _tap(tester, 'Change the password');
     expect(_body(_sent(backend, 'PUT', '/auth/password')), <String, Object?>{
-      'challenge_id': _challengeId,
-      'code': '246810',
+      'current_password': 'OldSecure8!',
       'password': 'NovaSecure9!',
       'password_confirmation': 'NovaSecure9!',
     });
+    expect(backend.requests.where((FakeRequest r) => r.path.contains('otp')), isEmpty);
     expect(find.text('Your password was changed. Your other devices were signed out.'), findsOneWidget);
     expect(session.signedIn, isTrue);
   });

@@ -117,35 +117,9 @@ class SessionStore extends ChangeNotifier {
   }
 
   /// Registration does not sign in (backend rule); the caller signs in
-  /// with the same phone and password afterwards. While the Admin switch
-  /// is on, [fields] carry the `phone_verification_token` (D-093).
+  /// with the same phone and password afterwards. No phone code (D-182).
   Future<void> register(Map<String, Object?> fields) async {
     await _api!.post('/auth/register', fields);
-  }
-
-  /// D-093/D-096: whether registration needs the phone code step (the
-  /// Admin switch, on by default).
-  Future<bool> registrationPhoneVerificationRequired() async {
-    final Json body = await _api!.get('/auth/registration-options');
-    return body.obj('data')?.flag('phone_verification_required') ?? false;
-  }
-
-  /// D-093: sends a registration code to [phone] by [channel], written
-  /// in [lang] (`ar` | `fr` | `en`).
-  Future<OtpChallenge> sendRegistrationCode(String phone, OtpChannel channel, String lang) async =>
-      _challenge(await _api!.post('/auth/register/otp', <String, String>{
-        'phone': phone.trim(),
-        'channel': channel.name,
-        'lang': lang,
-      }));
-
-  /// The verification token sent with the registration.
-  Future<String> verifyRegistrationCode(String challengeId, String code) async {
-    final Json body = await _api!.post('/auth/register/otp/verify', <String, String>{
-      'challenge_id': challengeId,
-      'code': code.trim(),
-    });
-    return body.obj('data')?.str('verification_token') ?? '';
   }
 
   /// D-093 forgotten password, step 1: the answer is the same whether or
@@ -176,26 +150,17 @@ class SessionStore extends ChangeNotifier {
     });
   }
 
-  /// D-093: a signed-in Student asks for a code on their own number
-  /// before changing their password.
-  Future<OtpChallenge> requestPasswordChangeCode(OtpChannel channel, String lang) async =>
-      _challenge(await _api!.post('/auth/password/otp', <String, String>{
-        'channel': channel.name,
-        'lang': lang,
-      }));
-
-  /// Changes the password with the code. This device stays signed in
-  /// with a renewed session; the other devices are signed out.
-  Future<void> changePasswordWithCode({
-    required String challengeId,
-    required String code,
+  /// D-182: a signed-in Student changes their password with the current
+  /// one (no code). This device stays signed in with a renewed session;
+  /// the other devices are signed out.
+  Future<void> changeOwnPassword({
+    required String currentPassword,
     required String password,
     required String confirmation,
   }) async {
     _setUser(
       (await _api!.put('/auth/password', <String, String>{
-        'challenge_id': challengeId,
-        'code': code.trim(),
+        'current_password': currentPassword,
         'password': password,
         'password_confirmation': confirmation,
       }))

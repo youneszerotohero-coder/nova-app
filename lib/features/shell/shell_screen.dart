@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
+import '../../core/utils/support.dart';
 import '../../core/theme/nova_dimens.dart';
 import '../../core/widgets/app_menu.dart';
 import '../../core/widgets/nova_bottom_bar.dart';
@@ -132,9 +132,6 @@ class _ShellScreenState extends State<ShellScreen> {
     }
   }
 
-  /// The website's support address (`config/contact.ts`).
-  static const String _supportEmail = 'noova.elearning@gmail.com';
-
   /// The menu = the website's Student sidebar: Learning (Overview, My units,
   /// Lives) and Account (Orders, Wallet, Settings), help and sign out. App
   /// only: the teachers directory. A visitor sees Home and the catalogue,
@@ -187,15 +184,7 @@ class _ShellScreenState extends State<ShellScreen> {
   }
 
   /// The help row (`.sidebarSupport`): a mail to the NOVA team.
-  Future<void> _contactSupport() async {
-    bool opened = false;
-    try {
-      opened = await launchUrl(Uri.parse('mailto:$_supportEmail'), mode: LaunchMode.externalApplication);
-    } catch (_) {
-      opened = false;
-    }
-    if (!opened && mounted) novaToast(context, _supportEmail, icon: Icons.mail_outline_rounded);
-  }
+  Future<void> _contactSupport() => contactNovaSupport(context);
 
   @override
   Widget build(BuildContext context) {

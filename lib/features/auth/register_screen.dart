@@ -15,7 +15,6 @@ import '../../core/widgets/motion.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../data/account_store.dart';
 import '../../data/models.dart';
-import '../../data/otp.dart';
 import 'auth_hero.dart';
 import 'login_screen.dart';
 import 'otp_widgets.dart';
@@ -45,14 +44,12 @@ class RegisterScreen extends StatefulWidget {
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen>
-    with ResendCountdown<RegisterScreen> {
+class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _first = TextEditingController();
   final TextEditingController _last = TextEditingController();
   final TextEditingController _phone = TextEditingController();
   final TextEditingController _password = TextEditingController();
   final TextEditingController _confirm = TextEditingController();
-  final TextEditingController _code = TextEditingController();
 
   List<RefItem> _levels = const <RefItem>[];
   List<RefItem> _tracks = const <RefItem>[];
@@ -71,21 +68,6 @@ class _RegisterScreenState extends State<RegisterScreen>
   /// 409 `PHONE_ALREADY_REGISTERED` (D-079): the number already has an
   /// account, created by the school or registered earlier — sign in.
   bool _phoneTaken = false;
-
-  /// D-093/D-096 registration phone verification (`/auth/registration-options`).
-  bool _verificationRequired = false;
-  OtpChannel _channel = OtpChannel.sms;
-  String _challengeId = '';
-  String _challengePhone = '';
-  bool _codeBusy = false;
-  String? _codeError;
-
-  /// The number the token was issued for; another number needs a new code.
-  String _verifiedPhone = '';
-  String _verificationToken = '';
-
-  bool get _phoneVerified =>
-      _verificationToken.isNotEmpty && _verifiedPhone == _phone.text.trim();
 
   /// 0: account, 1: school details (registration only).
   int _step = 0;
@@ -116,31 +98,7 @@ class _RegisterScreenState extends State<RegisterScreen>
   @override
   void initState() {
     super.initState();
-    // The verification block follows the number being typed.
-    _phone.addListener(_onPhoneChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadReferences();
-      if (!widget.onboarding) _loadRegistrationOptions();
-    });
-  }
-
-  String _lastPhone = '';
-
-  void _onPhoneChanged() {
-    final String phone = _phone.text.trim();
-    if (phone == _lastPhone) return;
-    _lastPhone = phone;
-    if (_verificationRequired) setState(() => _codeError = null);
-  }
-
-  Future<void> _loadRegistrationOptions() async {
-    try {
-      final bool required =
-          await AppScope.of(context).session.registrationPhoneVerificationRequired();
-      if (mounted) setState(() => _verificationRequired = required);
-    } on ApiException {
-      // Unknown: the registration answer says when a code is needed.
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadReferences());
   }
 
   /// The website's legal pages, in the browser.
@@ -153,14 +111,12 @@ class _RegisterScreenState extends State<RegisterScreen>
   void dispose() {
     _termsTap.dispose();
     _privacyTap.dispose();
-    _phone.removeListener(_onPhoneChanged);
     for (final TextEditingController c in <TextEditingController>[
       _first,
       _last,
       _phone,
       _password,
       _confirm,
-      _code,
     ]) {
       c.dispose();
     }
@@ -220,77 +176,6 @@ class _RegisterScreenState extends State<RegisterScreen>
       };
 
   static final RegExp _strictMobile = RegExp(r'^0[567][0-9]{8}$');
-
-  /// Sends (or resends) the registration code to the number typed.
-  Future<void> _sendCode() async {
-    final String phone = _phone.text.trim();
-    if (!_strictMobile.hasMatch(phone)) {
-      setState(() => _fieldErrors = <String, String>{'phone': context.tr('auth.phoneStrict')});
-      return;
-    }
-    final AppState app = AppScope.of(context);
-    setState(() {
-      _codeBusy = true;
-      _codeError = null;
-      _phoneTaken = false;
-      _fieldErrors = const <String, String>{};
-    });
-    try {
-      final OtpChallenge challenge =
-          await app.session.sendRegistrationCode(phone, _channel, app.lang.name);
-      if (!mounted) return;
-      _code.clear();
-      setState(() {
-        _challengeId = challenge.id;
-        _challengePhone = phone;
-      });
-      startResend(challenge.resendIn);
-    } on ApiException catch (error) {
-      if (!mounted) return;
-      final int? retryAfter = otpRetryAfter(error);
-      if (retryAfter != null) startResend(retryAfter);
-      setState(() {
-        if (error.code == 'PHONE_ALREADY_REGISTERED') {
-          _phoneTaken = true;
-          _step = 0;
-        } else if (error.code == 'PHONE_VERIFICATION_DISABLED') {
-          // The Admin switched it off meanwhile: no code is needed.
-          _verificationRequired = false;
-        } else {
-          _codeError = apiErrorText(context, error);
-        }
-      });
-    } finally {
-      if (mounted) setState(() => _codeBusy = false);
-    }
-  }
-
-  Future<void> _verifyCode() async {
-    if (!isOtpCode(_code.text)) {
-      setState(() => _codeError = context.tr('otp.codeFormat'));
-      return;
-    }
-    final String phone = _challengePhone;
-    setState(() {
-      _codeBusy = true;
-      _codeError = null;
-    });
-    try {
-      final String token =
-          await AppScope.of(context).session.verifyRegistrationCode(_challengeId, _code.text);
-      if (!mounted) return;
-      setState(() {
-        _verifiedPhone = phone;
-        _verificationToken = token;
-        _challengeId = '';
-        _error = null;
-      });
-    } on ApiException catch (error) {
-      if (mounted) setState(() => _codeError = apiErrorText(context, error));
-    } finally {
-      if (mounted) setState(() => _codeBusy = false);
-    }
-  }
 
   /// Missing fields and the password rules (D-078), in the app language
   /// before asking the server, which stays authoritative and answers in
@@ -375,13 +260,6 @@ class _RegisterScreenState extends State<RegisterScreen>
       setState(() => _error = context.tr('auth.termsRequired'));
       return;
     }
-    if (!widget.onboarding && _verificationRequired && !_phoneVerified) {
-      setState(() {
-        _phoneTaken = false;
-        _error = context.tr('auth.phoneVerificationNeeded');
-      });
-      return;
-    }
     setState(() {
       _busy = true;
       _error = null;
@@ -397,8 +275,6 @@ class _RegisterScreenState extends State<RegisterScreen>
           'phone': _phone.text.trim(),
           'password': _password.text,
           'password_confirmation': _confirm.text,
-          if (_verificationRequired && _phoneVerified)
-            'phone_verification_token': _verificationToken,
         });
         // Registration does not open a session; sign in right away so
         // the new Student lands in their space.
@@ -410,19 +286,6 @@ class _RegisterScreenState extends State<RegisterScreen>
         setState(() {
           _phoneTaken = true;
           _step = 0;
-        });
-        return;
-      }
-      if (error.code == 'PHONE_VERIFICATION_REQUIRED' ||
-          error.code == 'PHONE_VERIFICATION_INVALID') {
-        // The switch was turned on meanwhile, or the token expired: show
-        // the code step again.
-        setState(() {
-          _verificationRequired = true;
-          _verificationToken = '';
-          _verifiedPhone = '';
-          _fieldErrors = const <String, String>{};
-          _error = apiErrorText(context, error);
         });
         return;
       }
@@ -589,10 +452,6 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  /// The outlined buttons of the phone code (`.authBack` in
-  /// `.authStepActions`).
-  Widget _codeButton({required String label, required VoidCallback? onTap}) => AuthOutlineButton(label: label, onTap: onTap);
-
   /// D-122: the checkbox, with the terms and the privacy policy opening
   /// the website's pages.
   Widget _termsAcceptance() {
@@ -705,79 +564,6 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  /// D-093/D-096 (`RegisterPhoneVerification`): the channel, "send the
-  /// code", then the 6-digit code, for the number typed above; another
-  /// number needs a new code.
-  List<Widget> _phoneVerification() {
-    final String phone = _phone.text.trim();
-    final bool codeSent = _challengeId.isNotEmpty && _challengePhone == phone;
-    if (_phoneVerified) return <Widget>[AuthNotice(context.tr('auth.phoneVerified'))];
-    return <Widget>[
-      AuthGroupLegend(context.tr('auth.verifyPhone')),
-      AuthMessage(
-        codeSent
-            ? context.trf('auth.verifyCodeSent', <String, String>{
-                'phone': '\u2066$phone\u2069',
-                'channel': otpChannelName(context, _channel),
-              })
-            : context.trf('auth.verifyPhoneDesc', <String, String>{
-                'phone': '\u2066${phone.isEmpty ? '05xxxxxxxx' : phone}\u2069',
-              }),
-        error: false,
-      ),
-      if (codeSent)
-        AuthTextField.code(
-          controller: _code,
-          label: context.tr('otp.codeLabel'),
-          onSubmitted: (_) => _verifyCode(),
-        )
-      else
-        OtpChannelChoice(
-          value: _channel,
-          enabled: !_codeBusy,
-          onChanged: (OtpChannel channel) => setState(() => _channel = channel),
-        ),
-      if (_codeError != null) AuthMessage(_codeError!),
-      Padding(
-        padding: const EdgeInsets.only(bottom: 18),
-        child: Row(
-          children: [
-            Expanded(
-              child: _codeButton(
-                label: resendLabel(
-                  context,
-                  resendIn,
-                  idleKey: codeSent ? 'otp.resend' : 'otp.sendCode',
-                ),
-                onTap: _codeBusy || resendIn > 0 ? null : _sendCode,
-              ),
-            ),
-            if (codeSent) ...[
-              const SizedBox(width: 10),
-              Expanded(
-                child: _codeButton(
-                  label: context.tr('otp.verify'),
-                  onTap: _codeBusy ? null : _verifyCode,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-      if (_codeBusy)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 18),
-          child: Center(
-            child: SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2, color: NovaColors.accent),
-            ),
-          ),
-        ),
-    ];
-  }
-
   List<Widget> _form() {
     if (widget.onboarding) {
       return <Widget>[
@@ -795,7 +581,6 @@ class _RegisterScreenState extends State<RegisterScreen>
     }
     return <Widget>[
       ..._schoolFields(),
-      if (_verificationRequired) ..._phoneVerification(),
       _termsAcceptance(),
     ];
   }

@@ -110,11 +110,6 @@ void main() {
         '03_register',
         const RegisterScreen(),
         scaffold: false,
-        session: SessionStore(fakeApi(FakeBackend(<String, FakeResponse>{
-          'GET /auth/registration-options': const FakeResponse(200, <String, Object>{
-            'data': <String, Object>{'phone_verification_required': true},
-          }),
-        }))),
       ));
   goldenTestWidgets('tour: home', (tester) => shoot(tester, '10_home', const ShellScreen(), scaffold: false));
   goldenTestWidgets('tour: my units', (tester) => shoot(tester, '11_my_units', const ShellScreen(initialIndex: ShellScreen.units), scaffold: false));

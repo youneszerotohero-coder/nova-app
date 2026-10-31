@@ -737,22 +737,23 @@ const Map<String, Map<String, String>> K = {
     'fr': 'Cette étape a expiré. Recommence et demande un nouveau code.',
     'ar': 'انتهت صلاحية هذه الخطوة. ابدأ من جديد واطلب رمزاً جديداً.',
   },
-  'otp.phoneVerificationRequired': {
-    'en': 'Verify your phone number with the code first.',
-    'fr': 'Vérifie d’abord ton numéro avec le code reçu.',
-    'ar': 'تحقّق أولاً من رقم هاتفك بالرمز الذي وصلك.',
-  },
-  'otp.phoneVerificationInvalid': {
-    'en': 'The phone verification has expired or does not match this number. Request a new code.',
-    'fr': 'La vérification du numéro a expiré ou ne correspond pas à ce numéro. Demande un nouveau code.',
-    'ar': 'انتهت صلاحية التحقق من الرقم أو لا يطابق هذا الرقم. اطلب رمزاً جديداً.',
-  },
   'forgot.title': {'en': 'Forgot your password?', 'fr': 'Mot de passe oublié ?', 'ar': 'نسيت كلمة المرور؟'},
   'forgot.subtitle': {
     'en': 'Enter the phone number of your Student account. We send you a code by SMS or WhatsApp.',
     'fr': 'Saisis le numéro de téléphone de ton compte élève. Nous t’envoyons un code par SMS ou WhatsApp.',
     'ar': 'أدخل رقم هاتف حسابك كتلميذ. سنرسل لك رمزاً عبر SMS أو واتساب.',
   },
+  'forgot.limitNote': {
+    'en': 'Each account gets 3 codes in total. After that, only the NOVA administration can change your password.',
+    'fr': 'Chaque compte a droit à 3 codes au total. Ensuite, seule l’administration NOVA peut changer ton mot de passe.',
+    'ar': 'كل حساب عندو 3 كودات برك في المجموع. من بعد، غير الإدارة تاع NOVA تقدر تبدّلك كلمة السر.',
+  },
+  'forgot.locked': {
+    'en': 'You have used your 3 password reset codes. Contact the NOVA administration to change your password.',
+    'fr': 'Tu as utilisé tes 3 codes de réinitialisation. Contacte l’administration NOVA pour changer ton mot de passe.',
+    'ar': 'استعملت الـ3 كودات تاع استرجاع كلمة السر. اتصل بالإدارة تاع NOVA باش تبدّل كلمة السر.',
+  },
+  'forgot.contactAdmin': {'en': 'Contact the administration', 'fr': 'Contacter l’administration', 'ar': 'اتصل بالإدارة'},
   'forgot.codeTitle': {'en': 'Enter the code', 'fr': 'Saisis le code', 'ar': 'أدخل الرمز'},
   'forgot.codeSent': {
     'en': 'If this number belongs to a NOVA Student account, a 6-digit code was sent to {phone} '
@@ -773,26 +774,14 @@ const Map<String, Map<String, String>> K = {
   'forgot.changeNumber': {'en': 'Change the number', 'fr': 'Changer de numéro', 'ar': 'تغيير الرقم'},
   'forgot.backToLogin': {'en': 'Back to sign in', 'fr': 'Retour à la connexion', 'ar': 'العودة إلى تسجيل الدخول'},
   'auth.passwordResetDone': {'en': 'Your password was changed. Sign in with your new password.', 'fr': 'Votre mot de passe a été modifié. Connectez-vous avec votre nouveau mot de passe.', 'ar': 'كلمة السر تبدّلت. ادخل بكلمة السر الجديدة.'},
-  'auth.phoneVerificationNeeded': {
-    'en': 'Verify your phone number with the code before creating your account.',
-    'fr': 'Vérifie ton numéro avec le code reçu avant de créer ton compte.',
-    'ar': 'تحقّق من رقم هاتفك بالرمز قبل إنشاء حسابك.',
+  'security.changeCurrentDesc': {
+    'en': 'Enter your current password, then choose the new one.',
+    'fr': 'Saisis ton mot de passe actuel, puis choisis le nouveau.',
+    'ar': 'دخّل كلمة السر الحالية تاعك، ومن بعد اختار الجديدة.',
   },
-  'auth.verifyPhone': {'en': 'Verify your phone number', 'fr': 'Confirmez votre numéro', 'ar': 'أكّد رقم التيليفون تاعك'},
-  'auth.verifyPhoneDesc': {
-    'en': 'We send a 6-digit code to {phone} by SMS or WhatsApp.',
-    'fr': 'Nous envoyons un code à 6 chiffres au {phone} par SMS ou WhatsApp.',
-    'ar': 'نرسل رمزاً من 6 أرقام إلى {phone} عبر SMS أو واتساب.',
-  },
-  'auth.verifyCodeSent': {
-    'en': 'A code was sent by {channel} to {phone}. It is valid for 5 minutes.',
-    'fr': 'Un code a été envoyé par {channel} au {phone}. Il est valable 5 minutes.',
-    'ar': 'تم إرسال رمز عبر {channel} إلى {phone}. صالح لمدة 5 دقائق.',
-  },
-  'auth.phoneVerified': {'en': 'Phone number verified.', 'fr': 'Numéro de téléphone vérifié.', 'ar': 'الرقم تأكّد.'},
-  'security.changeDesc': {'en': 'To change your password, we send a code to your phone number by SMS or WhatsApp.', 'fr': 'Pour changer votre mot de passe, on vous envoie un code par SMS ou WhatsApp.', 'ar': 'باش تبدّل كلمة السر، نبعثولك كود في SMS ولا واتساب.'},
-  'security.sendCode': {'en': 'Send me a code', 'fr': 'M’envoyer un code', 'ar': 'ابعثلي كود'},
-  'security.codeSent': {'en': 'A 6-digit code was sent by {channel} to {phone}. It is valid for 5 minutes.', 'fr': 'Un code à 6 chiffres a été envoyé par {channel} au {phone}. Il est valable 5 minutes.', 'ar': 'بعثنا كود فيه 6 أرقام في {channel} لـ {phone}. يخدم 5 دقايق.'},
+  'security.currentPassword': {'en': 'Current password', 'fr': 'Mot de passe actuel', 'ar': 'كلمة السر الحالية'},
+  'security.currentRequired': {'en': 'Enter your current password.', 'fr': 'Saisis ton mot de passe actuel.', 'ar': 'دخّل كلمة السر الحالية تاعك.'},
+  'security.currentWrong': {'en': 'The current password is incorrect.', 'fr': 'Le mot de passe actuel est incorrect.', 'ar': 'كلمة السر الحالية غالطة.'},
   'security.save': {'en': 'Change the password', 'fr': 'Changer le mot de passe', 'ar': 'بدّل كلمة السر'},
   'security.changed': {'en': 'Your password was changed. Your other devices were signed out.', 'fr': 'Mot de passe changé. Vos autres appareils sont déconnectés.', 'ar': 'كلمة السر تبدّلت. الأجهزة الأخرى تاعك خرجو من الحساب.'},
   'security.unavailable': {'en': 'The password could not be changed. Please retry.', 'fr': 'Le mot de passe n’a pas pu être modifié. Réessayez.', 'ar': 'ما قدرناش نبدّلو كلمة السر. عاود جرّب.'},

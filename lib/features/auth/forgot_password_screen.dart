@@ -6,6 +6,7 @@ import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../core/utils/phone.dart';
+import '../../core/utils/support.dart';
 import '../../data/otp.dart';
 import 'auth_hero.dart';
 import 'otp_widgets.dart';
@@ -15,7 +16,8 @@ enum _Step { phone, code, password }
 /// D-093 forgotten password, as on the website: phone and channel (SMS
 /// or WhatsApp, D-096) → 6-digit code → new password. The server answers
 /// the same whether the number has an account or not, so the screen never
-/// says whether it does. Pops with the number once the password is
+/// says whether it does — except D-182: after its 3 codes an account is
+/// refused and the Student contacts the administration. Pops with the number once the password is
 /// changed, so sign-in can prefill it.
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key, this.initialPhone = ''});
@@ -38,6 +40,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
   String _sentTo = '';
   String _challengeId = '';
   String _resetToken = '';
+
+  /// D-182 `PASSWORD_RESET_LOCKED`: the 3 codes are used; only the administration helps.
+  bool _locked = false;
   bool _obscure = true;
   bool _busy = false;
   String? _error;
@@ -121,6 +126,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     setState(() {
       _busy = true;
       _error = null;
+      _locked = false;
       _fieldErrors = const <String, String>{};
     });
     try {
@@ -130,6 +136,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       final int? retryAfter = otpRetryAfter(error);
       if (retryAfter != null) startResend(retryAfter);
       setState(() {
+        _locked = error.code == 'PASSWORD_RESET_LOCKED';
         final Map<String, String> fields =
             error.code == ApiException.validationFailed ? error.fieldErrors : const <String, String>{};
         // A field error is shown next to its field only.
@@ -179,6 +186,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                 children: [
                   ..._fields(),
                   if (_error != null) AuthMessage(_error!),
+                  if (_locked)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Center(
+                        child: AuthTextAction(
+                          label: '${context.tr('forgot.contactAdmin')} · \u2066$novaSupportEmail\u2069',
+                          onTap: () => contactNovaSupport(context),
+                        ),
+                      ),
+                    ),
                   AuthSubmitButton(
                     busy: _busy,
                     label: switch (_step) {
@@ -240,6 +257,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
               enabled: !_busy,
               onChanged: (OtpChannel channel) => setState(() => _channel = channel),
             ),
+            AuthMessage(context.tr('forgot.limitNote'), error: false),
           ],
         _Step.code => <Widget>[
             AuthTextField.code(
