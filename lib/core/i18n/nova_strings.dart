@@ -379,6 +379,7 @@ const Map<String, Map<String, String>> K = {
   },
   'live.raiseHand': {'en': 'Raise hand to speak', 'fr': 'Lève la main pour parler', 'ar': 'ارفع يدك للتحدث'},
   'live.handInQueue': {'en': 'Your hand is in the queue', 'fr': 'Ta main est dans la file', 'ar': 'يدك في قائمة الانتظار'},
+  'live.pinned': {'en': 'Pinned by the teaching team', 'fr': 'Épinglé par l’équipe pédagogique', 'ar': 'مثبّت من فريق التدريس'},
 
   // Notifications.
   'notif.subtitle': {

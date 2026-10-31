@@ -20,6 +20,7 @@ import '../../data/live_store.dart';
 import '../../data/models.dart';
 import '../player/live_player.dart';
 import '../player/playback_rules.dart';
+import 'live_pinned_comment.dart';
 import 'live_speaker.dart';
 import 'live_speaking_stage.dart';
 import 'open_course.dart';
@@ -81,6 +82,9 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
   /// Who is speaking, as the other Students see it (D-073).
   LiveSpeakerName? _speakerName;
   bool _speakerFromRealtime = false;
+
+  /// D-186: the comment the Admin pinned, from the Live and its broadcasts.
+  LivePinnedComment? _pinned;
   final Set<Timer> _speakerTimers = <Timer>{};
 
   Timer? _poll;
@@ -136,6 +140,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
         if (detail.inWaitingRoom) _waited = true;
         // Realtime is the fresher source once it has spoken.
         if (!_speakerFromRealtime) _speakerName = detail.isLive ? detail.speaker : null;
+        _pinned = detail.pinnedComment;
       });
       if (detail.isOver && detail.live.lessonId != null) {
         _openLesson(detail.live);
@@ -182,6 +187,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
       if (data.integer('live_id') != _id) return;
       if (event == 'LiveStateChanged') _load();
       if (event == 'LiveHandChanged') _applyHandStatus(data.strOrNull('status'));
+      if (event == 'LivePinnedCommentChanged') _applyPinned(data);
     }));
   }
 
@@ -194,11 +200,19 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
         if (event == 'presence' && mounted) setState(() => _viewers = data.integer('count'));
         if (event == 'LiveStateChanged') _load();
         if (event == 'LiveSpeakerChanged') _announceSpeaker(LiveSpeakerName.fromJson(data.obj('speaker')));
+        if (event == 'LivePinnedCommentChanged') _applyPinned(data);
       });
     } else if (!live && _presence != null) {
       _presence!();
       _presence = null;
     }
+  }
+
+  /// `LivePinnedCommentChanged` (D-186): the Admin pinned another comment,
+  /// or removed it (null); shown at once, also on the student channel.
+  void _applyPinned(Json data) {
+    if (data.integer('live_id') != _id || !mounted) return;
+    setState(() => _pinned = LivePinnedComment.fromJson(data.obj('pinned_comment')));
   }
 
   /// `LiveSpeakerChanged` (D-073): shown to the other Students once the
@@ -670,6 +684,11 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
       color: NovaColors.ink950,
       child: Column(
         children: [
+          // D-186: the pinned comment at the top of the Live chat.
+          if (_pinned != null) ...<Widget>[
+            LivePinnedCommentBanner(comment: _pinned!),
+            const SizedBox(height: 12),
+          ],
           Row(
             children: [
               Expanded(

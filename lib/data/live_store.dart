@@ -17,6 +17,7 @@ class LiveDetail {
     this.speaker,
     this.audienceOpen = true,
     this.audienceOpenedAt,
+    this.pinnedComment,
   });
 
   /// D-128 (web `LIVE_REVEAL_DELAY_MS`): when the doors open, the newest
@@ -41,6 +42,7 @@ class LiveDetail {
       // Absent on servers before D-117: the doors are open.
       audienceOpen: data.flag('audience_open', true),
       audienceOpenedAt: data.date('audience_opened_at'),
+      pinnedComment: LivePinnedComment.fromJson(data.obj('pinned_comment')),
     );
   }
 
@@ -65,6 +67,10 @@ class LiveDetail {
 
   /// When the doors opened (null while closed).
   final DateTime? audienceOpenedAt;
+
+  /// D-186: the comment the Admin pinned for every Student, while the Live
+  /// runs (null otherwise); kept current by `LivePinnedCommentChanged`.
+  final LivePinnedComment? pinnedComment;
 
   String get status => live.rawStatus;
 
@@ -109,6 +115,23 @@ class LiveDetail {
         'cancelled',
         'failed',
       }.contains(status);
+}
+
+/// D-186: the one comment the Admin pinned in a Live, shown at the top of
+/// the Live chat for every Student until removed. Students get its text,
+/// never its author (`pinned_comment` of the Live, or the
+/// `LivePinnedCommentChanged` broadcast, null once removed).
+class LivePinnedComment {
+  const LivePinnedComment({required this.id, required this.message});
+
+  static LivePinnedComment? fromJson(Json? json) {
+    if (json == null) return null;
+    final String message = json.str('message').trim();
+    return message.isEmpty ? null : LivePinnedComment(id: json.integer('id'), message: message);
+  }
+
+  final int id;
+  final String message;
 }
 
 /// First and last name of the Student who is speaking (D-073).
