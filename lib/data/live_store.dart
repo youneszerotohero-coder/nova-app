@@ -337,6 +337,12 @@ class LiveStore {
 
   Future<LiveDetail> detail(int id) async => LiveDetail.fromJson(await _api.get('/lives/$id'));
 
+  /// D-181: the exact audience of a running Live (website and app Students), cached 15 s by the server.
+  Future<int?> audience(int id) async {
+    final Object? value = (await _api.get('/lives/$id/audience')).obj('data')?['watching_now'];
+    return value is num ? value.toInt() : null;
+  }
+
   Future<LivePolicy> policy(int id) async =>
       LivePolicy.fromJson((await _api.post('/lives/$id/playback-policy')).obj('data') ?? <String, dynamic>{});
 

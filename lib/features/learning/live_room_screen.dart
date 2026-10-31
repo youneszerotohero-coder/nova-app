@@ -61,6 +61,10 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
   bool _fullscreen = false;
   int? _viewers;
 
+  /// D-181 (Live 69: the presence missed the apps): the server's count of Students watching, read every 30 s.
+  int? _audience;
+  Timer? _audienceTimer;
+
   _Hand _hand = _Hand.passive;
   LiveSpeaker? _speaker;
 
@@ -104,12 +108,25 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
     _clock = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && (_detail?.isLive ?? false)) setState(() {});
     });
+    _audienceTimer = Timer.periodic(const Duration(seconds: 30), (_) => _refreshAudience());
+  }
+
+  /// Only the audience count: the rest of the room keeps its realtime updates.
+  Future<void> _refreshAudience() async {
+    if (!(_detail?.isLive ?? false)) return;
+    try {
+      final int? count = await _store.audience(_id);
+      if (mounted && count != null) setState(() => _audience = count);
+    } catch (_) {
+      // The next tick tries again; the last count stays shown.
+    }
   }
 
   @override
   void dispose() {
     _poll?.cancel();
     _clock?.cancel();
+    _audienceTimer?.cancel();
     for (final Timer timer in _speakerTimers) {
       timer.cancel();
     }
@@ -656,7 +673,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
                   const SizedBox(width: 5),
                   Text(
                     // D-181: the Students watching now (presence, else the server's count), never the attended total.
-                    '${_viewers ?? detail?.live.watchingNow ?? '—'}',
+                    '${_audience ?? detail?.live.watchingNow ?? _viewers ?? '—'}',
                     style: const TextStyle(
                       fontFamily: 'Geist',
                       fontWeight: FontWeight.w700,
