@@ -9,6 +9,7 @@ import '../../core/theme/nova_dimens.dart';
 import '../../core/theme/nova_typography.dart';
 import '../../core/widgets/hero_style.dart';
 import '../../core/widgets/motion.dart';
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../shell/student_top_bar.dart';
 import 'auth_routes.dart';
@@ -22,7 +23,7 @@ class AuthGatewayScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return DesktopFrame.form(child: Scaffold(
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
@@ -103,7 +104,7 @@ class AuthGatewayScreen extends StatelessWidget {
           const SizedBox(height: 30),
         ],
       ),
-    );
+    ));
   }
 }
 

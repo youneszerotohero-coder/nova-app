@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/i18n/labels.dart';
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
@@ -712,15 +713,28 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     return <Widget>[
       const SizedBox(height: 72),
       _SectionHead(number: '02', label: context.tr('detail.keepExploring'), title: context.tr('detail.otherUnits')),
-      for (final Course course in others) ...[
-        NovaProductCard.unit(
-          context,
-          course,
-          width: double.infinity,
-          onTap: () => _push(CourseDetailScreen(course: course)),
-        ),
-        const SizedBox(height: 16),
-      ],
+      // D-188, PC app: the three Units side by side.
+      if (desktopGridOf(context))
+        DesktopCardGrid(
+          minColumns: 3,
+          maxColumns: 3,
+          minItemWidth: 200,
+          equalHeight: true,
+          children: [
+            for (final Course course in others)
+              NovaProductCard.unit(context, course, width: double.infinity, onTap: () => _push(CourseDetailScreen(course: course))),
+          ],
+        )
+      else
+        for (final Course course in others) ...[
+          NovaProductCard.unit(
+            context,
+            course,
+            width: double.infinity,
+            onTap: () => _push(CourseDetailScreen(course: course)),
+          ),
+          const SizedBox(height: 16),
+        ],
     ];
   }
 

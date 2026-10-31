@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
@@ -80,6 +81,18 @@ class MyLearningScreen extends StatelessWidget {
                   chipIcon: Icons.arrow_forward_rounded,
                   onTap: () => _push(context, const UnitsCatalogScreen()),
                 ),
+              ),
+            )
+          // D-188, PC app: the Units side by side in auto-fit columns.
+          else if (desktopGridOf(context))
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: DesktopCardGrid(
+                minItemWidth: 340,
+                maxColumns: 3,
+                children: [
+                  for (final Course unit in units) UnitProgressCard(course: unit, resume: app.learning.resumeLesson(unit.id)),
+                ],
               ),
             )
           else

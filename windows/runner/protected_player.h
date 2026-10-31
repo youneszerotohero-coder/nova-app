@@ -31,7 +31,8 @@ class ProtectedPlayback;
 // https://nova-elearning.com/__pc-player/ for the CDN's CORS) placed exactly
 // under a transparent hole that the Flutter page leaves in its player box,
 // directly behind the app window. The Flutter controls and the moving watermark are drawn over
-// it by the app, as on the phone. The window is excluded from capture.
+// it by the app, as on the phone. The window is black in captures (D-188,
+// capture_exclusion.h).
 //
 // Control arrives on `nova/protected_player_<id>` (play, pause, seekTo,
 // seekToLiveEdge, setSpeed, setVolume, setQuality, renewToken, release, and

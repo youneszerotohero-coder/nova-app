@@ -273,7 +273,7 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
 /// embedded with hybrid composition (a Widevine L1 decoder can only render
 /// to a real SurfaceView), for both DRM and the clear copy. iPhone:
 /// AVPlayer, FairPlay HLS (D-118) or the clear copy. Windows: PlayReady
-/// DASH or the clear copy in a capture-excluded video window behind a
+/// DASH or the clear copy in a capture-protected video window behind a
 /// transparent hole of this widget ([_WindowsVideoSurface]).
 class ProtectedVideoView extends StatelessWidget {
   const ProtectedVideoView({

@@ -204,7 +204,7 @@ bool VideoWindow::Create() {
   if (window_ == nullptr) {
     return false;
   }
-  ExcludeFromCapture(window_);
+  ProtectFromCapture(window_);
   if (probe_) {
     ::SetTimer(window_, kProbeTimer, kProbeTimeoutMs, nullptr);
   }

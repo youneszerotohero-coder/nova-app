@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
@@ -95,6 +96,16 @@ class _LivesScreenState extends State<LivesScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
               child: HeroEmpty(icon: Icons.sensors_rounded, title: context.tr('lives.empty'), message: context.tr('lives.emptyText')),
+            )
+          // D-188, PC app: the Lives side by side in auto-fit columns.
+          else if (desktopGridOf(context))
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: DesktopCardGrid(
+                minItemWidth: 340,
+                maxColumns: 3,
+                children: [for (int i = 0; i < shown.length; i++) LiveTicket(live: shown[i], index: i)],
+              ),
             )
           else
             for (int i = 0; i < shown.length; i++)

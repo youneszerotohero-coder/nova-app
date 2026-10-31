@@ -5,6 +5,7 @@ import '../../core/api/api_exception.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/utils/phone.dart';
 import 'auth_hero.dart';
 import 'otp_widgets.dart';
@@ -89,7 +90,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return DesktopFrame.form(child: Scaffold(
       backgroundColor: NovaColors.paperCard,
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
@@ -141,6 +142,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           ),
         ],
       ),
-    );
+    ));
   }
 }

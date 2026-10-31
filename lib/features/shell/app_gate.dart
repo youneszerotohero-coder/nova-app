@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/api/api_exception.dart';
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/push/push_host.dart';
 import '../../core/state/app_state.dart';
@@ -78,7 +79,8 @@ class _AppGateState extends State<AppGate> {
     _lastKey = key;
 
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 420),
+      // D-188: the PC app switches spaces at once (a short fade).
+      duration: isDesktopApp ? DesktopMetrics.pageTransition : const Duration(milliseconds: 420),
       switchInCurve: Curves.easeOutCubic,
       child: KeyedSubtree(
         key: ValueKey<Object>(key),

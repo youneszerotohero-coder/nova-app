@@ -146,8 +146,8 @@ bool Win32Window::Create(const std::wstring& title,
     return false;
   }
 
-  // Before the first frame: no NOVA pixel is ever captured.
-  ExcludeFromCapture(window);
+  // Before the first frame: no NOVA pixel is ever captured (black, D-188).
+  ProtectFromCapture(window);
 
   UpdateTheme(window);
 

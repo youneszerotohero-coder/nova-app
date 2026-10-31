@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
@@ -348,6 +349,14 @@ class _Rail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // D-188, PC app: the website's desktop grid (rows of cards of one
+    // height) instead of a swipeable row of window-wide cards.
+    if (desktopGridOf(context)) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(14, 2, 14, 8),
+        child: DesktopCardGrid(equalHeight: true, children: children),
+      );
+    }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       physics: _SnapPhysics(extent: itemWidth + _gap),

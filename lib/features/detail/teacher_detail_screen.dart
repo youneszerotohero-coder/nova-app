@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
@@ -224,21 +225,31 @@ class _TeacherDetailScreenState extends State<TeacherDetailScreen> {
         title: context.trf('teacher.packsBy', <String, String>{'name': teacher.name}),
         count: found.length,
       ),
-      ...stagger(<Widget>[
-        for (final Pack pack in found)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: NovaProductCard.offer(
-              context,
-              pack,
-              width: double.infinity,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => CourseDetailScreen.pack(pack: pack)),
-              ),
-            ),
+      // D-188, PC app: the Offers in auto-fit columns.
+      if (desktopGridOf(context))
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: DesktopCardGrid(
+            equalHeight: true,
+            children: [for (final Pack pack in found) _offerCard(context, pack)],
           ),
-      ]),
+        )
+      else
+        ...stagger(<Widget>[
+          for (final Pack pack in found) Padding(padding: const EdgeInsets.only(bottom: 16), child: _offerCard(context, pack)),
+        ]),
     ];
+  }
+
+  Widget _offerCard(BuildContext context, Pack pack) {
+    return NovaProductCard.offer(
+      context,
+      pack,
+      width: double.infinity,
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => CourseDetailScreen.pack(pack: pack)),
+      ),
+    );
   }
 }
 

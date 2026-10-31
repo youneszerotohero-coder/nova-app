@@ -5,10 +5,10 @@ part of 'protected_video.dart';
 /// Flutter on Windows has no platform views, and a PlayReady picture can
 /// never be copied into a Flutter texture. The native side
 /// (`windows/runner/protected_player.cpp`) therefore plays the video in its
-/// own capture-excluded window, directly behind the app window. This widget
-/// leaves a transparent hole where the picture must show and tells the
-/// native side where the hole is (physical pixels of the Flutter view) after
-/// every frame in which it moved. Everything the page draws over the box —
+/// own capture-protected window (black in captures, D-188), directly behind
+/// the app window. This widget leaves a transparent hole where the picture
+/// must show and tells the native side where the hole is (physical pixels of
+/// the Flutter view) after every frame in which it moved. Everything the page draws over the box —
 /// the controls, the moving watermark, sheets and dialogs — stays above the
 /// video, exactly as with the phones' platform views.
 class _WindowsVideoSurface extends StatefulWidget {

@@ -5,6 +5,7 @@ import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../core/theme/nova_dimens.dart';
 import '../../core/widgets/nova_bottom_bar.dart';
+import '../../core/widgets/nova_side_rail.dart';
 import '../account/notifications_screen.dart';
 import '../messages/chat_list_screen.dart';
 import '../shell/shell_screen.dart';
@@ -57,23 +58,20 @@ class _TeacherShellState extends State<TeacherShell> {
       // The Teacher space has no menu: its three tabs are everything.
       openMenu: () {},
       index: _currentIndex,
-      child: Scaffold(
+      // D-188: the bottom bar on phones, the sidebar in the PC app.
+      child: NovaShellFrame(
         backgroundColor: NovaColors.paper,
-        body: Stack(
+        items: items,
+        currentIndex: _currentIndex,
+        onChanged: _select,
+        content: IndexedStack(
+          index: _currentIndex,
           children: [
-            Positioned.fill(
-              child: IndexedStack(
-                index: _currentIndex,
-                children: [
-                  for (int i = 0; i < items.length; i++)
-                    TickerMode(
-                      enabled: i == _currentIndex,
-                      child: _visited.contains(i) ? RepaintBoundary(child: _buildTab(i)) : const SizedBox.shrink(),
-                    ),
-                ],
+            for (int i = 0; i < items.length; i++)
+              TickerMode(
+                enabled: i == _currentIndex,
+                child: _visited.contains(i) ? RepaintBoundary(child: _buildTab(i)) : const SizedBox.shrink(),
               ),
-            ),
-            NovaBottomBar(items: items, currentIndex: _currentIndex, onChanged: _select),
           ],
         ),
       ),

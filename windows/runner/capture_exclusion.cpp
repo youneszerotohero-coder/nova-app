@@ -1,16 +1,11 @@
 #include "capture_exclusion.h"
 
-#ifndef WDA_EXCLUDEFROMCAPTURE
-#define WDA_EXCLUDEFROMCAPTURE 0x00000011
-#endif
-
-DWORD ExcludeFromCapture(HWND window) {
+DWORD ProtectFromCapture(HWND window) {
   if (window == nullptr) {
     return WDA_NONE;
   }
-  if (::SetWindowDisplayAffinity(window, WDA_EXCLUDEFROMCAPTURE)) {
-    return WDA_EXCLUDEFROMCAPTURE;
-  }
+  // D-188: black in every capture (not excluded, which showed the screen
+  // behind the app).
   if (::SetWindowDisplayAffinity(window, WDA_MONITOR)) {
     return WDA_MONITOR;
   }

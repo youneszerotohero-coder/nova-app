@@ -1,5 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+/// Whether a player is full screen. D-188: the PC app's centred page column
+/// (`DesktopFrame`) takes the whole window meanwhile. Set in a microtask: a
+/// player page leaving full screen from its `dispose` must not rebuild other
+/// widgets while the tree is locked.
+final ValueNotifier<bool> playerFullscreen = ValueNotifier<bool>(false);
+
+void _markFullscreen(bool on) => scheduleMicrotask(() => playerFullscreen.value = on);
 
 /// PC app: the window itself goes full screen (`nova/screen`, the runner's
 /// nova_platform.cpp); phones have no window to resize.
@@ -17,6 +27,7 @@ Future<void> _windowFullscreen(bool on) async {
 
 /// Player fullscreen: landscape and no system bars.
 Future<void> enterPlayerFullscreen() async {
+  _markFullscreen(true);
   if (_windowsApp) return _windowFullscreen(true);
   await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
     DeviceOrientation.landscapeLeft,
@@ -30,6 +41,7 @@ Future<void> enterPlayerFullscreen() async {
 /// `edgeToEdge` instead drew the app under an opaque navigation bar on
 /// Android before 15, hiding the bottom tab bar after leaving a player.
 Future<void> exitPlayerFullscreen() async {
+  _markFullscreen(false);
   if (_windowsApp) return _windowFullscreen(false);
   await SystemChrome.setPreferredOrientations(<DeviceOrientation>[]);
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);

@@ -6,6 +6,7 @@ import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../data/session_store.dart';
 import '../../core/i18n/nova_strings.dart';
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/widgets/motion.dart';
 import 'auth_hero.dart';
 import 'forgot_password_screen.dart';
@@ -107,7 +108,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final SessionStore session = AppScope.of(context).session;
     // The website centres the sign-in form on the phone's height
     // (`.authPageLogin .authPanel`); a short screen scrolls instead.
-    return Scaffold(
+    return DesktopFrame.form(child: Scaffold(
       backgroundColor: NovaColors.paperCard,
       body: CustomScrollView(
         slivers: [
@@ -152,7 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   List<Widget> _fields() {

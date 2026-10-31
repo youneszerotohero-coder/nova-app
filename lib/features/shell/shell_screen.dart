@@ -8,6 +8,7 @@ import '../../core/utils/support.dart';
 import '../../core/theme/nova_dimens.dart';
 import '../../core/widgets/app_menu.dart';
 import '../../core/widgets/nova_bottom_bar.dart';
+import '../../core/widgets/nova_side_rail.dart';
 import '../../core/widgets/nova_toast.dart';
 import '../account/notifications_screen.dart';
 import '../assistant/assistant_screen.dart';
@@ -196,42 +197,39 @@ class _ShellScreenState extends State<ShellScreen> {
       select: _select,
       openMenu: _openMenu,
       index: _currentIndex,
-      child: Scaffold(
-        body: Stack(
+      // D-188: the bottom bar on phones, the sidebar in the PC app.
+      child: NovaShellFrame(
+        items: items,
+        currentIndex: _currentIndex,
+        onChanged: _select,
+        // A visited tab stays alive (scroll position kept, no rebuild or
+        // replayed entrances on return) and switches instantly; a hidden
+        // tab's animations are paused. Cross-fading two full screens on
+        // every switch stuttered on average Android phones.
+        content: IndexedStack(
+          index: _currentIndex,
           children: [
-            // A visited tab stays alive (scroll position kept, no rebuild or
-            // replayed entrances on return) and switches instantly; a hidden
-            // tab's animations are paused. Cross-fading two full screens on
-            // every switch stuttered on average Android phones.
-            Positioned.fill(
-              child: IndexedStack(
-                index: _currentIndex,
-                children: [
-                  for (int i = 0; i < items.length; i++)
-                    TickerMode(
-                      enabled: i == _currentIndex,
-                      child: _visited.contains(i)
-                          ? RepaintBoundary(child: _buildTab(i))
-                          : const SizedBox.shrink(),
-                    ),
-                ],
+            for (int i = 0; i < items.length; i++)
+              TickerMode(
+                enabled: i == _currentIndex,
+                child: _visited.contains(i)
+                    ? RepaintBoundary(child: _buildTab(i))
+                    : const SizedBox.shrink(),
               ),
-            ),
-            NovaBottomBar(
-              items: items,
-              currentIndex: _currentIndex,
-              onChanged: _select,
-            ),
-            // D-150: the help assistant, as the website's floating button
-            // above its phone tab bar (not in offline previews: no API).
-            if (state.api != null)
-              PositionedDirectional(
+          ],
+        ),
+        // D-150: the help assistant, as the website's floating button
+        // above its phone tab bar (not in offline previews: no API).
+        phoneOverlay: state.api == null
+            ? null
+            : PositionedDirectional(
                 start: 16,
                 bottom: 12 + MediaQuery.viewPaddingOf(context).bottom + NovaDimens.bottomBarHeight + 14,
                 child: const AssistantFab(),
               ),
-          ],
-        ),
+        desktopOverlay: state.api == null
+            ? null
+            : const PositionedDirectional(start: 24, bottom: 24, child: AssistantFab()),
       ),
     );
   }

@@ -12,6 +12,7 @@ import '../../core/theme/nova_colors.dart';
 import '../../core/theme/nova_typography.dart';
 import '../../core/utils/phone.dart';
 import '../../core/widgets/motion.dart';
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/widgets/pressable_scale.dart';
 import '../../data/account_store.dart';
 import '../../data/models.dart';
@@ -301,7 +302,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return DesktopFrame.form(child: Scaffold(
       backgroundColor: NovaColors.paperCard,
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
@@ -380,7 +381,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   /// `.authSteps`: "1 Account — 2 School details"; the active tile is blue,

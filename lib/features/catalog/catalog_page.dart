@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
@@ -182,7 +183,19 @@ class _CatalogPageState extends State<CatalogPage> {
                         )
                       : items.isEmpty
                           ? SliverToBoxAdapter(child: _empty(context))
-                          : SliverList.separated(
+                          // D-188, PC app: auto-fit columns of cards, built row by row.
+                          : desktopGridOf(context)
+                              ? SliverDesktopCardGrid(
+                                  itemCount: items.length,
+                                  equalHeight: true,
+                                  itemBuilder: (BuildContext context, int index) {
+                                    final Object item = items[index];
+                                    return item is Course
+                                        ? NovaProductCard.unit(context, item, width: double.infinity, onTap: () => _open(item))
+                                        : NovaProductCard.offer(context, item as Pack, width: double.infinity, onTap: () => _open(item));
+                                  },
+                                )
+                              : SliverList.separated(
                               itemCount: items.length,
                               separatorBuilder: (_, _) => const SizedBox(height: 16),
                               itemBuilder: (BuildContext context, int index) {

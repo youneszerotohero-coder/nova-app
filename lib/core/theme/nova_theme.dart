@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../desktop/desktop_navigation.dart';
 import 'nova_colors.dart';
 import 'nova_typography.dart';
 
@@ -88,7 +89,10 @@ abstract final class NovaTheme {
         builders: <TargetPlatform, PageTransitionsBuilder>{
           TargetPlatform.android: NovaPageTransitionsBuilder(),
           TargetPlatform.iOS: NovaPageTransitionsBuilder(),
-          TargetPlatform.windows: NovaPageTransitionsBuilder(),
+          // D-188: the PC app fades pages in (≤ 150 ms) in its centred column.
+          TargetPlatform.windows: DesktopPageTransitionsBuilder(),
+          TargetPlatform.linux: DesktopPageTransitionsBuilder(),
+          TargetPlatform.macOS: DesktopPageTransitionsBuilder(),
         },
       ),
     );

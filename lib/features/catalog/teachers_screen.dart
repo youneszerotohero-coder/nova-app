@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
@@ -179,6 +180,10 @@ class _Grid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // D-188, PC app: auto-fit columns instead of two window-wide halves.
+    if (desktopGridOf(context)) {
+      return DesktopCardGrid(minItemWidth: 230, maxColumns: 5, gap: 12, equalHeight: true, children: children);
+    }
     return Column(
       children: [
         for (int i = 0; i < children.length; i += 2) ...[

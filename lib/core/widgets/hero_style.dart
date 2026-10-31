@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../desktop/desktop_layout.dart';
 import '../theme/nova_colors.dart';
 import '../theme/nova_dimens.dart';
 import '../theme/nova_typography.dart';
@@ -515,8 +516,9 @@ class _OrbitState extends State<_Orbit> with SingleTickerProviderStateMixin {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // `prefers-reduced-motion` stops the website's orbit too.
-    if (MediaQuery.disableAnimationsOf(context)) {
+    // `prefers-reduced-motion` stops the website's orbit too. D-188: still in
+    // the PC app (a 40 s loop repainted its page on every frame).
+    if (MediaQuery.disableAnimationsOf(context) || isDesktopApp) {
       _spin.stop();
     } else if (!_spin.isAnimating) {
       _spin.repeat();

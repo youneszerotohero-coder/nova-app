@@ -2,13 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../desktop/desktop_layout.dart';
+
 /// Shared motion vocabulary: staggered entrances for lists, count-up
 /// numbers and a pulsing marker. Page transitions live in the theme
 /// (NovaTheme) so every pushed route animates consistently.
 ///
 /// Kept light for average Android phones: short, few at a time, no
 /// widget rebuild per frame, and none at all when the phone's "remove
-/// animations" accessibility setting is on.
+/// animations" accessibility setting is on. D-188: none in the PC app
+/// either — a desktop page shows its content at once.
 
 /// Plays a short fade + slide-up entrance once, with an optional start
 /// delay so siblings can stagger.
@@ -45,6 +48,10 @@ class _EntranceState extends State<Entrance> with SingleTickerProviderStateMixin
   @override
   void initState() {
     super.initState();
+    if (isDesktopApp) {
+      _controller.value = 1;
+      return;
+    }
     final Duration delay = widget.delay > Entrance.maxDelay ? Entrance.maxDelay : widget.delay;
     if (delay == Duration.zero) {
       _controller.forward();
@@ -64,7 +71,7 @@ class _EntranceState extends State<Entrance> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
-    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return widget.child;
+    if (isDesktopApp || (MediaQuery.maybeDisableAnimationsOf(context) ?? false)) return widget.child;
     // FadeTransition only changes a layer's alpha; the translated child
     // is built once and never rebuilt while it animates.
     return FadeTransition(
@@ -116,6 +123,7 @@ class CountUpText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isDesktopApp) return Text('$value$suffix', style: style);
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: value.toDouble()),
       duration: duration,

@@ -6,6 +6,7 @@ import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../core/utils/phone.dart';
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/utils/support.dart';
 import '../../data/otp.dart';
 import 'auth_hero.dart';
@@ -172,7 +173,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
         }),
       _Step.password => context.tr('forgot.passwordSubtitle'),
     };
-    return Scaffold(
+    return DesktopFrame.form(child: Scaffold(
       backgroundColor: NovaColors.paperCard,
       body: AutofillGroup(
         child: ListView(
@@ -238,7 +239,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           ],
         ),
       ),
-    );
+    ));
   }
 
   List<Widget> _fields() => switch (_step) {

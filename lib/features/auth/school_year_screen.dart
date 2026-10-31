@@ -4,6 +4,7 @@ import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../data/account_store.dart';
 import '../../data/models.dart';
@@ -99,7 +100,7 @@ class _SchoolYearScreenState extends State<SchoolYearScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return DesktopFrame.form(child: Scaffold(
       backgroundColor: NovaColors.paperCard,
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
@@ -152,6 +153,6 @@ class _SchoolYearScreenState extends State<SchoolYearScreen> {
           ),
         ],
       ),
-    );
+    ));
   }
 }
