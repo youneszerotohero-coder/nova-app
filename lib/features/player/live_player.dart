@@ -47,6 +47,12 @@ _Overlay _overlayOf(VideoState state) => (
 /// only final messages are a device that cannot play at all in mode A,
 /// and a withdrawn access (401/403/404/410), which refreshes the room.
 ///
+/// D-190: a player behind the live window after a stall (Media3 1002) goes
+/// back to the live edge in place (telemetry `edge_jump`), a full reload
+/// only after two such jumps within 60 s; a decoder failure gets at most
+/// three automatic attempts (the first a rendition lower), then the error
+/// screen ([LiveRecovery]). Network failures are handled as before.
+///
 /// Speaking turn (owner decision 2026-10-30, amends D-066 for the apps):
 /// while [suspended] the player is kept, muted and hidden under the
 /// speaking stage, so the turn's end shows it again at once, without a new
@@ -158,6 +164,13 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
 
   /// Why this device plays the clear stream (telemetry `fallback_reason`).
   int _fallbackReason = 0;
+
+  /// D-190: in-place edge jumps and the decoder's automatic attempts, on
+  /// the [_opened] clock.
+  final LiveRecovery _recovery = LiveRecovery();
+
+  /// D-190: the rendition cap after a decoder failure (web decode guard).
+  int? _decodeCap;
 
   /// This Live continues on the clear stream (its protected copy was
   /// unreachable); unlike [ClearDeliveryMemory.live] not kept for the device.
@@ -637,6 +650,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   /// reload (`startup_ms` since it started, `error_code`), and stalls
   /// (`waiting`, then `playing` with `stall_ms`).
   void _observePlayback(VideoState state) {
+    _recovery.observe(playing: state.playing, now: _opened.elapsed);
     if (state.playing) {
       _watchRestarts = 0;
       final Stopwatch? stall = _stall;
@@ -701,7 +715,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   /// (D-077); before the policy answers, the wording stays neutral.
   bool get _neutral => _clear || (_policy?.clearAvailable ?? true);
 
-  void _fail(String category) {
+  void _fail(String category, {int? code, int? attempt}) {
     final bool drm = !_clear;
     _teardown();
     // Only access refusals (any mode) and DRM failures in mode A end here.
@@ -712,6 +726,8 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
         contentId: widget.live.id,
         event: 'error_shown',
         category: category,
+        code: code,
+        attempt: attempt,
         drm: drm && _candidate != null,
         robustness: _candidate?.robustness,
         neutral: _neutral,
@@ -857,6 +873,23 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
       ..._deliveryField,
     });
 
+    switch (_recovery.decide(
+      category: category,
+      kind: state.errorKind,
+      code: state.errorCode,
+      now: _opened.elapsed,
+    )) {
+      case LiveFailureAction.edgeJump:
+        return _jumpToEdge(state);
+      case LiveFailureAction.decoderGiveUp:
+        return _giveUpDecoder(state);
+      case LiveFailureAction.decoderRetry:
+        // The first attempt asks for one rendition lower (web decode guard).
+        if (_recovery.decoderFailures == 1) _decodeCap = lowerDecodeHeight(state.heights, current: _decodeCap);
+      case LiveFailureAction.usual:
+        break;
+    }
+
     if (_clear) return _retryLater(errorCode: state.errorCode);
 
     // D-077 mode B: every failure of the protected attempt continues on the
@@ -914,6 +947,43 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
         // Mode A and a DRM failure: only this is a final message.
         _fail(category);
     }
+  }
+
+  /// D-190: behind the live window after a stall (Media3 1002): back to the
+  /// live edge in the same player — no new authorization, playback session
+  /// or player. A native player that cannot do it gets the full reload.
+  void _jumpToEdge(VideoState state) {
+    final ProtectedVideoController? video = _video;
+    if (video == null) return;
+    _telemetry?.record(liveEdgeJumpEvent, <String, num>{
+      'error_code': state.errorCode,
+      'attempt': _recovery.edgeJumps,
+      if (state.liveOffset != null) 'edge_distance_s': state.liveOffset!.inMilliseconds / 1000,
+      ..._deliveryField,
+    });
+    // The failure is cleared synchronously, so the listener sees the next one.
+    final Future<bool> recovery = video.recoverAtLiveEdge();
+    video.addListener(_onVideo);
+    unawaited(recovery.then((bool recovered) {
+      if (recovered || _disposed || _video != video) return;
+      video.removeListener(_onVideo);
+      _beginReload(liveReloadHardRecover, <String, num>{'error_data_code': state.errorCode, ..._deliveryField});
+      _start(recovering: true);
+    }));
+  }
+
+  /// D-190: the decoder failed again after its automatic attempts (Live 69:
+  /// two phones looped 282 times): one telemetry event, the error screen,
+  /// and no further automatic retry.
+  void _giveUpDecoder(VideoState state) {
+    _telemetry?.record('error', <String, num>{
+      'error_category': liveFailureCodes['decoder']!,
+      'error_data_code': state.errorCode,
+      'attempt': _recovery.decoderFailures,
+      ..._deliveryField,
+    });
+    _telemetry?.flush();
+    _fail('decoder', code: state.errorCode, attempt: _recovery.decoderFailures);
   }
 
   void _sample() {
@@ -1020,7 +1090,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
               keySystem: _candidate?.keySystem ?? playReadyKeySystem,
               robustness: _candidate?.robustness ?? '2000',
               token: join.token,
-              maxHeight: join.clear ? null : join.maxHeight ?? _policy?.maxHeight,
+              maxHeight: _maxHeight(join),
               live: true,
               controller: video,
             ),
@@ -1066,6 +1136,15 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     );
     if (widget.fullscreen) return box;
     return AspectRatio(aspectRatio: 16 / 9, child: box);
+  }
+
+  /// The server's cap (protected stream only), lowered by a decoder
+  /// failure (D-190) on either stream.
+  int? _maxHeight(LiveJoin join) {
+    final int? server = join.clear ? null : join.maxHeight ?? _policy?.maxHeight;
+    final int? decode = _decodeCap;
+    if (decode == null) return server;
+    return server == null ? decode : min(server, decode);
   }
 
   /// Keeps the picture (and its native player) when fullscreen moves it to
@@ -1178,6 +1257,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
               PressableScale(
                 onTap: () {
                   _quickReloads = 0;
+                  _recovery.retriedByStudent();
                   _start();
                 },
                 semanticLabel: context.tr('common.retry'),

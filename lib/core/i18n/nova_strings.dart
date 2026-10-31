@@ -1159,6 +1159,12 @@ const Map<String, Map<String, String>> K = {
     'fr': 'La vidéo n’a pas pu être décodée.',
     'ar': 'تعذّر فك ترميز الفيديو.',
   },
+  // D-190: a Live whose decoder failed past its automatic attempts.
+  'player.err.decoder': {
+    'en': 'This phone cannot decode this video. Try another device, or update the NOVA app.',
+    'fr': 'Ce téléphone ne parvient pas à décoder cette vidéo. Essayez un autre appareil ou mettez à jour l’application NOVA.',
+    'ar': 'لا يستطيع هذا الهاتف فك ترميز هذا الفيديو. جرّب جهازاً آخر أو حدّث تطبيق NOVA.',
+  },
   'player.err.timeout': {
     'en': 'The connection is too slow. Check your internet and retry.',
     'fr': 'La connexion est trop lente. Vérifie ton internet et réessaie.',

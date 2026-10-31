@@ -406,6 +406,103 @@ void main() {
       );
     });
 
+    group('D-190 recovery in place, no endless decoder retries (Live 69, 2026-10-31)', () {
+      const Duration s0 = Duration.zero;
+      LiveFailureAction decide(LiveRecovery recovery, String category, String kind, int code, Duration now,
+              {TargetPlatform platform = TargetPlatform.android}) =>
+          recovery.decide(category: category, kind: kind, code: code, now: now, platform: platform);
+
+      test('Android 1002 behind the live window jumps to the live edge in place', () {
+        final LiveRecovery recovery = LiveRecovery();
+        expect(decide(recovery, 'behind_live', 'other', 1002, s0), LiveFailureAction.edgeJump);
+        expect(recovery.edgeJumps, 1);
+      });
+
+      test('two failed edge jumps within 60 s: the next one is today\'s full reload', () {
+        final LiveRecovery recovery = LiveRecovery();
+        expect(decide(recovery, 'behind_live', 'other', 1002, s0), LiveFailureAction.edgeJump);
+        expect(decide(recovery, 'behind_live', 'other', 1002, const Duration(seconds: 20)), LiveFailureAction.edgeJump);
+        expect(decide(recovery, 'behind_live', 'other', 1002, const Duration(seconds: 59)), LiveFailureAction.usual);
+        // The full reload's new player gets its own edge jumps.
+        expect(decide(recovery, 'behind_live', 'other', 1002, const Duration(seconds: 90)), LiveFailureAction.edgeJump);
+      });
+
+      test('edge jumps spread over more than 60 s never reload', () {
+        final LiveRecovery recovery = LiveRecovery();
+        for (int minute = 0; minute < 5; minute++) {
+          expect(decide(recovery, 'behind_live', 'other', 1002, Duration(seconds: 35 * minute)), LiveFailureAction.edgeJump);
+        }
+      });
+
+      test('only Media3 1002 behind_live counts: iPhone, the PC app and other codes are unchanged', () {
+        final LiveRecovery recovery = LiveRecovery();
+        expect(decide(recovery, 'behind_live', 'other', 1002, s0, platform: TargetPlatform.iOS), LiveFailureAction.usual);
+        expect(decide(recovery, 'behind_live', 'other', 1002, s0, platform: TargetPlatform.windows), LiveFailureAction.usual);
+        expect(decide(recovery, 'delivery', 'other', 1002, s0), LiveFailureAction.usual);
+        expect(decide(recovery, 'behind_live', 'other', 2001, s0), LiveFailureAction.usual);
+        expect(recovery.edgeJumps, 0);
+      });
+
+      test('decoder codes: three automatic attempts, then the error state and no more retries', () {
+        final LiveRecovery recovery = LiveRecovery();
+        expect(decide(recovery, 'capability', 'decoder', 4001, s0), LiveFailureAction.decoderRetry);
+        expect(decide(recovery, 'decode', 'decoder', 4003, const Duration(seconds: 5)), LiveFailureAction.decoderRetry);
+        expect(decide(recovery, 'capability', 'decoder', 4001, const Duration(seconds: 10)), LiveFailureAction.decoderRetry);
+        expect(decide(recovery, 'capability', 'decoder', 4001, const Duration(seconds: 15)), LiveFailureAction.decoderGiveUp);
+        expect(decide(recovery, 'capability', 'decoder', 4001, const Duration(seconds: 20)), LiveFailureAction.decoderGiveUp);
+        // "Try again" by the Student: one attempt, the next failure shows the error again.
+        recovery.retriedByStudent();
+        expect(decide(recovery, 'capability', 'decoder', 4001, const Duration(seconds: 30)), LiveFailureAction.decoderGiveUp);
+      });
+
+      test('two minutes of continuous playback give a later decoder failure fresh attempts', () {
+        final LiveRecovery recovery = LiveRecovery();
+        for (int i = 0; i < 3; i++) {
+          decide(recovery, 'decode', 'decoder', 4003, Duration(seconds: i));
+        }
+        recovery.observe(playing: true, now: const Duration(seconds: 10));
+        recovery.observe(playing: true, now: const Duration(seconds: 100));
+        recovery.observe(playing: false, now: const Duration(seconds: 101)); // a stall restarts the count
+        recovery.observe(playing: true, now: const Duration(seconds: 102));
+        recovery.observe(playing: true, now: const Duration(seconds: 200));
+        expect(recovery.decoderFailures, 3);
+        recovery.observe(playing: true, now: const Duration(seconds: 222));
+        expect(recovery.decoderFailures, 0);
+        expect(decide(recovery, 'decode', 'decoder', 4003, const Duration(seconds: 230)), LiveFailureAction.decoderRetry);
+      });
+
+      test('only decoder codes: iPhone AVError decoder codes count, the PC app and other kinds do not', () {
+        final LiveRecovery recovery = LiveRecovery();
+        expect(decide(recovery, 'decode', 'decoder', -11821, s0, platform: TargetPlatform.iOS), LiveFailureAction.decoderRetry);
+        expect(decide(recovery, 'decode', 'decoder', 3016, s0, platform: TargetPlatform.windows), LiveFailureAction.usual);
+        expect(decide(recovery, 'decode', 'other', 4003, s0), LiveFailureAction.usual);
+        expect(decide(recovery, 'license', 'drm', 6004, s0), LiveFailureAction.usual);
+        expect(decide(recovery, 'decode', 'decoder', 3001, s0), LiveFailureAction.usual);
+        expect(recovery.decoderFailures, 1);
+      });
+
+      test('network failures keep today\'s handling and touch no counter', () {
+        final LiveRecovery recovery = LiveRecovery();
+        for (final int code in <int>[2000, 2001, 2002, 2004]) {
+          expect(
+            decide(recovery, code == 2002 ? 'timeout' : 'delivery', 'other', code, s0),
+            LiveFailureAction.usual,
+          );
+        }
+        expect(recovery.edgeJumps, 0);
+        expect(recovery.decoderFailures, 0);
+      });
+
+      test('the first decoder retry asks for one rendition lower', () {
+        expect(lowerDecodeHeight(<int>[1080, 720, 480]), 720);
+        expect(lowerDecodeHeight(<int>[480, 1080, 720]), 720);
+        expect(lowerDecodeHeight(<int>[1080, 720, 480], current: 720), 480);
+        expect(lowerDecodeHeight(<int>[1080, 720, 480], current: 480), 480);
+        expect(lowerDecodeHeight(<int>[480]), isNull);
+        expect(lowerDecodeHeight(const <int>[]), isNull);
+      });
+    });
+
     test('a speaking turn LiveKit ended is never reconnected (Live 66, 2026-10-30)', () {
       expect(speakerTurnEndedBy(DisconnectReason.participantRemoved), isTrue);
       expect(speakerTurnEndedBy(DisconnectReason.roomDeleted), isTrue);
@@ -1144,6 +1241,139 @@ void main() {
       expect(players.created.last['clear'], isTrue);
       expect(ClearDeliveryMemory.live, isTrue);
       await leave(tester);
+    });
+
+    group('D-190 (Live 69, 2026-10-31)', () {
+      List<String> sent(int id) => <String>[for (final MethodCall c in players.commands[id] ?? const <MethodCall>[]) c.method];
+
+      Future<void> play(WidgetTester tester) async {
+        players.emit(<String, Object?>{'event': 'firstFrame'});
+        players.emit(<String, Object?>{'event': 'state', 'state': 'ready'});
+        players.emit(<String, Object?>{'event': 'playing', 'value': true});
+        await tester.pump(const Duration(seconds: 1));
+      }
+
+      Future<void> behindLiveWindow(WidgetTester tester) async {
+        players.emit(<String, Object?>{'event': 'error', 'category': 'behind_live', 'kind': 'other', 'code': 1002});
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+
+      testWidgets('1002 behind the live window: back to the live edge in the same player, no new join', (tester) async {
+        final FakeBackend backend = await pumpRoom(tester, clearLive());
+        await tester.pump(const Duration(milliseconds: 200));
+        await play(tester);
+        final int id = players.lastId;
+
+        await behindLiveWindow(tester);
+        expect(sent(id), contains('recoverAtLiveEdge'));
+        expect(sent(id), isNot(contains('release')));
+        expect(joins(backend), hasLength(1), reason: 'no new authorization');
+        expect(players.created, hasLength(1), reason: 'no new player');
+        expect(find.text('Reconnecting to the live broadcast…'), findsNothing);
+
+        // The recovered player plays on; a later failure is seen again.
+        await play(tester);
+        await tester.pump(const Duration(seconds: 70));
+        await behindLiveWindow(tester);
+        expect(sent(id).where((String m) => m == 'recoverAtLiveEdge'), hasLength(2));
+        expect(joins(backend), hasLength(1));
+        await leave(tester);
+
+        final List<Map<String, dynamic>> jumps =
+            telemetry(backend).where((Map<String, dynamic> e) => e['type'] == 'edge_jump').toList();
+        expect(jumps, hasLength(2));
+        expect(jumps.first['error_code'], 1002);
+        expect(jumps.first['attempt'], 1);
+        expect(jumps.first['delivery_mode'], 1);
+        expect(telemetry(backend).where((Map<String, dynamic> e) => e['type'] == 'reload'), isEmpty);
+      });
+
+      testWidgets('two failed edge jumps within 60 s: the third failure gets the full reload', (tester) async {
+        final FakeBackend backend = await pumpRoom(tester, clearLive());
+        await tester.pump(const Duration(milliseconds: 200));
+        await play(tester);
+        final int id = players.lastId;
+
+        await behindLiveWindow(tester);
+        await tester.pump(const Duration(seconds: 5));
+        await behindLiveWindow(tester);
+        await tester.pump(const Duration(seconds: 5));
+        expect(sent(id).where((String m) => m == 'recoverAtLiveEdge'), hasLength(2));
+        expect(joins(backend), hasLength(1));
+
+        await behindLiveWindow(tester);
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(sent(id).where((String m) => m == 'recoverAtLiveEdge'), hasLength(2));
+        expect(joins(backend), hasLength(2));
+        expect(players.created, hasLength(2));
+        await leave(tester);
+
+        final Map<String, dynamic> reload =
+            telemetry(backend).singleWhere((Map<String, dynamic> e) => e['type'] == 'reload');
+        expect(reload['error_code'], liveReloadRetryLater);
+        expect(reload['error_data_code'], 1002);
+      });
+
+      testWidgets('a decoder that keeps failing: three attempts (the first a rendition lower), then the error screen',
+          (tester) async {
+        final FakeBackend backend = await pumpRoom(tester, clearLive());
+        await tester.pump(const Duration(milliseconds: 200));
+        players.emit(<String, Object?>{'event': 'tracks', 'heights': <int>[1080, 720, 480]});
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(players.created.single['maxHeight'], isNull);
+
+        Future<void> decoderFails() async {
+          players.emit(<String, Object?>{'event': 'error', 'category': 'capability', 'kind': 'decoder', 'code': 4001});
+          await tester.pump();
+          await tester.pump(const Duration(seconds: 6));
+          await tester.pump(const Duration(milliseconds: 200));
+        }
+
+        await decoderFails();
+        expect(joins(backend), hasLength(2));
+        expect(players.created[1]['maxHeight'], 720);
+        await decoderFails();
+        await decoderFails();
+        expect(joins(backend), hasLength(4));
+        expect(players.created, hasLength(4));
+
+        await decoderFails();
+        expect(find.text('This phone cannot decode this video. Try another device, or update the NOVA app.'), findsOneWidget);
+        await tester.pump(const Duration(seconds: 60));
+        expect(joins(backend), hasLength(4), reason: 'no further automatic retry');
+        expect(players.created, hasLength(4));
+
+        final FakeRequest shown = backend.requests.singleWhere((FakeRequest r) => r.path == '/playback-diagnostics');
+        expect((shown.data! as Map<String, Object?>)['event'], 'error_shown');
+        expect((shown.data! as Map<String, Object?>)['category'], 'decoder');
+        expect((shown.data! as Map<String, Object?>)['code'], 4001);
+        await leave(tester);
+
+        final List<Map<String, dynamic>> final14 = telemetry(backend)
+            .where((Map<String, dynamic> e) => e['type'] == 'error' && e['error_category'] == liveFailureCodes['decoder'])
+            .toList();
+        expect(final14, hasLength(1));
+        expect(final14.single['attempt'], 4);
+        expect(final14.single['error_data_code'], 4001);
+      });
+
+      testWidgets('network failures are retried as before', (tester) async {
+        final FakeBackend backend = await pumpRoom(tester, clearLive());
+        await tester.pump(const Duration(milliseconds: 200));
+        await play(tester);
+        final int id = players.lastId;
+        players.emit(<String, Object?>{'event': 'error', 'category': 'delivery', 'kind': 'other', 'code': 2001});
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(sent(id), isNot(contains('recoverAtLiveEdge')));
+        expect(joins(backend), hasLength(2));
+        await leave(tester);
+        expect(telemetry(backend).singleWhere((Map<String, dynamic> e) => e['type'] == 'reload')['error_code'],
+            liveReloadRetryLater);
+      });
     });
 
     testWidgets('a busy or failing server is retried without a dead end', (tester) async {

@@ -207,6 +207,13 @@ class ProtectedPlayerView(
             "pause" -> player.pause()
             "seekTo" -> player.seekTo((call.argument<Number>("ms") ?: 0).toLong())
             "seekToLiveEdge" -> player.seekToDefaultPosition()
+            // D-190: Media3's documented recovery from ERROR_CODE_BEHIND_LIVE_WINDOW,
+            // in place: the same media item, source and DRM session manager (no new
+            // authorization), prepared again at the live edge; playWhenReady is kept.
+            "recoverAtLiveEdge" -> {
+                player.seekToDefaultPosition()
+                player.prepare()
+            }
             "setSpeed" -> player.playbackParameters =
                 PlaybackParameters((call.argument<Number>("speed") ?: 1.0).toFloat())
             "setVolume" -> player.volume = (call.argument<Number>("volume") ?: 1.0).toFloat()

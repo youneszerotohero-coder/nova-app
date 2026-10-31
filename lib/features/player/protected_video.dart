@@ -257,6 +257,35 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
   Future<void> setVolume(double volume) => _call('setVolume', <String, Object>{'volume': volume});
   Future<void> seekToLiveEdge() => _call('seekToLiveEdge');
 
+  /// D-190: a Live that fell behind its live window (Android Media3 1002)
+  /// starts again at the live edge in the same native player — same media
+  /// item, source and DRM session manager, no new authorization. The
+  /// failure is cleared first, so the next one is reported again. False
+  /// when the native player could not do it (then: a full reload).
+  Future<bool> recoverAtLiveEdge() async {
+    final VideoState failed = value;
+    value = VideoState(
+      phase: 'buffering',
+      position: failed.position,
+      duration: failed.duration,
+      buffered: failed.buffered,
+      heights: failed.heights,
+      firstFrame: failed.firstFrame,
+      liveOffset: failed.liveOffset,
+      licenseStatus: failed.licenseStatus,
+    );
+    final MethodChannel? methods = _methods;
+    if (methods == null) return false;
+    try {
+      await methods.invokeMethod<void>('recoverAtLiveEdge');
+      return true;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
   /// A renewed Live entitlement for future licence requests.
   Future<void> renewToken(String token) => _call('renewToken', <String, Object>{'token': token});
 

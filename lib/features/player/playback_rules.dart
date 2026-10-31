@@ -382,3 +382,138 @@ const List<WatermarkSpot> liveWatermarkSpots = <WatermarkSpot>[
   WatermarkSpot(top: 0.42, inset: 0.30, right: false),
   WatermarkSpot(top: 0.58, inset: 0.30, right: true),
 ];
+
+/// What a failing Live player does next (D-190, Live 69 study).
+enum LiveFailureAction {
+  /// Back to the live edge in place: same player, same source and DRM
+  /// session, no new authorization or playback session.
+  edgeJump,
+
+  /// A decoder failure with automatic attempts left: today's handling
+  /// (clear stream in mode B, a fresh player on the clear stream).
+  decoderRetry,
+
+  /// A decoder failure past its automatic attempts: the error screen.
+  decoderGiveUp,
+
+  /// Anything else, network failures included: today's handling.
+  usual,
+}
+
+/// D-190 (Live 69, 2026-10-31: 26 % of app Students hit Media3 1002
+/// `ERROR_CODE_BEHIND_LIVE_WINDOW` after a network stall, each answered by a
+/// full reload; two phones looped 282 times on 4001
+/// `ERROR_CODE_DECODER_INIT_FAILED`).
+///
+/// * Behind the live window (Android Media3 1002 only: AVPlayer and Shaka
+///   have no such fatal error): jump back to the live edge in place; only
+///   when that in-place recovery failed twice within [edgeWindow] does the
+///   next one get today's full reload.
+/// * Decoder failures (only the codes in [androidDecoderCodes] /
+///   [iosDecoderCodes]): at most [decoderAttempts] automatic attempts, the
+///   first one a rendition lower ([lowerDecodeHeight]); the next failure
+///   shows the error screen, without further automatic retries. After
+///   [decoderRecovered] of continuous playback, a later decoder failure gets
+///   fresh attempts.
+/// * Network failures and everything else: unchanged.
+///
+/// Times are the caller's clock (the time since the player opened), so the
+/// rule is the same on a phone and under fake timers.
+class LiveRecovery {
+  static const Duration edgeWindow = Duration(seconds: 60);
+  static const int edgeJumpsPerWindow = 2;
+  static const int decoderAttempts = 3;
+  static const Duration decoderRecovered = Duration(minutes: 2);
+
+  /// Media3 `PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW`.
+  static const int androidBehindLiveWindow = 1002;
+
+  /// Media3 4001 `DECODER_INIT_FAILED`, 4002 `DECODER_QUERY_FAILED`, 4003
+  /// `DECODING_FAILED`, 4004 `DECODING_FORMAT_EXCEEDS_CAPABILITIES`, 4005
+  /// `DECODING_FORMAT_UNSUPPORTED`.
+  static const Set<int> androidDecoderCodes = <int>{4001, 4002, 4003, 4004, 4005};
+
+  /// AVFoundation `AVError` -11821 `decodeFailed`, -11833
+  /// `decoderNotFound`, -11839 `decoderTemporarilyUnavailable` (the codes
+  /// `ClearPlayerView` reports as `decoder`).
+  static const Set<int> iosDecoderCodes = <int>{-11821, -11833, -11839};
+
+  final List<Duration> _edgeJumps = <Duration>[];
+  Duration? _playingSince;
+
+  /// Decoder failures since the Live last played [decoderRecovered] in a row.
+  int decoderFailures = 0;
+
+  /// In-place edge jumps within the last [edgeWindow].
+  int get edgeJumps => _edgeJumps.length;
+
+  static bool behindLiveWindow({required String? category, required int code, TargetPlatform? platform}) =>
+      (platform ?? defaultTargetPlatform) == TargetPlatform.android &&
+      category == 'behind_live' &&
+      code == androidBehindLiveWindow;
+
+  static bool decoderFailure({required String? kind, required int code, TargetPlatform? platform}) {
+    if (kind != 'decoder') return false;
+    return switch (platform ?? defaultTargetPlatform) {
+      TargetPlatform.android => androidDecoderCodes.contains(code),
+      TargetPlatform.iOS => iosDecoderCodes.contains(code),
+      _ => false,
+    };
+  }
+
+  /// The next step after a native failure observed at [now].
+  LiveFailureAction decide({
+    required String? category,
+    required String? kind,
+    required int code,
+    required Duration now,
+    TargetPlatform? platform,
+  }) {
+    if (behindLiveWindow(category: category, code: code, platform: platform)) {
+      _edgeJumps.removeWhere((Duration at) => now - at >= edgeWindow);
+      if (_edgeJumps.length < edgeJumpsPerWindow) {
+        _edgeJumps.add(now);
+        return LiveFailureAction.edgeJump;
+      }
+      // The full reload starts a new player: its own edge jumps later.
+      _edgeJumps.clear();
+      return LiveFailureAction.usual;
+    }
+    if (decoderFailure(kind: kind, code: code, platform: platform)) {
+      decoderFailures++;
+      return decoderFailures > decoderAttempts ? LiveFailureAction.decoderGiveUp : LiveFailureAction.decoderRetry;
+    }
+    return LiveFailureAction.usual;
+  }
+
+  /// One playback observation: [decoderRecovered] of continuous playback
+  /// clears the decoder failures.
+  void observe({required bool playing, required Duration now}) {
+    if (!playing) {
+      _playingSince = null;
+      return;
+    }
+    final Duration since = _playingSince ??= now;
+    if (now - since >= decoderRecovered) decoderFailures = 0;
+  }
+
+  /// The Student pressed "Try again" on the decoder error: one more
+  /// attempt, and the next decoder failure shows the error again.
+  void retriedByStudent() {
+    if (decoderFailures > decoderAttempts) decoderFailures = decoderAttempts;
+  }
+}
+
+/// The first decoder retry asks for one rendition lower (web decode guard,
+/// D-116): the highest of [heights] (highest first) below [current], or
+/// below the highest rendition when no cap is set yet; null when there is
+/// no lower rendition (the cap stays as it was).
+int? lowerDecodeHeight(List<int> heights, {int? current}) {
+  final List<int> sorted = <int>[...heights.where((int h) => h > 0)]..sort((int a, int b) => b.compareTo(a));
+  if (sorted.isEmpty) return current;
+  final int top = current ?? sorted.first;
+  for (final int height in sorted) {
+    if (height < top) return height;
+  }
+  return current;
+}

@@ -392,6 +392,9 @@ const Map<String, int> liveFailureCodes = <String, int>{
   'access': 11,
   'session_expired': 12,
   'first_frame_timeout': 13,
+  // D-190: the device's decoder failed past its automatic attempts; the
+  // error screen is shown and nothing retries by itself.
+  'decoder': 14,
 };
 
 /// `error_code` of a Live `reload` event: why the player reloaded (web
@@ -406,6 +409,12 @@ const int liveReloadRetryLater = 9003;
 const int liveReloadExpired = 9006;
 const int liveReloadClearFallback = 9007;
 const int liveReloadRenewal = 9008;
+
+/// D-190: a Live behind its live window (Media3 1002) went back to the live
+/// edge in place — telemetry event `edge_jump` with `error_code` 1002 and
+/// `attempt` (1 or 2 within 60 s), not a `reload`: same player, same
+/// authorization and playback session.
+const String liveEdgeJumpEvent = 'edge_jump';
 
 /// Why a device plays the clear Live stream (telemetry `fallback_reason`,
 /// web `LIVE_FALLBACK_*`, D-070).

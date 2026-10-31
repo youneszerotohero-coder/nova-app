@@ -978,7 +978,11 @@ String playbackPausedCategory(Object? details) =>
 /// String key of a playback failure. On the clear copy the messages never
 /// speak of protected media (web `getLocalizedClearFailureMessage`).
 String playerFailureKey(String category, {required bool clear}) {
-  if (category == 'clear_unavailable' || category == 'access' || category == 'rate' || category.startsWith('paused_')) {
+  if (category == 'clear_unavailable' ||
+      category == 'access' ||
+      category == 'rate' ||
+      category == 'decoder' ||
+      category.startsWith('paused_')) {
     return 'player.err.$category';
   }
   if (!clear) return 'player.err.$category';
