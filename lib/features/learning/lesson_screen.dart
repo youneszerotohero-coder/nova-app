@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
@@ -167,7 +168,8 @@ class _LessonScreenState extends State<LessonScreen> {
   }
 
   /// Owner decision 2026-10-29: the copy stamped with the Student's name,
-  /// phone and the date, saved then handed to the system share sheet.
+  /// phone and the date, saved then handed to the system share sheet (PC app:
+  /// saved in Downloads and opened).
   Future<void> _downloadPdf(LessonPdf pdf, BuildContext button) async {
     final AppState app = AppScope.of(context);
     final Lesson lesson = _lesson;
@@ -177,12 +179,15 @@ class _LessonScreenState extends State<LessonScreen> {
     try {
       final LessonPdfDownload download = await app.learning.downloadLessonPdf(lesson, pdf);
       _setDownloadsLeft(lesson.id, pdf.id, download.remaining ?? ((pdf.downloadsRemaining ?? 1) - 1).clamp(0, pdf.downloadLimit));
-      await LessonPdfSaver.factory().save(download.fileName, download.bytes, origin: origin);
+      final String? savedPath = await LessonPdfSaver.factory().save(download.fileName, download.bytes, origin: origin);
+      if (savedPath != null && mounted) {
+        novaToast(context, context.trf('lesson.pdfSavedInDownloads', <String, String>{'name': download.fileName}), icon: Icons.download_done_rounded);
+      }
     } on ApiException catch (error) {
       if (error.code == 'PDF_DOWNLOAD_LIMIT_REACHED') _setDownloadsLeft(lesson.id, pdf.id, 0);
       if (mounted) novaToast(context, apiErrorText(context, error), icon: Icons.error_outline_rounded);
     } on Exception {
-      if (mounted) novaToast(context, context.tr('lesson.pdfSaveFailed'), icon: Icons.error_outline_rounded);
+      if (mounted) novaToast(context, context.tr(isDesktopApp ? 'lesson.pdfSaveFailedPc' : 'lesson.pdfSaveFailed'), icon: Icons.error_outline_rounded);
     } finally {
       if (mounted) setState(() => _downloading = null);
     }

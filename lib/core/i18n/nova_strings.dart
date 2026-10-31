@@ -1555,6 +1555,16 @@ const Map<String, Map<String, String>> K = {
     'fr': 'Le PDF n’a pas pu être ouvert sur ce téléphone.',
     'ar': 'ما قدرناش نحلّو الـPDF في هاد التيليفون.',
   },
+  'lesson.pdfSaveFailedPc': {
+    'en': 'The PDF could not be saved on this PC.',
+    'fr': 'Le PDF n’a pas pu être enregistré sur ce PC.',
+    'ar': 'ما قدرناش نسجّلو الـPDF في هاد الـPC.',
+  },
+  'lesson.pdfSavedInDownloads': {
+    'en': 'Saved in your Downloads folder: {name}',
+    'fr': 'Enregistré dans ton dossier Téléchargements : {name}',
+    'ar': 'تسجّل في دوسي التحميلات تاعك: {name}',
+  },
   'lesson.blockQuiz': {'en': 'Take the quiz', 'fr': 'Fais le quiz', 'ar': 'جاوب على الكويز'},
   'lesson.noQuiz': {'en': 'No quiz for this lesson for now.', 'fr': 'Pas de quiz pour cette leçon pour l’instant.', 'ar': 'ما كاينش كويز لهاد الدرس حاليا.'},
   'lesson.quizPassed': {'en': 'Quiz passed, bravo!', 'fr': 'Quiz réussi, bravo !', 'ar': 'نجحت في الكويز، برافو!'},
