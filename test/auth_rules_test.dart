@@ -288,6 +288,16 @@ void main() {
     }
   });
 
+  testWidgets('sign-in fields are linked to the phone password manager (owner request 2026-10-31)', (tester) async {
+    final FakeBackend backend = FakeBackend(<String, FakeResponse>{});
+    backend.routes.addAll(_references);
+    await _pump(tester, _install(SessionStore(fakeApi(backend)), references: ReferenceStore(fakeApi(backend))), const LoginScreen());
+    final List<TextField> fields = tester.widgetList<TextField>(find.byType(TextField)).toList();
+    expect(fields[0].autofillHints, <String>[AutofillHints.username]);
+    expect(fields[1].autofillHints, <String>[AutofillHints.password]);
+    expect(find.ancestor(of: find.byType(TextField).first, matching: find.byType(AutofillGroup)), findsOneWidget);
+  });
+
   testWidgets('on a small phone the first screen offers both ways in; sign-in and registration link under their form (D-133)',
       (tester) async {
     final SessionStore session = SessionStore(fakeApi(FakeBackend(<String, FakeResponse>{

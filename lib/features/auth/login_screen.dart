@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
@@ -65,6 +66,8 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     try {
       await session.login(phone: _phone.text, password: _password.text);
+      // An accepted sign-in tells the password manager to save the credentials.
+      TextInput.finishAutofillContext();
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = apiErrorText(context, error));
     } finally {
@@ -126,7 +129,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(18, 24, 18, 24),
-                  child: Column(
+                  // Owner request 2026-10-31: the phone's password manager (Google, iCloud Keychain…) offers to save
+                  // the number and password, and fills them next time.
+                  child: AutofillGroup(child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       if (session.endedReason == ApiException.sessionReplaced) AuthMessage(context.tr('err.sessionReplaced')),
@@ -145,7 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       // The website's line under the form: "New to Nova? Create an account".
                       AuthModeSwitch(signIn: true, onSwitch: _openRegister),
                     ],
-                  ),
+                  )),
                 ),
                 const Spacer(),
               ],
@@ -165,6 +170,7 @@ class _LoginScreenState extends State<LoginScreen> {
         hint: '05 xx xx xx xx',
         keyboard: TextInputType.phone,
         action: TextInputAction.next,
+        autofill: AutofillHints.username,
       ),
       AuthTextField(
         controller: _password,
@@ -173,6 +179,7 @@ class _LoginScreenState extends State<LoginScreen> {
         hint: context.tr('auth.passwordHint'),
         obscure: _obscure,
         action: TextInputAction.done,
+        autofill: AutofillHints.password,
         onSubmitted: (_) => _submit(),
         trailing: PasswordVisibilityToggle(
           obscure: _obscure,
