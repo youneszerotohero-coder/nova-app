@@ -46,6 +46,11 @@ class ReverbClient {
   StreamSubscription<dynamic>? _subscription;
   String? _socketId;
   Timer? _retry;
+
+  /// Live 69 study (2026-10-31): a socket that only answered the server's pings was cut after 60 s of silence by the
+  /// proxy (26,421 reconnections in an hour); like pusher-js, the client now pings by itself every 30 s.
+  static const Duration keepAlive = Duration(seconds: 30);
+  Timer? _keepAlive;
   int _failures = 0;
   bool _wanted = false;
 
@@ -69,6 +74,8 @@ class ReverbClient {
         onError: (Object _) => _onClosed(),
         cancelOnError: true,
       );
+      _keepAlive?.cancel();
+      _keepAlive = Timer.periodic(keepAlive, (_) => _send('pusher:ping', <String, dynamic>{}));
     } catch (_) {
       _onClosed();
     }
@@ -77,6 +84,7 @@ class ReverbClient {
   void disconnect() {
     _wanted = false;
     _retry?.cancel();
+    _keepAlive?.cancel();
     _subscription?.cancel();
     _socket?.sink.close();
     _socket = null;
@@ -188,6 +196,7 @@ class ReverbClient {
   }
 
   void _onClosed() {
+    _keepAlive?.cancel();
     _subscription?.cancel();
     _socket = null;
     _socketId = null;
