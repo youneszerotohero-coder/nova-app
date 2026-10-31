@@ -104,6 +104,8 @@ class VideoState {
     this.errorKind,
     this.errorCode = 0,
     this.licenseStatus = 0,
+    this.bandwidthBps,
+    this.videoHeight,
   });
 
   /// idle | buffering | ready | ended.
@@ -135,6 +137,11 @@ class VideoState {
   /// HTTP status of the last licence exchange, telemetry `license_status`.
   final int licenseStatus;
 
+  /// D-192: the native player's measured bandwidth estimate (Android; null
+  /// before any measurement) and the height of the rendition it plays.
+  final int? bandwidthBps;
+  final int? videoHeight;
+
   VideoState copyWith({
     String? phase,
     bool? playing,
@@ -148,6 +155,8 @@ class VideoState {
     String? errorKind,
     int? errorCode,
     int? licenseStatus,
+    int? bandwidthBps,
+    int? videoHeight,
   }) =>
       VideoState(
         phase: phase ?? this.phase,
@@ -162,6 +171,8 @@ class VideoState {
         errorKind: errorKind ?? this.errorKind,
         errorCode: errorCode ?? this.errorCode,
         licenseStatus: licenseStatus ?? this.licenseStatus,
+        bandwidthBps: bandwidthBps ?? this.bandwidthBps,
+        videoHeight: videoHeight ?? this.videoHeight,
       );
 }
 
@@ -223,6 +234,8 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
           liveOffset: event['liveOffset'] is num && (event['liveOffset'] as num) >= 0
               ? Duration(milliseconds: (event['liveOffset'] as num).toInt())
               : null,
+          bandwidthBps: event['bandwidth'] is num && (event['bandwidth'] as num) > 0 ? (event['bandwidth'] as num).toInt() : null,
+          videoHeight: event['height'] is num && (event['height'] as num) > 0 ? (event['height'] as num).toInt() : null,
         );
       case 'firstFrame':
         value = value.copyWith(firstFrame: true);
@@ -286,6 +299,29 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
     }
   }
 
+  /// D-192 F (Android): the sound only (video track disabled, no video
+  /// segment loaded; the DRM session and the audio key stay) or the picture
+  /// again. False when the native player cannot.
+  Future<bool> setAudioOnly(bool on) => _optional('setAudioOnly', <String, Object>{'on': on});
+
+  /// D-192 H (Android): the Live's target distance behind the live edge;
+  /// null = the MediaItem's own (12 s). False when the native player cannot.
+  Future<bool> setLiveTargetOffset(Duration? offset) =>
+      _optional('setLiveTargetOffset', <String, Object>{'ms': offset?.inMilliseconds ?? -1});
+
+  Future<bool> _optional(String method, Map<String, Object> args) async {
+    final MethodChannel? methods = _methods;
+    if (methods == null) return false;
+    try {
+      await methods.invokeMethod<void>(method, args);
+      return true;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
   /// A renewed Live entitlement for future licence requests.
   Future<void> renewToken(String token) => _call('renewToken', <String, Object>{'token': token});
 
@@ -318,6 +354,8 @@ class ProtectedVideoView extends StatelessWidget {
     this.live = false,
     this.keySystem = playReadyKeySystem,
     this.robustness = '2000',
+    this.startBps,
+    this.audioOnly = false,
   });
 
   final String manifest;
@@ -339,6 +377,12 @@ class ProtectedVideoView extends StatelessWidget {
   final String keySystem;
   final String robustness;
 
+  /// D-192 G (Android): the first bandwidth estimate ([AbrStartMemory]).
+  final int? startBps;
+
+  /// D-192 F (Android): a fresh player of a Live already in sound only.
+  final bool audioOnly;
+
   static const String viewType = 'nova/protected-player';
   static const String iosViewType = 'nova/clear-player';
 
@@ -353,6 +397,8 @@ class ProtectedVideoView extends StatelessWidget {
       'startMs': startSeconds * 1000,
       'maxHeight': maxHeight,
       'live': live,
+      if (startBps != null) 'startBps': startBps,
+      if (audioOnly) 'audioOnly': true,
     };
     if (isWindowsApp) {
       return _WindowsVideoSurface(

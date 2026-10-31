@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -52,6 +53,12 @@ _Overlay _overlayOf(VideoState state) => (
 /// only after two such jumps within 60 s; a decoder failure gets at most
 /// three automatic attempts (the first a rendition lower), then the error
 /// screen ([LiveRecovery]). Network failures are handled as before.
+///
+/// D-192 (Android only; iPhone and the PC app unchanged): a conservative
+/// first bandwidth estimate ([AbrStartMemory]), the sound only on a link too
+/// weak for the lowest rung ([LiveAudioOnly], banner « Connexion faible :
+/// son seul », back to the picture by itself) and a target 7 s behind the
+/// live edge while the playback is healthy ([LiveLatencyTarget]).
 ///
 /// Speaking turn (owner decision 2026-10-30, amends D-066 for the apps):
 /// while [suspended] the player is kept, muted and hidden under the
@@ -176,6 +183,19 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   /// unreachable); unlike [ClearDeliveryMemory.live] not kept for the device.
   bool _clearForThisLive = false;
 
+  /// D-192 F/H: the sound-only fallback and the latency target of this
+  /// Live, kept across native players; what the current player has.
+  final LiveAudioOnly _audioOnly = LiveAudioOnly();
+  final LiveLatencyTarget _latency = LiveLatencyTarget();
+  LiveLatencyMode _appliedLatency = LiveLatencyMode.normal;
+  bool _audioSwitching = false;
+  final ValueNotifier<bool> _soundOnly = ValueNotifier<bool>(false);
+
+  /// D-192's clock (`clock`, so tests drive it) and when the stall in progress began on it.
+  final DateTime _clockStart = clock.now();
+  Duration get _now => clock.now().difference(_clockStart);
+  Duration? _stallSince;
+
   /// 0 = automatic; a manual choice survives reconnections (web).
   int _quality = 0;
   bool _qualityApplied = false;
@@ -230,6 +250,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     _teardown();
     _overlay.dispose();
     _spot.dispose();
+    _soundOnly.dispose();
     super.dispose();
   }
 
@@ -433,6 +454,8 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
         'join_ms': joinClock.elapsedMilliseconds,
         'delivery_mode': clear ? 1 : 0,
         'fallback_reason': _fallbackReason,
+        // D-192 G: the first bandwidth estimate given to the native player (Android).
+        if (_adaptive) 'startup_bps': AbrStartMemory.startBps(),
         // Web codes: Widevine 1, PlayReady 2, FairPlay 3 (FairPlay is hardware-backed).
         if (!clear) 'drm_system': switch (candidate?.drm) { 'fairplay' => 3, 'playready' => 2, _ => 1 },
         if (!clear)
@@ -564,6 +587,10 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     _scheduleHide();
     _sampler?.cancel();
     _sampler = Timer.periodic(_sampleEvery, (_) => _sample());
+    // D-192 H: a fresh native player starts at the normal target (12 s) and counts as a stall.
+    _appliedLatency = LiveLatencyMode.normal;
+    _latency.stall(now: _now, duration: const Duration(days: 1));
+    _soundOnly.value = _audioOnly.on && _adaptive;
     video.setVolume(_muted ? 0 : 1);
     if (!join.clear && (_policy?.clearAvailable ?? false)) _watchProtectedStart(video);
     _watchPlayback(video);
@@ -604,7 +631,68 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
       if (_startWatch?.isActive ?? false) return;
       if (watch.stuck(restarts: _watchRestarts)) return _restartStuck(video, state, played: watch.played);
       _keepNearEdge(video, state);
+      _adapt(video, state);
     });
+  }
+
+  /// D-192: Android's Media3 player only (track disabling, target offset override).
+  bool get _adaptive => !kIsWeb && defaultTargetPlatform == TargetPlatform.android && !isWindowsApp;
+
+  bool _playingNow(VideoState state) =>
+      state.playing && state.firstFrame && _stall == null && _expectedToPlay && !widget.suspended && !_audioSwitching;
+
+  /// D-192 F/H, once a second: the measured bandwidth and the buffer decide.
+  void _adapt(ProtectedVideoController video, VideoState state) {
+    if (!_adaptive) return;
+    AbrStartMemory.remember(state.bandwidthBps);
+    final Duration now = _now;
+    final bool playing = _playingNow(state);
+    if (LiveLatencyTarget.enabled) {
+      _applyLatency(video, state, _latency.observe(now: now, playing: playing, bufferAhead: state.buffered - state.position, liveOffset: state.liveOffset));
+    }
+    if (LiveAudioOnly.enabled && !_audioSwitching) {
+      final AudioOnlyDecision? decision = _audioOnly.observe(now: now, bandwidthBps: state.bandwidthBps, playing: playing);
+      if (decision != null) _switchSoundOnly(video, state, decision == AudioOnlyDecision.enter);
+    }
+  }
+
+  void _adaptToStall(ProtectedVideoController video, VideoState state, Duration duration) {
+    if (!_adaptive) return;
+    final Duration now = _now;
+    if (LiveLatencyTarget.enabled) _applyLatency(video, state, _latency.stall(now: now, duration: duration));
+    if (!LiveAudioOnly.enabled || _audioSwitching) return;
+    final AudioOnlyDecision? decision = _audioOnly.stall(now: now, duration: duration, lowestRung: onLowestRung(state.heights, state.videoHeight));
+    if (decision == AudioOnlyDecision.enter) _switchSoundOnly(video, state, true);
+  }
+
+  void _applyLatency(ProtectedVideoController video, VideoState state, LiveLatencyMode mode) {
+    if (mode == _appliedLatency) return;
+    _appliedLatency = mode;
+    unawaited(video.setLiveTargetOffset(mode == LiveLatencyMode.low ? LiveLatencyTarget.lowOffset : null));
+    _telemetry?.record('latency_target', <String, num>{
+      'target_latency_s': _latency.target.inMilliseconds / 1000,
+      if (state.liveOffset != null) 'live_latency_s': state.liveOffset!.inMilliseconds / 1000,
+      'buffer_ahead_s': (state.buffered - state.position).inMilliseconds / 1000,
+      'attempt': _latency.failures,
+      ..._deliveryField,
+    });
+  }
+
+  /// D-192 F: the same native player disables (or enables again) its video
+  /// track: no new join, authorization or player.
+  void _switchSoundOnly(ProtectedVideoController video, VideoState state, bool on) {
+    _audioSwitching = true;
+    _telemetry?.record(on ? 'audio_only_on' : 'audio_only_off', <String, num>{
+      if (state.bandwidthBps != null) 'bandwidth_bps': state.bandwidthBps!,
+      if (state.videoHeight != null) 'height': state.videoHeight!,
+      'stall_count': _stallCount,
+      'attempt': _audioOnly.entries,
+      'audio_only': on ? (_audioOnly.reason == 'stalls' ? 2 : 1) : 0,
+      ..._deliveryField,
+    });
+    _telemetry?.flush();
+    _soundOnly.value = on;
+    unawaited(video.setAudioOnly(on).whenComplete(() => _audioSwitching = false));
   }
 
   /// iPhone: AVPlayer plays the Live at exactly 1.0× without catching up
@@ -668,14 +756,19 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
           'stall_count': _stallCount,
           ..._takeReload(),
         });
+        final ProtectedVideoController? video = _video;
+        final Duration? since = _stallSince;
+        if (video != null && since != null) _adaptToStall(video, state, _now - since);
       } else if (!_playerPlayed) {
         final Map<String, num> reloaded = _takeReload();
         if (reloaded.isNotEmpty) _telemetry?.record('playing', reloaded);
       }
       _stall = null;
+      _stallSince = null;
       _playerPlayed = true;
     } else if (_playerPlayed && _stall == null && state.phase == 'buffering' && _expectedToPlay) {
       _stall = Stopwatch()..start();
+      _stallSince = _now;
       final Map<String, num> media = _mediaFields(state);
       _telemetry?.record('waiting', <String, num>{
         'buffer_ahead_s': media['buffer_ahead_s']!,
@@ -992,6 +1085,9 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     _telemetry?.record('sample', <String, num>{
       ..._mediaFields(state),
       if (_quality > 0) 'height': _quality,
+      // D-192: the latency target and the sound only (Android).
+      if (_adaptive) 'target_latency_s': _latency.target.inMilliseconds / 1000,
+      if (_adaptive) 'audio_only': _audioOnly.on ? 1 : 0,
     });
   }
 
@@ -1093,8 +1189,14 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
               maxHeight: _maxHeight(join),
               live: true,
               controller: video,
+              startBps: _adaptive ? AbrStartMemory.startBps() : null,
+              audioOnly: _adaptive && _audioOnly.on,
             ),
             _watermark(context),
+            ValueListenableBuilder<bool>(
+              valueListenable: _soundOnly,
+              builder: (BuildContext context, bool soundOnly, _) => soundOnly ? const _SoundOnlyBanner() : const SizedBox.shrink(),
+            ),
             ValueListenableBuilder<_Overlay>(
               valueListenable: _overlay,
               builder: (BuildContext context, _Overlay overlay, Widget? spinner) =>
@@ -1352,6 +1454,40 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
 }
 
 /// Auto or one of the Live renditions (1080p, 720p, 480p), web parity.
+/// D-192 F: « Connexion faible : son seul » over the dark picture.
+class _SoundOnlyBanner extends StatelessWidget {
+  const _SoundOnlyBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: IgnorePointer(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          decoration: BoxDecoration(
+            color: const Color(0xEB0F172A),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.volume_up_rounded, size: 18, color: Color(0xFFFACC15)),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  context.tr('player.audio_only'),
+                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class LiveQualitySheet extends StatelessWidget {
   const LiveQualitySheet({
     super.key,

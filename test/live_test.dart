@@ -406,6 +406,104 @@ void main() {
       );
     });
 
+    group('D-192 sound only, faster start, adaptive latency (2026-10-31)', () {
+      Duration at(int seconds) => Duration(seconds: seconds);
+
+      test('the first estimate lands on 480p, or follows the link measured in this app session', () {
+        AbrStartMemory.reset();
+        addTearDown(AbrStartMemory.reset);
+        expect(AbrStartMemory.startBps(), 2200000);
+        // Media3 picks within 70 %: clear HLS 480p peak 1.33 fits, 720p 2.47 does not; DASH video 480p ≤ 1.2, 720p ≥ 1.8.
+        expect(AbrStartMemory.startBps() * 0.7, greaterThanOrEqualTo(1330000));
+        expect(AbrStartMemory.startBps() * 0.7, lessThan(1800000));
+        AbrStartMemory.remember(null);
+        AbrStartMemory.remember(0);
+        expect(AbrStartMemory.startBps(), 2200000);
+        AbrStartMemory.remember(5000000);
+        expect(AbrStartMemory.startBps(), 4000000);
+        AbrStartMemory.remember(300000);
+        expect(AbrStartMemory.startBps(), AbrStartMemory.minBps);
+        AbrStartMemory.remember(50000000);
+        expect(AbrStartMemory.startBps(), AbrStartMemory.maxBps);
+      });
+
+      test('sound only after 20 s below 350 kbit/s, never on one sample, an unmeasured estimate or a pause', () {
+        final LiveAudioOnly rule = LiveAudioOnly();
+        expect(rule.observe(now: at(0), bandwidthBps: 300000, playing: true), isNull);
+        expect(rule.observe(now: at(5), bandwidthBps: null, playing: true), isNull);
+        expect(rule.observe(now: at(6), bandwidthBps: 300000, playing: false), isNull);
+        expect(rule.observe(now: at(10), bandwidthBps: 300000, playing: true), isNull);
+        expect(rule.observe(now: at(19), bandwidthBps: 900000, playing: true), isNull);
+        expect(rule.observe(now: at(21), bandwidthBps: 300000, playing: true), isNull);
+        expect(rule.observe(now: at(30), bandwidthBps: 300000, playing: true), isNull);
+        expect(rule.observe(now: at(41), bandwidthBps: 300000, playing: true), AudioOnlyDecision.enter);
+        expect(rule.on, isTrue);
+        expect(rule.reason, 'bandwidth');
+      });
+
+      test('sound only after 2 stalls within 60 s on the lowest rung; back at a calm 20 s check from 700 kbit/s', () {
+        final LiveAudioOnly rule = LiveAudioOnly();
+        const Duration stall = Duration(milliseconds: 900);
+        expect(rule.stall(now: at(0), duration: stall, lowestRung: false), isNull);
+        expect(rule.stall(now: at(1), duration: const Duration(milliseconds: 400), lowestRung: true), isNull);
+        expect(rule.stall(now: at(2), duration: stall, lowestRung: true), isNull);
+        expect(rule.stall(now: at(63), duration: stall, lowestRung: true), isNull);
+        expect(rule.stall(now: at(70), duration: stall, lowestRung: true), AudioOnlyDecision.enter);
+        expect(rule.reason, 'stalls');
+        expect(rule.observe(now: at(80), bandwidthBps: 2000000, playing: true), isNull);
+        rule.stall(now: at(85), duration: stall, lowestRung: false);
+        expect(rule.observe(now: at(90), bandwidthBps: 2000000, playing: true), isNull, reason: 'a stall since the last check');
+        expect(rule.observe(now: at(110), bandwidthBps: 650000, playing: true), isNull);
+        expect(rule.observe(now: at(130), bandwidthBps: 700000, playing: true), AudioOnlyDecision.leave);
+        // Back to the sound only within 5 minutes: the hold doubles.
+        rule.stall(now: at(140), duration: stall, lowestRung: true);
+        expect(rule.stall(now: at(141), duration: stall, lowestRung: true), AudioOnlyDecision.enter);
+        expect(rule.hold, const Duration(seconds: 40));
+        expect(rule.observe(now: at(175), bandwidthBps: 3000000, playing: true), isNull);
+        expect(rule.observe(now: at(181), bandwidthBps: 3000000, playing: true), AudioOnlyDecision.leave);
+        expect(rule.entries, 2);
+      });
+
+      test('the lowest rung of a ladder only', () {
+        expect(onLowestRung(<int>[1080, 720, 480, 360, 240], 240), isTrue);
+        expect(onLowestRung(<int>[1080, 720, 480, 360, 240], 360), isFalse);
+        expect(onLowestRung(<int>[1080], 1080), isFalse);
+        expect(onLowestRung(<int>[720, 480], null), isFalse);
+      });
+
+      test('7 s behind the edge after 60 s healthy, back to 12 s on a stall, the next try later and later', () {
+        final LiveLatencyTarget rule = LiveLatencyTarget();
+        LiveLatencyMode healthy(int seconds) => rule.observe(
+            now: at(seconds), playing: true, bufferAhead: const Duration(seconds: 8), liveOffset: const Duration(seconds: 12));
+        expect(rule.target, const Duration(seconds: 12));
+        expect(healthy(0), LiveLatencyMode.normal);
+        expect(rule.observe(now: at(30), playing: true, bufferAhead: const Duration(seconds: 2), liveOffset: const Duration(seconds: 12)),
+            LiveLatencyMode.normal);
+        expect(healthy(31), LiveLatencyMode.normal);
+        expect(healthy(90), LiveLatencyMode.normal);
+        expect(healthy(91), LiveLatencyMode.low);
+        expect(rule.target, const Duration(seconds: 7));
+        expect(rule.stall(now: at(100), duration: const Duration(milliseconds: 300)), LiveLatencyMode.low);
+        expect(rule.stall(now: at(100), duration: const Duration(seconds: 1)), LiveLatencyMode.normal);
+        // The next try waits 2 minutes, then 4.
+        for (int t = 102; t < 220; t += 2) {
+          expect(healthy(t), LiveLatencyMode.normal, reason: 'at $t s');
+        }
+        expect(healthy(220), LiveLatencyMode.low);
+        rule.stall(now: at(222), duration: const Duration(seconds: 1));
+        expect(rule.failures, 2);
+        expect(healthy(224), LiveLatencyMode.normal);
+        expect(healthy(461), LiveLatencyMode.normal);
+        expect(healthy(462), LiveLatencyMode.low);
+        // Ten minutes close forget the failures; a fresh native player counts as a stall.
+        expect(rule.observe(now: at(1062), playing: true, bufferAhead: const Duration(seconds: 5), liveOffset: const Duration(seconds: 7)),
+            LiveLatencyMode.low);
+        expect(rule.failures, 0);
+        expect(rule.stall(now: at(1063), duration: const Duration(days: 1)), LiveLatencyMode.normal);
+        expect(rule.failures, 1);
+      });
+    });
+
     group('D-190 recovery in place, no endless decoder retries (Live 69, 2026-10-31)', () {
       const Duration s0 = Duration.zero;
       LiveFailureAction decide(LiveRecovery recovery, String category, String kind, int code, Duration now,
@@ -1373,6 +1471,95 @@ void main() {
         await leave(tester);
         expect(telemetry(backend).singleWhere((Map<String, dynamic> e) => e['type'] == 'reload')['error_code'],
             liveReloadRetryLater);
+      });
+    });
+
+    group('D-192 (2026-10-31)', () {
+      List<MethodCall> calls(int id, String method) =>
+          <MethodCall>[for (final MethodCall c in players.commands[id] ?? const <MethodCall>[]) if (c.method == method) c];
+
+      Future<void> play(WidgetTester tester) async {
+        players.emit(<String, Object?>{'event': 'firstFrame'});
+        players.emit(<String, Object?>{'event': 'state', 'state': 'ready'});
+        players.emit(<String, Object?>{'event': 'playing', 'value': true});
+        await tester.pump(const Duration(seconds: 1));
+      }
+
+      /// One second of playback as Media3 reports it.
+      Future<void> second(WidgetTester tester, int t, {int? bandwidth, int bufferAheadMs = 8000, int height = 480}) async {
+        players.emit(<String, Object?>{
+          'event': 'position', 'position': t * 1000, 'duration': 0, 'buffered': t * 1000 + bufferAheadMs, 'liveOffset': 12000,
+          'bandwidth': bandwidth ?? -1, 'height': height,
+        });
+        await tester.pump(const Duration(seconds: 1));
+      }
+
+      testWidgets('a conservative first estimate goes to the native player and to telemetry', (tester) async {
+        AbrStartMemory.reset();
+        addTearDown(AbrStartMemory.reset);
+        final FakeBackend backend = await pumpRoom(tester, clearLive());
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(players.created.single['startBps'], 2200000);
+        expect(players.created.single.containsKey('audioOnly'), isFalse);
+        await leave(tester);
+        expect(telemetry(backend).firstWhere((Map<String, dynamic> e) => e['type'] == 'ready')['startup_bps'], 2200000);
+      });
+
+      testWidgets('below 350 kbit/s for 20 s: the sound only in the same player with the banner, then the picture again', (tester) async {
+        final FakeBackend backend = await pumpRoom(tester, clearLive());
+        await tester.pump(const Duration(milliseconds: 200));
+        await play(tester);
+        final int id = players.lastId;
+        for (int t = 1; t <= 24; t++) {
+          await second(tester, t, bandwidth: 250000, height: 240);
+        }
+        expect(calls(id, 'setAudioOnly').map((MethodCall c) => c.arguments), <Object?>[<String, Object?>{'on': true}]);
+        expect(find.text('Weak connection: sound only'), findsOneWidget);
+        expect(joins(backend), hasLength(1), reason: 'no new authorization');
+        expect(players.created, hasLength(1), reason: 'no new player');
+
+        for (int t = 25; t <= 48; t++) {
+          await second(tester, t, bandwidth: 900000, height: 0);
+        }
+        expect(calls(id, 'setAudioOnly').map((MethodCall c) => c.arguments),
+            <Object?>[<String, Object?>{'on': true}, <String, Object?>{'on': false}]);
+        expect(find.text('Weak connection: sound only'), findsNothing);
+        await leave(tester);
+        final List<Map<String, dynamic>> events = telemetry(backend);
+        final Map<String, dynamic> on = events.firstWhere((Map<String, dynamic> e) => e['type'] == 'audio_only_on');
+        expect(<Object?>[on['audio_only'], on['bandwidth_bps'], on['attempt'], on['height']], <Object?>[1, 250000, 1, 240]);
+        expect(events.firstWhere((Map<String, dynamic> e) => e['type'] == 'audio_only_off')['audio_only'], 0);
+      });
+
+      testWidgets('a healthy Live goes 7 s behind the edge, back to 12 s after a stall', (tester) async {
+        final FakeBackend backend = await pumpRoom(tester, clearLive());
+        await tester.pump(const Duration(milliseconds: 200));
+        await play(tester);
+        final int id = players.lastId;
+        for (int t = 1; t <= 58; t++) {
+          await second(tester, t, bandwidth: 4000000);
+        }
+        expect(calls(id, 'setLiveTargetOffset'), isEmpty);
+        for (int t = 59; t <= 64; t++) {
+          await second(tester, t, bandwidth: 4000000);
+        }
+        expect(calls(id, 'setLiveTargetOffset').map((MethodCall c) => c.arguments), <Object?>[<String, Object?>{'ms': 7000}]);
+        expect(calls(id, 'seekToLiveEdge'), isEmpty, reason: 'a playback-rate catch-up, never a seek');
+
+        players.emit(<String, Object?>{'event': 'state', 'state': 'buffering'});
+        players.emit(<String, Object?>{'event': 'playing', 'value': false});
+        await tester.pump(const Duration(seconds: 1));
+        players.emit(<String, Object?>{'event': 'state', 'state': 'ready'});
+        players.emit(<String, Object?>{'event': 'playing', 'value': true});
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(calls(id, 'setLiveTargetOffset').map((MethodCall c) => c.arguments),
+            <Object?>[<String, Object?>{'ms': 7000}, <String, Object?>{'ms': -1}]);
+        await leave(tester);
+        final List<num> targets = <num>[
+          for (final Map<String, dynamic> e in telemetry(backend))
+            if (e['type'] == 'latency_target') e['target_latency_s'] as num,
+        ];
+        expect(targets, <num>[7, 12]);
       });
     });
 

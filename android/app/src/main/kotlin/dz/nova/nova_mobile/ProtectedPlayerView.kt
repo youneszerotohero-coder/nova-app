@@ -17,6 +17,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.dash.DashMediaSource
@@ -24,6 +25,7 @@ import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
 import androidx.media3.exoplayer.drm.FrameworkMediaDrm
 import androidx.media3.exoplayer.drm.HttpMediaDrmCallback
 import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
@@ -45,6 +47,10 @@ import io.flutter.plugin.platform.PlatformView
  *  - `maxHeight` resolution cap from `protection.max_height`, or null
  *  - `live`      true for a Live: joins at the live edge, 12 s behind,
  *                catching up at up to 1.08× (web Shaka live tuning)
+ *  - `startBps`  D-192 G: the first bandwidth estimate (else Media3's
+ *                country/network default)
+ *  - `audioOnly` D-192 F: start with the video track disabled (a fresh
+ *                player of a Live already playing its sound only)
  *
  * The licence callback is kept so a Live can swap in a renewed
  * entitlement (`renewToken`) without reloading the stream, exactly as
@@ -66,7 +72,16 @@ class ProtectedPlayerView(
         // recordings or non-secure displays, independently of FLAG_SECURE.
         setSecure(true)
     }
-    private val player: ExoPlayer = ExoPlayer.Builder(context).build()
+    /** D-192 H: kept to move a Live's target offset (`setLiveTargetOffset`); same defaults as ExoPlayer's own. */
+    private val liveSpeedControl = DefaultLivePlaybackSpeedControl.Builder().build()
+    private val player: ExoPlayer = ExoPlayer.Builder(context)
+        .setLivePlaybackSpeedControl(liveSpeedControl)
+        .apply {
+            // D-192 G: a conservative first estimate (≈ 480p) unless the app measured this link before.
+            val startBps = (params["startBps"] as? Number)?.toLong() ?: 0L
+            if (startBps > 0) setBandwidthMeter(DefaultBandwidthMeter.Builder(context).setInitialBitrateEstimate(startBps).build())
+        }
+        .build()
     private val http = DefaultHttpDataSource.Factory()
     private val clear = params["clear"] == true
     private val licence: HttpMediaDrmCallback? =
@@ -79,6 +94,9 @@ class ProtectedPlayerView(
 
     /** HTTP status of the last licence exchange (telemetry `license_status`). */
     private var licenseStatus = 0
+
+    /** D-192: the last measured bandwidth estimate (bit/s), -1 before any transfer was measured. */
+    private var bandwidthEstimate = -1L
 
     /** A frame was rendered: replayed to a listener that came later. */
     private var firstFrameRendered = false
@@ -96,6 +114,8 @@ class ProtectedPlayerView(
                     "duration" to player.duration.coerceAtLeast(0),
                     "buffered" to player.bufferedPosition,
                     "liveOffset" to player.currentLiveOffset.let { if (it == C.TIME_UNSET) -1L else it },
+                    "bandwidth" to bandwidthEstimate,
+                    "height" to (player.videoFormat?.height ?: 0),
                 ),
             )
             main.postDelayed(this, tickMs)
@@ -145,6 +165,15 @@ class ProtectedPlayerView(
             override fun onDrmKeysLoaded(eventTime: AnalyticsListener.EventTime) {
                 licenseStatus = 200
             }
+
+            override fun onBandwidthEstimate(
+                eventTime: AnalyticsListener.EventTime,
+                totalLoadTimeMs: Int,
+                totalBytesLoaded: Long,
+                bitrateEstimate: Long,
+            ) {
+                bandwidthEstimate = bitrateEstimate
+            }
         })
         load(params)
     }
@@ -162,6 +191,7 @@ class ProtectedPlayerView(
                 .setMaxVideoSize(Int.MAX_VALUE, maxHeight)
                 .build()
         }
+        if (params["audioOnly"] == true) setAudioOnly(true)
 
         val item = MediaItem.Builder()
             .setUri(manifest)
@@ -218,6 +248,15 @@ class ProtectedPlayerView(
                 PlaybackParameters((call.argument<Number>("speed") ?: 1.0).toFloat())
             "setVolume" -> player.volume = (call.argument<Number>("volume") ?: 1.0).toFloat()
             "setQuality" -> setQuality(call.argument<Number>("height")?.toInt() ?: 0)
+            // D-192 F: the sound only — no video renderer, so no video segment is loaded;
+            // the DRM session (audio key) and the playback position stay.
+            "setAudioOnly" -> setAudioOnly(call.argument<Boolean>("on") == true)
+            // D-192 H: the Live's target distance behind the live edge (ms; < 0 = the
+            // MediaItem's 12 s). Media3 reaches it with its 1.0–1.08× speed, never a seek.
+            "setLiveTargetOffset" -> {
+                val ms = call.argument<Number>("ms")?.toLong() ?: -1L
+                liveSpeedControl.setTargetLiveOffsetOverrideUs(if (ms > 0) ms * 1000 else C.TIME_UNSET)
+            }
             // Renewed Live entitlement: only future licence requests use it.
             "renewToken" -> licence?.setKeyRequestProperty(
                 "X-AxDRM-Message",
@@ -230,6 +269,13 @@ class ProtectedPlayerView(
             }
         }
         result.success(null)
+    }
+
+    private fun setAudioOnly(on: Boolean) {
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, on)
+            .build()
     }
 
     /** 0 = automatic (ABR within the server cap), else a fixed height. */

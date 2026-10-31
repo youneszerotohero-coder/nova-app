@@ -1159,6 +1159,12 @@ const Map<String, Map<String, String>> K = {
     'fr': 'La vidéo n’a pas pu être décodée.',
     'ar': 'تعذّر فك ترميز الفيديو.',
   },
+  // D-192 F: the Live plays its sound only on a link too weak for the picture.
+  'player.audio_only': {
+    'en': 'Weak connection: sound only',
+    'fr': 'Connexion faible : son seul',
+    'ar': 'اتصال ضعيف: الصوت فقط',
+  },
   // D-190: a Live whose decoder failed past its automatic attempts.
   'player.err.decoder': {
     'en': 'This phone cannot decode this video. Try another device, or update the NOVA app.',

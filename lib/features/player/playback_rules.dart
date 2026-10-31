@@ -517,3 +517,211 @@ int? lowerDecodeHeight(List<int> heights, {int? current}) {
   }
   return current;
 }
+
+/// D-192 G (owner approval 2026-10-31 « B jusqu'à K »): the first
+/// bandwidth estimate of the Android player (Media3 `DefaultBandwidthMeter`).
+/// Media3 picks the highest rendition whose bitrate fits 70 % of it: without
+/// a measurement 2.2 Mbit/s lands on 480p on both Live ladders (clear HLS
+/// 480p peak 1.33, 720p 2.47 Mbit/s; DASH video 480p ≤ 1.2, 720p ≥ 1.8) and
+/// on the Lessons' 1080/720/480 ladder, instead of the country/network
+/// default of Media3. A link measured earlier in this app session starts
+/// from 80 % of it, between 0.7 Mbit/s (the 240p Live rung) and 8 Mbit/s.
+class AbrStartMemory {
+  AbrStartMemory._();
+
+  static const int defaultBps = 2200000;
+  static const int minBps = 700000;
+  static const int maxBps = 8000000;
+  static const double rememberedShare = 0.8;
+
+  static int? _remembered;
+
+  /// The estimate the next native player starts from.
+  static int startBps() {
+    final int? remembered = _remembered;
+    if (remembered == null) return defaultBps;
+    return (remembered * rememberedShare).round().clamp(minBps, maxBps);
+  }
+
+  /// A measured estimate of the native player (Media3 only reports measured ones).
+  static void remember(int? bps) {
+    if (bps != null && bps > 0) _remembered = bps;
+  }
+
+  @visibleForTesting
+  static void reset() => _remembered = null;
+}
+
+/// D-192 F: what the sound-only fallback decides.
+enum AudioOnlyDecision { enter, leave }
+
+/// D-192 F (owner approval 2026-10-31): the app Live's automatic sound-only
+/// fallback, same rules as the website (`live-audio-only.ts`). Below
+/// 350 kbit/s no video rung fits (240p ≈ 320 kbit/s plus the sound): enter
+/// when the measured estimate stayed below [enterBps] for [lowFor] (at
+/// least [minLowSamples] samples), or after [stallsToEnter] stalls within
+/// [stallWindow] on the lowest rung of a ladder; leave at a check every
+/// [checkEvery], once the hold is over, when the estimate reaches
+/// [returnBps] with no stall since the previous check. A new entry within
+/// [repeatWindow] of the last return doubles the hold, up to [maxHold].
+class LiveAudioOnly {
+  static const bool enabled = true;
+  static const int enterBps = 350000;
+  static const Duration lowFor = Duration(seconds: 20);
+  static const int minLowSamples = 3;
+  static const int stallsToEnter = 2;
+  static const Duration stallWindow = Duration(seconds: 60);
+  static const Duration stallMin = Duration(milliseconds: 500);
+  static const int returnBps = 700000;
+  static const Duration checkEvery = Duration(seconds: 20);
+  static const Duration minHold = Duration(seconds: 20);
+  static const Duration maxHold = Duration(minutes: 5);
+  static const Duration repeatWindow = Duration(minutes: 5);
+
+  bool on = false;
+
+  /// `bandwidth` or `stalls` while [on] (telemetry `audio_only` 1 or 2).
+  String? reason;
+
+  /// Entries in this Live (telemetry `attempt`).
+  int entries = 0;
+  Duration hold = minHold;
+
+  Duration? _lowSince;
+  int _lowSamples = 0;
+  List<Duration> _stalls = <Duration>[];
+  Duration _enteredAt = Duration.zero;
+  Duration _lastCheckAt = Duration.zero;
+  Duration? _leftAt;
+
+  AudioOnlyDecision _enter(Duration now, String why) {
+    final Duration? left = _leftAt;
+    final bool repeated = left != null && now - left < repeatWindow;
+    hold = repeated ? Duration(milliseconds: min(maxHold.inMilliseconds, hold.inMilliseconds * 2)) : minHold;
+    on = true;
+    reason = why;
+    _enteredAt = now;
+    _lastCheckAt = now;
+    _lowSince = null;
+    _lowSamples = 0;
+    _stalls = <Duration>[];
+    entries++;
+    return AudioOnlyDecision.enter;
+  }
+
+  /// A periodic sample: the measured estimate (null before any) while the
+  /// player is meant to play.
+  AudioOnlyDecision? observe({required Duration now, required int? bandwidthBps, required bool playing}) {
+    if (!on) {
+      if (!playing || bandwidthBps == null) return null;
+      if (bandwidthBps >= enterBps) {
+        _lowSince = null;
+        _lowSamples = 0;
+        return null;
+      }
+      final Duration since = _lowSince ??= now;
+      _lowSamples++;
+      return now - since >= lowFor && _lowSamples >= minLowSamples ? _enter(now, 'bandwidth') : null;
+    }
+    if (now - _lastCheckAt < checkEvery || now - _enteredAt < hold) return null;
+    _lastCheckAt = now;
+    final bool calm = _stalls.isEmpty;
+    _stalls = <Duration>[];
+    if (!playing || !calm || bandwidthBps == null || bandwidthBps < returnBps) return null;
+    on = false;
+    reason = null;
+    _leftAt = now;
+    return AudioOnlyDecision.leave;
+  }
+
+  /// A stall of [duration] ended; [lowestRung]: on the lowest rendition of a
+  /// ladder ([onLowestRung]).
+  AudioOnlyDecision? stall({required Duration now, required Duration duration, required bool lowestRung}) {
+    if (duration <= stallMin) return null;
+    if (on) {
+      _stalls.add(now);
+      return null;
+    }
+    if (!lowestRung) {
+      _stalls = <Duration>[];
+      return null;
+    }
+    _stalls = <Duration>[..._stalls.where((Duration at) => now - at < stallWindow), now];
+    return _stalls.length >= stallsToEnter ? _enter(now, 'stalls') : null;
+  }
+}
+
+/// True when [current] is the lowest of at least two video [heights].
+bool onLowestRung(List<int> heights, int? current) {
+  final List<int> ladder = heights.where((int h) => h > 0).toSet().toList();
+  return ladder.length > 1 && current != null && current > 0 && current == ladder.reduce(min);
+}
+
+/// D-192 H: the target distance behind the live edge of the Android player.
+enum LiveLatencyMode { normal, low }
+
+/// D-192 H (owner approval 2026-10-31): adaptive Live latency per Student on
+/// Android (Media3 `setTargetLiveOffsetOverrideUs`; iPhone and the PC app
+/// keep today's behaviour). Normal: the MediaItem's 12 s target with
+/// Media3's catch-up up to 1.08×. After [lowAfter] of playback with at least
+/// [healthyBuffer] buffered and no stall, the target becomes [lowOffset]
+/// (Media3 reaches it by playing up to 1.08×, never by a seek). Any stall
+/// there goes back to 12 s at once (Media3 never slows below 1×, so the
+/// stall itself and Media3's own +0.5 s per rebuffer rebuild the margin),
+/// and the next try waits [retryBase], doubled after each failed try up to
+/// [retryMax]; [resetAfter] close without a stall forgets the failures.
+/// A fresh native player starts at 12 s and counts as a stall.
+class LiveLatencyTarget {
+  static const bool enabled = true;
+  static const Duration normalOffset = Duration(seconds: 12);
+  static const Duration lowOffset = Duration(seconds: 7);
+  static const Duration lowAfter = Duration(seconds: 60);
+  static const Duration healthyBuffer = Duration(seconds: 4);
+  static const Duration stallMin = Duration(milliseconds: 500);
+  static const Duration retryBase = Duration(minutes: 2);
+  static const Duration retryMax = Duration(minutes: 16);
+  static const Duration resetAfter = Duration(minutes: 10);
+
+  LiveLatencyMode mode = LiveLatencyMode.normal;
+  int failures = 0;
+  Duration? _healthySince;
+  Duration _nextTryAt = Duration.zero;
+  Duration _lowSince = Duration.zero;
+
+  /// The target of [mode] behind the live edge (telemetry `target_latency_s`).
+  Duration get target => mode == LiveLatencyMode.low ? lowOffset : normalOffset;
+
+  LiveLatencyMode observe({required Duration now, required bool playing, required Duration bufferAhead, required Duration? liveOffset}) {
+    if (!playing) {
+      _healthySince = null;
+      return mode;
+    }
+    if (mode == LiveLatencyMode.low) {
+      if (failures > 0 && now - _lowSince >= resetAfter) failures = 0;
+      return mode;
+    }
+    if (bufferAhead < healthyBuffer) {
+      _healthySince = null;
+      return mode;
+    }
+    final Duration since = _healthySince ??= now;
+    if (now - since >= lowAfter && now >= _nextTryAt && liveOffset != null) {
+      mode = LiveLatencyMode.low;
+      _lowSince = now;
+    }
+    return mode;
+  }
+
+  /// A stall of [duration] ended (a fresh native player: [Duration] of a day).
+  LiveLatencyMode stall({required Duration now, required Duration duration}) {
+    if (duration <= stallMin) return mode;
+    _healthySince = null;
+    if (mode == LiveLatencyMode.low) {
+      failures++;
+      final int wait = retryBase.inMilliseconds * (1 << min(failures - 1, 20));
+      _nextTryAt = now + Duration(milliseconds: min(retryMax.inMilliseconds, wait));
+      mode = LiveLatencyMode.normal;
+    }
+    return mode;
+  }
+}
