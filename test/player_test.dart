@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -1183,6 +1184,7 @@ void main() {
       expect(saver.saved, <String>['Energy - Energy — the summary.pdf']);
       expect(String.fromCharCodes(saver.bytes.single), '%PDF-1.4 stamped');
       expect(find.text('1 of 5 downloads left. Each copy carries your name and phone number.'), findsOneWidget);
+      expect(find.textContaining('Downloads folder'), findsNothing);
 
       // The limit reached elsewhere: the server's refusal is explained and the button turns off.
       await tester.tap(find.text('Download the PDF').first);
@@ -1193,6 +1195,61 @@ void main() {
       expect(download(0).onTap, isNull);
       expect(saver.saved, hasLength(1));
       await tester.pump(const Duration(seconds: 3));
+    });
+
+    testWidgets('the PC app says where the stamped copy was saved', (tester) async {
+      tester.view.physicalSize = const Size(1170, 2532);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+      final _FakePdfSaver saver = _FakePdfSaver(savedPath: r'C:\Users\student\Downloads\Energy - summary.pdf');
+      final LessonPdfSaver Function() realSaver = LessonPdfSaver.factory;
+      LessonPdfSaver.factory = () => saver;
+      addTearDown(() => LessonPdfSaver.factory = realSaver);
+      final FakeBackend backend = FakeBackend(<String, FakeResponse>{
+        'GET /lessons/1023': const FakeResponse(200, <String, Object?>{
+          'data': <String, Object?>{
+            'id': 1023,
+            'has_pdf': true,
+            'allow_pdf_download': true,
+            'pdf_download_limit': 5,
+            'pdfs': <Object>[
+              <String, Object>{'id': 71, 'title': 'Energy — the summary', 'position': 1, 'downloads_remaining': 5},
+            ],
+          },
+        }),
+        'POST /lessons/1023/pdfs/71/download': FakeResponse(200, Uint8List.fromList('%PDF-1.4 stamped'.codeUnits), <String, List<String>>{
+          'content-type': <String>['application/pdf'],
+          'content-disposition': <String>['attachment; filename="Energy - summary.pdf"'],
+          'x-nova-downloads-remaining': <String>['4'],
+        }),
+      });
+      final AppState app = installFixtureApp(learning: LearningStore(fakeApi(backend)));
+      final Course course = HomeData.popularCourses.firstWhere((Course c) => c.owned);
+      final int index = course.lessons.indexWhere((Lesson l) => l.id == 1023);
+      await tester.pumpWidget(AppScope(
+        state: app,
+        child: MaterialApp(theme: NovaTheme.light, home: LessonScreen(course: ValueNotifier<Course>(course), index: index)),
+      ));
+      await tester.pumpAndSettle();
+      await _reveal(tester, find.text('Download the PDF'), 200);
+
+      await tester.tap(find.text('Download the PDF'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(saver.saved, <String>['Energy - summary.pdf']);
+      expect(find.text('Saved in your Downloads folder: Energy - summary.pdf'), findsOneWidget);
+      expect(find.text('4 of 5 downloads left. Each copy carries your name and phone number.'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+    });
+
+    test('the PC app never overwrites an earlier copy in Downloads', () {
+      final Directory folder = Directory.systemTemp.createTempSync('nova-pdf-');
+      addTearDown(() => folder.deleteSync(recursive: true));
+      expect(freeDownloadPath(folder.path, 'Energy - summary.pdf').path, endsWith('Energy - summary.pdf'));
+      File('${folder.path}${Platform.pathSeparator}Energy - summary.pdf').writeAsStringSync('1');
+      expect(freeDownloadPath(folder.path, 'Energy - summary.pdf').path, endsWith('Energy - summary (2).pdf'));
+      File('${folder.path}${Platform.pathSeparator}Energy - summary (2).pdf').writeAsStringSync('2');
+      expect(freeDownloadPath(folder.path, 'Energy - summary.pdf').path, endsWith('Energy - summary (3).pdf'));
     });
 
     test('a downloaded PDF is named from the server, safe for the phone', () {
@@ -1453,12 +1510,17 @@ void main() {
 
 /// Records what would be saved and shared (owner decision 2026-10-29).
 class _FakePdfSaver implements LessonPdfSaver {
+  _FakePdfSaver({this.savedPath});
+
+  /// Null as the phones' share sheet; a path as the PC app's Downloads folder.
+  final String? savedPath;
   final List<String> saved = <String>[];
   final List<List<int>> bytes = <List<int>>[];
 
   @override
-  Future<void> save(String fileName, List<int> data, {Rect? origin}) async {
+  Future<String?> save(String fileName, List<int> data, {Rect? origin}) async {
     saved.add(fileName);
     bytes.add(data);
+    return savedPath;
   }
 }
