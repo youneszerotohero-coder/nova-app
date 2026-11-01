@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/utils/support.dart';
@@ -90,9 +91,9 @@ class _ShellScreenState extends State<ShellScreen> {
       case OpenTab(:final int tab):
         _select(tab);
       case OpenNotifications():
-        Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()));
+        _navigator.push(MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()));
       case OpenCourse(:final Course course):
-        Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => CourseDetailScreen(course: course)));
+        _navigator.push(MaterialPageRoute<void>(builder: (_) => CourseDetailScreen(course: course)));
       case AddToCart(:final String kind, :final int id):
         _select(ShellScreen.cart);
         try {
@@ -133,29 +134,99 @@ class _ShellScreenState extends State<ShellScreen> {
     }
   }
 
+  /// D-193: where the PC app opens pages beside its sidebar.
+  final GlobalKey<NavigatorState> _desktopPages = GlobalKey<NavigatorState>();
+
+  /// The navigator pages open in: beside the sidebar in the PC app's desktop
+  /// layout, else the app's.
+  NavigatorState get _navigator => _desktopPages.currentState ?? Navigator.of(context);
+
+  /// A menu destination; in the sidebar it replaces the page open beside it.
+  void _push(Widget page) {
+    _desktopPages.currentState?.popUntil((Route<dynamic> route) => route.isFirst);
+    _navigator.push(MaterialPageRoute<void>(builder: (_) => page));
+  }
+
   /// The menu = the website's Student sidebar: Learning (Overview, My units,
   /// Lives) and Account (Orders, Wallet, Settings), help and sign out. App
   /// only: the teachers directory. A visitor sees Home and the catalogue,
-  /// then "Sign in" and "Create my account".
-  void _openMenu() {
+  /// then "Sign in" and "Create my account". D-193: a signed-in Student also
+  /// gets the catalogue's public pages (all courses, all offers) to buy more.
+  ///
+  /// With [rail] (the PC app's sidebar, which already shows the five tabs)
+  /// the tabs' entries are left out.
+  List<NovaMenuGroup> _menuGroups({bool rail = false}) {
     final AppState app = AppScope.of(context);
-    void push(Widget page) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
     NovaMenuEntry tab(IconData icon, String key, int index) =>
         NovaMenuEntry(icon: icon, label: context.tr(key), active: _currentIndex == index, onTap: () => _select(index));
     final NovaMenuEntry teachers =
-        NovaMenuEntry(icon: Icons.groups_outlined, label: context.tr('menu.teachers'), onTap: () => push(const TeachersScreen()));
+        NovaMenuEntry(icon: Icons.groups_outlined, label: context.tr('menu.teachers'), onTap: () => _push(const TeachersScreen()));
+    final NovaMenuEntry chats =
+        NovaMenuEntry(icon: Icons.forum_outlined, label: context.tr('chat.title'), onTap: () => _push(const ChatListScreen()));
+    // A visitor's "Units" keeps its book; a Student's "All courses" differs
+    // from "My units".
+    NovaMenuEntry units(String key) => NovaMenuEntry(
+          icon: key == 'menu.units' ? Icons.menu_book_outlined : Icons.local_library_outlined,
+          label: context.tr(key),
+          onTap: () => _push(const UnitsCatalogScreen()),
+        );
+    NovaMenuEntry offers(String key) =>
+        NovaMenuEntry(icon: Icons.auto_awesome_outlined, label: context.tr(key), onTap: () => _push(const OffersCatalogScreen()));
 
+    if (!app.session.signedIn) {
+      return <NovaMenuGroup>[
+        NovaMenuGroup(
+          label: context.tr(rail ? 'menu.groupCatalog' : 'menu.groupLearning'),
+          entries: <NovaMenuEntry>[
+            if (!rail) tab(Icons.dashboard_outlined, 'menu.overview', ShellScreen.home),
+            units('menu.units'),
+            offers('menu.offers'),
+            teachers,
+          ],
+        ),
+      ];
+    }
+    if (rail) {
+      return <NovaMenuGroup>[
+        NovaMenuGroup(label: context.tr('menu.groupCatalog'), entries: <NovaMenuEntry>[
+          units('menu.allUnits'),
+          offers('menu.allOffers'),
+          teachers,
+        ]),
+        NovaMenuGroup(label: context.tr('menu.groupAccount'), entries: <NovaMenuEntry>[
+          chats,
+          NovaMenuEntry(icon: Icons.credit_card_rounded, label: context.tr('menu.orders'), onTap: () => _push(const OrdersScreen())),
+          NovaMenuEntry(icon: Icons.account_balance_wallet_outlined, label: context.tr('menu.wallet'), onTap: () => _push(const WalletScreen())),
+        ]),
+      ];
+    }
+    return <NovaMenuGroup>[
+      NovaMenuGroup(label: context.tr('menu.groupLearning'), entries: <NovaMenuEntry>[
+        tab(Icons.dashboard_outlined, 'menu.overview', ShellScreen.home),
+        tab(Icons.menu_book_outlined, 'menu.myUnits', ShellScreen.units),
+        tab(Icons.sensors_rounded, 'menu.lives', ShellScreen.lives),
+        // D-143: the group chats (also the top bar's chat icon).
+        chats,
+        teachers,
+      ]),
+      NovaMenuGroup(label: context.tr('menu.groupCatalog'), entries: <NovaMenuEntry>[
+        units('menu.allUnits'),
+        offers('menu.allOffers'),
+      ]),
+      NovaMenuGroup(label: context.tr('menu.groupAccount'), entries: <NovaMenuEntry>[
+        NovaMenuEntry(icon: Icons.credit_card_rounded, label: context.tr('menu.orders'), onTap: () => _push(const OrdersScreen())),
+        NovaMenuEntry(icon: Icons.account_balance_wallet_outlined, label: context.tr('menu.wallet'), onTap: () => _push(const WalletScreen())),
+        tab(Icons.settings_outlined, 'menu.settings', ShellScreen.account),
+      ]),
+    ];
+  }
+
+  void _openMenu() {
+    final AppState app = AppScope.of(context);
     if (!app.session.signedIn) {
       showNovaMenu(
         context,
-        groups: <NovaMenuGroup>[
-          NovaMenuGroup(label: context.tr('menu.groupLearning'), entries: <NovaMenuEntry>[
-            tab(Icons.dashboard_outlined, 'menu.overview', ShellScreen.home),
-            NovaMenuEntry(icon: Icons.menu_book_outlined, label: context.tr('menu.units'), onTap: () => push(const UnitsCatalogScreen())),
-            NovaMenuEntry(icon: Icons.auto_awesome_outlined, label: context.tr('menu.offers'), onTap: () => push(const OffersCatalogScreen())),
-            teachers,
-          ]),
-        ],
+        groups: _menuGroups(),
         onSignIn: () => requireAccount(context),
         onRegister: () => openRegistration(context),
       );
@@ -163,25 +234,21 @@ class _ShellScreenState extends State<ShellScreen> {
     }
     showNovaMenu(
       context,
-      groups: <NovaMenuGroup>[
-        NovaMenuGroup(label: context.tr('menu.groupLearning'), entries: <NovaMenuEntry>[
-          tab(Icons.dashboard_outlined, 'menu.overview', ShellScreen.home),
-          tab(Icons.menu_book_outlined, 'menu.myUnits', ShellScreen.units),
-          tab(Icons.sensors_rounded, 'menu.lives', ShellScreen.lives),
-          // D-143: the group chats (also the top bar's chat icon).
-          NovaMenuEntry(icon: Icons.forum_outlined, label: context.tr('chat.title'), onTap: () => push(const ChatListScreen())),
-          teachers,
-        ]),
-        NovaMenuGroup(label: context.tr('menu.groupAccount'), entries: <NovaMenuEntry>[
-          NovaMenuEntry(icon: Icons.credit_card_rounded, label: context.tr('menu.orders'), onTap: () => push(const OrdersScreen())),
-          NovaMenuEntry(icon: Icons.account_balance_wallet_outlined, label: context.tr('menu.wallet'), onTap: () => push(const WalletScreen())),
-          tab(Icons.settings_outlined, 'menu.settings', ShellScreen.account),
-        ]),
-      ],
+      groups: _menuGroups(),
       onHelp: _contactSupport,
       // The same call as the settings' sign-out button.
       onSignOut: () => app.session.logout(),
     );
+  }
+
+  /// D-193: the PC sidebar's bottom (the menu panel's language, help and
+  /// sign-out rows, or a visitor's sign-in and registration).
+  Widget _railFooter() {
+    final AppState app = AppScope.of(context);
+    if (!app.session.signedIn) {
+      return NovaRailFooter(onSignIn: () => requireAccount(context), onRegister: () => openRegistration(context));
+    }
+    return NovaRailFooter(onHelp: _contactSupport, onSignOut: () => app.session.logout());
   }
 
   /// The help row (`.sidebarSupport`): a mail to the NOVA team.
@@ -193,15 +260,22 @@ class _ShellScreenState extends State<ShellScreen> {
     // A visitor has no cart (D-134).
     final List<NovaNavItem> items = _items(context, state.session.signedIn ? state.itemCount : 0);
 
+    // D-193: in the PC app's desktop layout the sidebar holds the menu, so
+    // the top bar has no menu button and nothing slides over the sidebar.
+    final bool rail = desktopLayoutOf(context);
+
     return ShellNav(
       select: _select,
-      openMenu: _openMenu,
+      openMenu: rail ? null : _openMenu,
       index: _currentIndex,
       // D-188: the bottom bar on phones, the sidebar in the PC app.
       child: NovaShellFrame(
         items: items,
         currentIndex: _currentIndex,
         onChanged: _select,
+        railGroups: rail ? _menuGroups(rail: true) : const <NovaMenuGroup>[],
+        railFooter: rail ? _railFooter() : null,
+        desktopNavigatorKey: _desktopPages,
         // A visited tab stays alive (scroll position kept, no rebuild or
         // replayed entrances on return) and switches instantly; a hidden
         // tab's animations are paused. Cross-fading two full screens on

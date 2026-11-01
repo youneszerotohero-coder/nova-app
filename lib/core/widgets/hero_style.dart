@@ -359,7 +359,7 @@ class NovaButton extends StatelessWidget {
         ],
       ],
     );
-    return Opacity(
+    final Widget button = Opacity(
       opacity: enabled || loading ? 1 : 0.5,
       child: PressableScale(
         onTap: enabled ? onTap : null,
@@ -382,7 +382,18 @@ class NovaButton extends StatelessWidget {
         ),
       ),
     );
+    // D-193: in the PC app a full-width button never stretches across a wide
+    // page (1 200 px "Open the PDF"): at most [desktopMaxWidth], centred. In
+    // a card or a phone-width column nothing changes.
+    if (!expand || !isDesktopApp) return button;
+    return Center(
+      heightFactor: 1,
+      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: desktopMaxWidth), child: button),
+    );
   }
+
+  /// The widest a full-width ([expand]) button grows in the PC app.
+  static const double desktopMaxWidth = 440;
 }
 
 /// `HxEmpty`: the icon tile inside a dashed orbit with its yellow bead,

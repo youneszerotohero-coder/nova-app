@@ -212,9 +212,44 @@
   function markFirstFrame() {
     if (firstFrame || released) return;
     firstFrame = true;
+    pictureSize = pageSize();
     clearTimeout(startWatch);
     emit({ event: 'firstFrame' });
   }
+
+  // Picture size --------------------------------------------------------
+
+  // D-193 (owner report: full screen showed the video in a rectangle, the
+  // rest black, until a quality change): Media Foundation (PlayReady) keeps
+  // drawing at the size the picture had before the window grew. Once a size
+  // change settles, the playing rendition is fed again from the current
+  // second, as a quality change does (a short rebuffer). Clear streams do not
+  // go through Media Foundation and are left alone.
+  const RESIZE_SETTLE_MS = 350;
+  const RESIZE_MIN_CHANGE = 0.05;
+  let pictureSize = null;
+  let resizeTimer = 0;
+
+  const pageSize = () => ({ width: window.innerWidth, height: window.innerHeight });
+
+  function refreshPicture() {
+    const before = pictureSize;
+    const now = pageSize();
+    if (!firstFrame || released || !player || params === null || params.clear || before === null) return;
+    pictureSize = now;
+    const changed = (a, b) => Math.abs(a - b) > RESIZE_MIN_CHANGE * Math.max(1, a);
+    if (!changed(before.width, now.width) && !changed(before.height, now.height)) return;
+    const active = player.getVariantTracks().find((track) => track.active);
+    if (!active) return;
+    const abr = player.getConfiguration().abr.enabled;
+    player.selectVariantTrack(active, true, 0);
+    if (abr) player.configure({ abr: { enabled: true } });
+  }
+
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(refreshPicture, RESIZE_SETTLE_MS);
+  });
 
   function tick() {
     if (released || !player) return;
@@ -308,6 +343,7 @@
   async function release() {
     released = true;
     clearInterval(ticker);
+    clearTimeout(resizeTimer);
     clearTimeout(startWatch);
     try { video.pause(); } catch (error) { /* nothing to stop */ }
     if (player) {

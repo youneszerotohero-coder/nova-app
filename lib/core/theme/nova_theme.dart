@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../desktop/desktop_layout.dart';
 import '../desktop/desktop_navigation.dart';
 import 'nova_colors.dart';
 import 'nova_typography.dart';
@@ -68,6 +69,17 @@ abstract final class NovaTheme {
 
     return ThemeData(
       useMaterial3: true,
+      // D-193, PC app: compact Material controls, sheets the width of a
+      // dialog rather than of the window, slim scrollbars.
+      visualDensity: isDesktopApp ? VisualDensity.compact : null,
+      bottomSheetTheme: isDesktopApp ? const BottomSheetThemeData(constraints: BoxConstraints(maxWidth: 560)) : null,
+      scrollbarTheme: isDesktopApp
+          ? ScrollbarThemeData(
+              thickness: const WidgetStatePropertyAll<double>(7),
+              radius: const Radius.circular(8),
+              thumbColor: WidgetStatePropertyAll<Color>(foreground.withValues(alpha: 0.28)),
+            )
+          : null,
       // The website's faces: Geist, with Baloo Bhaijaan 2 for Arabic glyphs.
       fontFamily: NovaTypography.body,
       fontFamilyFallback: NovaTypography.fallback,

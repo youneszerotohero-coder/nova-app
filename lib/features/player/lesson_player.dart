@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/api/api_exception.dart';
 import '../../core/api/nova_api.dart';
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/security/capture_shield.dart';
 import '../../core/utils/app_lifecycle.dart';
@@ -142,6 +144,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     CaptureMonitor.instance.addListener(_onCapture);
+    if (isDesktopApp) HardwareKeyboard.instance.addHandler(_onKey);
   }
 
   @override
@@ -154,6 +157,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     CaptureMonitor.instance.removeListener(_onCapture);
+    if (isDesktopApp) HardwareKeyboard.instance.removeHandler(_onKey);
     _clearRetry?.cancel();
     _autoResumeTimer?.cancel();
     _teardown();
@@ -671,6 +675,31 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
     if (video == null) return;
     video.value.playing ? video.pause() : video.play();
     _scheduleHide();
+  }
+
+  /// D-193, PC app: the video players' keys — Space or K play/pause, F full
+  /// screen, ← and → 10 s back and forward — while this page is in front,
+  /// the video plays and nothing is being typed (Esc leaves full screen
+  /// through the page's back handling).
+  bool _onKey(KeyEvent event) {
+    if (event is! KeyDownEvent || !mounted || _stage != _Stage.playing || _video == null) return false;
+    if (!(ModalRoute.of(context)?.isCurrent ?? true)) return false;
+    final BuildContext? focused = FocusManager.instance.primaryFocus?.context;
+    if (focused != null && focused.findAncestorWidgetOfExactType<EditableText>() != null) return false;
+    final LogicalKeyboardKey key = event.logicalKey;
+    if (key == LogicalKeyboardKey.space || key == LogicalKeyboardKey.keyK) {
+      _togglePlay();
+    } else if (key == LogicalKeyboardKey.keyF && widget.onToggleFullscreen != null) {
+      widget.onToggleFullscreen!();
+    } else if (key == LogicalKeyboardKey.arrowLeft) {
+      _skip(-10);
+    } else if (key == LogicalKeyboardKey.arrowRight) {
+      _skip(10);
+    } else {
+      return false;
+    }
+    if (!_controls) setState(() => _controls = true);
+    return true;
   }
 
   void _skip(int seconds) {

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/desktop/desktop_navigation.dart';
 import '../../core/push/push_platform.dart';
 import '../../core/push/windows_push_platform.dart';
 import '../../core/state/app_state.dart';
@@ -82,7 +83,8 @@ class _ChatNoticeHostState extends State<ChatNoticeHost> with SingleTickerProvid
     final ChatArrival? arrival = _current;
     if (arrival == null || _motion.status == AnimationStatus.reverse) return;
     _hide();
-    final NavigatorState? navigator = widget.navigatorKey.currentState;
+    // D-193: beside the PC sidebar when there is one.
+    final NavigatorState? navigator = DesktopShellPages.or(widget.navigatorKey.currentState);
     if (navigator != null) openChatRoom(navigator, arrival.room.id);
   }
 

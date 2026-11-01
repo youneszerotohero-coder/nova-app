@@ -82,7 +82,7 @@ void main() {
   group('PC app (Windows)', () {
     const String sha = 'a3f1c2d4e5b60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00';
 
-    StoreUpdates updates(Map<String, dynamic>? latest, _Memory memory, {String installed = '0.5.1+19'}) {
+    StoreUpdates updates(Map<String, dynamic>? latest, _Memory memory, {String installed = '0.5.1+19', bool mandatory = false}) {
       _native((MethodCall _) => <String, Object?>{
             'version': <String, String>{'version': installed},
           });
@@ -90,6 +90,7 @@ void main() {
         channel: _channel,
         platform: TargetPlatform.windows,
         memory: memory,
+        mandatory: mandatory,
         now: () => DateTime(2026, 10, 29, 12),
         fetchJson: (Uri uri) async {
           expect(uri.toString(), StoreUpdates.pcLatestUrl);
@@ -128,6 +129,17 @@ void main() {
       expect(await updates(latest('0.5.3+21'), memory).check(), isNotNull);
     });
 
+    test('D-194: a newer installer is required, even after "Later"', () async {
+      final _Memory memory = _Memory();
+      await updates(null, memory).declined('0.5.2+20');
+      final UpdateOffer? offer = await updates(latest('0.5.2+20'), memory, mandatory: true).check();
+      expect(offer?.required, isTrue);
+      expect(offer?.installerUrl, isNotNull);
+      // Never an untrusted or unverifiable installer, required or not.
+      expect(await updates(latest('0.6.0+21', hash: 'abc'), _Memory(), mandatory: true).check(), isNull);
+      expect(await updates(latest('0.5.1+19'), _Memory(), mandatory: true).check(), isNull);
+    });
+
     test('installers come from the NOVA site only, over HTTPS', () {
       expect(StoreUpdates.trustedInstallerUrl(Uri.parse('https://nova-elearning.com/downloads/pc/a.exe')), isTrue);
       expect(StoreUpdates.trustedInstallerUrl(Uri.parse('https://cdn.nova-elearning.com/a.exe')), isTrue);
@@ -137,12 +149,13 @@ void main() {
   });
 
   group('App Store (iPhone)', () {
-    StoreUpdates updates(Map<String?, Map<String, dynamic>?> storefronts, _Memory memory, {DateTime? now}) {
+    StoreUpdates updates(Map<String?, Map<String, dynamic>?> storefronts, _Memory memory, {DateTime? now, bool mandatory = false}) {
       _native(_iphone);
       return StoreUpdates(
         channel: _channel,
         platform: TargetPlatform.iOS,
         memory: memory,
+        mandatory: mandatory,
         now: () => now ?? DateTime(2026, 9, 26, 12),
         fetchJson: (Uri uri) async {
           expect(uri.host, 'itunes.apple.com');
@@ -157,6 +170,18 @@ void main() {
       expect(offer?.action, UpdateAction.prompt);
       expect(offer?.version, '1.1.0');
       expect(offer?.storeUrl.toString(), 'https://apps.apple.com/dz/app/nova/id123456789');
+    });
+
+    test('D-194: a newer store version is required, even after "Later"', () async {
+      final _Memory memory = _Memory();
+      await updates(const <String?, Map<String, dynamic>?>{}, memory).declined('1.1.0');
+      final UpdateOffer? offer =
+          await updates(<String?, Map<String, dynamic>?>{'dz': _lookup('1.1.0')}, memory, mandatory: true).check();
+      expect(offer?.required, isTrue);
+      expect(offer?.storeUrl.toString(), 'https://apps.apple.com/dz/app/nova/id123456789');
+      // Not a version this iPhone cannot install, nor the installed one.
+      expect(await updates(<String?, Map<String, dynamic>?>{'dz': _lookup('1.1.0', minimumOs: '18.0')}, _Memory(), mandatory: true).check(), isNull);
+      expect(await updates(<String?, Map<String, dynamic>?>{'dz': _lookup('1.0.0')}, _Memory(), mandatory: true).check(), isNull);
     });
 
     test('the default storefront is used when Algeria has no listing', () async {
@@ -194,7 +219,7 @@ void main() {
   group('Google Play (Android)', () {
     StoreUpdates updates(Map<String, Object?> answers, [_Memory? memory]) {
       _native((_) => answers);
-      return StoreUpdates(channel: _channel, platform: TargetPlatform.android, memory: memory ?? _Memory());
+      return StoreUpdates(channel: _channel, platform: TargetPlatform.android, memory: memory ?? _Memory(), mandatory: false);
     }
 
     test('an update is offered through the flexible flow', () async {
@@ -210,6 +235,28 @@ void main() {
     test('a downloaded update offers a restart; none when Play has nothing', () async {
       expect((await updates(_play(downloaded: true)).check())?.action, UpdateAction.restart);
       expect(await updates(_play(available: false)).check(), isNull);
+    });
+
+    test('D-194: any update is required through Play\'s full-screen flow, or the Play Store page', () async {
+      StoreUpdates required(Map<String, Object?> answers) {
+        _native((_) => answers);
+        return StoreUpdates(channel: _channel, platform: TargetPlatform.android, memory: _Memory(), mandatory: true);
+      }
+
+      final UpdateOffer? immediate = await required(_play()).check();
+      expect(immediate?.action, UpdateAction.immediate);
+      expect(immediate?.required, isTrue);
+      final Map<String, Object?> flexibleOnly = _play();
+      (flexibleOnly['info']! as Map<String, Object?>)['immediate'] = false;
+      final UpdateOffer? store = await required(flexibleOnly).check();
+      expect(store?.required, isTrue);
+      expect(store?.storeUrl.toString(), 'https://play.google.com/store/apps/details?id=dz.nova.nova_mobile');
+      expect(await required(_play(available: false)).check(), isNull);
+    });
+
+    test('D-194: required by default in this build', () {
+      expect(StoreUpdates.mandatoryUpdates, isTrue);
+      expect(StoreUpdates(channel: _channel).mandatory, isTrue);
     });
 
     test('no plugin (tests, other platforms) means no offer', () async {
@@ -254,6 +301,7 @@ void main() {
           channel: _channel,
           platform: TargetPlatform.iOS,
           memory: _Memory(),
+          mandatory: false,
           fetchJson: (Uri _) async => _lookup('1.1.0'),
         ),
         launch: (Uri url) async {
@@ -278,6 +326,7 @@ void main() {
           channel: _channel,
           platform: TargetPlatform.iOS,
           memory: memory,
+          mandatory: false,
           fetchJson: (Uri _) async => _lookup('1.1.0'),
         ),
       );
@@ -290,7 +339,7 @@ void main() {
       final List<MethodCall> calls = <MethodCall>[];
       _native((_) => _play(), calls);
       final MockStreamHandlerEventSink? Function() sink = _mockInstallStates();
-      await pumpGate(tester, StoreUpdates(channel: _channel, platform: TargetPlatform.android, memory: _Memory()));
+      await pumpGate(tester, StoreUpdates(channel: _channel, platform: TargetPlatform.android, memory: _Memory(), mandatory: false));
 
       expect(calls.map((MethodCall c) => c.method), <String>['info', 'start']);
       expect(calls.last.arguments, <String, bool>{'immediate': false});
@@ -303,11 +352,48 @@ void main() {
       expect(calls.last.method, 'complete');
     });
 
+    testWidgets('D-194 iPhone: the required page covers the app until the App Store opens; no "Later"', (tester) async {
+      _native(_iphone);
+      final List<Uri> opened = <Uri>[];
+      await pumpGate(
+        tester,
+        StoreUpdates(channel: _channel, platform: TargetPlatform.iOS, memory: _Memory(), mandatory: true, fetchJson: (Uri _) async => _lookup('1.1.0')),
+        launch: (Uri url) async {
+          opened.add(url);
+          return true;
+        },
+      );
+      expect(find.text('Update required'), findsOneWidget);
+      expect(find.text('Later'), findsNothing);
+      // The app below takes no tap.
+      expect(find.text('home').hitTestable(), findsNothing);
+      await tester.tap(find.text('Update'));
+      await tester.pumpAndSettle();
+      expect(opened.single.toString(), 'https://apps.apple.com/dz/app/nova/id123456789');
+      // Still required when the Student comes back without updating.
+      expect(find.text('Update required'), findsOneWidget);
+    });
+
+    testWidgets('D-194 Android: Play\'s full-screen flow first; cancelled, the required page retries it', (tester) async {
+      final List<MethodCall> calls = <MethodCall>[];
+      _native((_) => _play(start: 'canceled'), calls);
+      await pumpGate(tester, StoreUpdates(channel: _channel, platform: TargetPlatform.android, memory: _Memory(), mandatory: true));
+      expect(calls.map((MethodCall c) => c.method), <String>['info', 'start']);
+      expect(calls.last.arguments, <String, bool>{'immediate': true});
+      expect(find.text('Update required'), findsOneWidget);
+
+      await tester.tap(find.text('Update'));
+      await tester.pumpAndSettle();
+      expect(calls.map((MethodCall c) => c.method), <String>['info', 'start', 'info', 'start']);
+      expect(calls.last.arguments, <String, bool>{'immediate': true});
+      expect(find.text('Update required'), findsOneWidget);
+    });
+
     testWidgets('Android: declining Play\'s dialog is remembered', (tester) async {
       _native((_) => _play(start: 'canceled'));
       _mockInstallStates();
       final _Memory memory = _Memory();
-      await pumpGate(tester, StoreUpdates(channel: _channel, platform: TargetPlatform.android, memory: memory));
+      await pumpGate(tester, StoreUpdates(channel: _channel, platform: TargetPlatform.android, memory: memory, mandatory: false));
       expect(memory.values['nova.update.declined'], startsWith('7|'));
     });
   });

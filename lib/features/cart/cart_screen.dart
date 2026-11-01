@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/api_error_text.dart';
 import '../../core/api/api_exception.dart';
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
@@ -64,41 +65,61 @@ class _CartScreenState extends State<CartScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: selected == null
                 ? Entrance(child: _empty(context))
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _SectionHead(number: '01', label: context.tr('cart.orderDetails'), title: context.tr('cart.chooseProgram')),
-                      ...stagger(<Widget>[
-                        for (final CartItem item in items)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _CartRow(
-                              item: item,
-                              state: state,
-                              selected: item.id == selected.id,
-                              onSelect: () => setState(() => _selected = item.id),
-                            ),
-                          ),
-                      ]),
-                      if (items.length == 1) ...[
-                        const SizedBox(height: 4),
-                        const _CartTip(),
-                      ],
-                      const SizedBox(height: 24),
-                      Entrance(
-                        delay: const Duration(milliseconds: 120),
-                        child: _CheckoutPanel(
-                          item: selected,
-                          onCheckout: () => _push(context, CheckoutScreen(item: selected)),
-                        ),
+                : desktopLayoutOf(context) && MediaQuery.sizeOf(context).width >= 1000
+                    // D-193, PC app: the website's desktop cart — the
+                    // programmes on the start side, the checkout beside them.
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: _items(context, state, items, selected)),
+                          const SizedBox(width: 24),
+                          SizedBox(width: 400, child: _panel(context, selected)),
+                        ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _items(context, state, items, selected),
+                          const SizedBox(height: 24),
+                          _panel(context, selected),
+                        ],
                       ),
-                    ],
-                  ),
           ),
         ],
       ),
     );
   }
+
+  Widget _items(BuildContext context, AppState state, List<CartItem> items, CartItem selected) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SectionHead(number: '01', label: context.tr('cart.orderDetails'), title: context.tr('cart.chooseProgram')),
+          ...stagger(<Widget>[
+            for (final CartItem item in items)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _CartRow(
+                  item: item,
+                  state: state,
+                  selected: item.id == selected.id,
+                  onSelect: () => setState(() => _selected = item.id),
+                ),
+              ),
+          ]),
+          if (items.length == 1) ...[
+            const SizedBox(height: 4),
+            const _CartTip(),
+          ],
+        ],
+      );
+
+  Widget _panel(BuildContext context, CartItem selected) => Entrance(
+        delay: const Duration(milliseconds: 120),
+        child: _CheckoutPanel(
+          item: selected,
+          onCheckout: () => _push(context, CheckoutScreen(item: selected)),
+        ),
+      );
 
   /// `HxEmpty.nvCartEmpty`: the Offers first, the Units as the ghost.
   Widget _empty(BuildContext context) {

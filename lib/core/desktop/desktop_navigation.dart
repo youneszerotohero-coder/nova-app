@@ -64,6 +64,31 @@ class DesktopRouteObserver extends NavigatorObserver {
   }
 }
 
+/// D-193: the navigator beside the PC sidebar (the shell's pages) and its
+/// route stack, for Esc and the mouse's back button.
+abstract final class DesktopShellPages {
+  static GlobalKey<NavigatorState>? _key;
+  static DesktopRouteObserver? _observer;
+
+  static void attach(GlobalKey<NavigatorState> key, DesktopRouteObserver observer) {
+    _key = key;
+    _observer = observer;
+  }
+
+  static void detach(GlobalKey<NavigatorState> key) {
+    if (_key != key) return;
+    _key = null;
+    _observer = null;
+  }
+
+  static NavigatorState? get navigator => _key?.currentState;
+
+  /// Where a banner (notification, chat message) opens its page: beside the
+  /// PC sidebar when there is one, else [root].
+  static NavigatorState? or(NavigatorState? root) => navigator ?? root;
+  static Route<dynamic>? get top => _observer?.top;
+}
+
 /// D-188, PC app: Esc and the mouse's back button go back from a pushed page
 /// (as the page's Back pill, so a page that guards its exit, like a
 /// full-screen player, handles it). Dialogs and sheets keep Flutter's own Esc;
@@ -104,8 +129,16 @@ class _DesktopBackKeysState extends State<DesktopBackKeys> {
   bool _back() {
     final Route<dynamic>? top = widget.observer.top;
     final NavigatorState? navigator = widget.navigatorKey.currentState;
-    if (navigator == null || top is! PageRoute || top.isFirst || !top.isCurrent) return false;
-    navigator.maybePop();
+    if (navigator == null || top is! PageRoute || !top.isCurrent) return false;
+    if (!top.isFirst) {
+      navigator.maybePop();
+      return true;
+    }
+    // D-193: the root is the shell; a page open beside its sidebar goes back.
+    final Route<dynamic>? page = DesktopShellPages.top;
+    final NavigatorState? pages = DesktopShellPages.navigator;
+    if (pages == null || page is! PageRoute || page.isFirst || !page.isCurrent) return false;
+    pages.maybePop();
     return true;
   }
 

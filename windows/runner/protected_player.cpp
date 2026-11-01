@@ -536,6 +536,7 @@ void VideoWindow::Resize() {
   RECT bounds{};
   ::GetClientRect(window_, &bounds);
   controller_->put_Bounds(bounds);
+  controller_->NotifyParentWindowPositionChanged();
 }
 
 void VideoWindow::SetRect(const RECT& rect, bool visible) {
@@ -578,6 +579,11 @@ void VideoWindow::Place() {
   ::SetWindowPos(window_, main, video.left, video.top, video.right - video.left,
                  video.bottom - video.top,
                  SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW);
+  // D-193: WebView2 must be told when its host window moves (documented
+  // for windowed hosting); the protected picture's overlay follows it.
+  if (controller_ != nullptr) {
+    controller_->NotifyParentWindowPositionChanged();
+  }
   // Never outside the app window (a player scrolled half out of view).
   const RECT local{clip.left - video.left, clip.top - video.top,
                    clip.right - video.left, clip.bottom - video.top};

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../core/api/api_error_text.dart';
@@ -50,6 +52,16 @@ class _LessonScreenState extends State<LessonScreen> {
   final GlobalKey _quizKey = GlobalKey();
   final ScrollController _scroll = ScrollController();
 
+  /// D-193: the PC layout's side column (PDFs, quiz, previous/next).
+  final ScrollController _sideScroll = ScrollController();
+
+  /// D-193: the PC app shows the Lesson in two columns from this width.
+  static const double _desktopTwoColumnsWidth = 1100;
+  static const double _desktopSideWidth = 400;
+
+  /// The top bar, the heading, the steps and the video block's own lines.
+  static const double _desktopChromeHeight = 380;
+
   /// PDFs opened during this visit (the server does not record reading), as
   /// `lessonId:pdfId` (`lessonId:` alone before the Lesson's list is known).
   final Set<String> _pdfOpened = <String>{};
@@ -80,6 +92,7 @@ class _LessonScreenState extends State<LessonScreen> {
   void dispose() {
     if (_fullscreen) exitPlayerFullscreen();
     _scroll.dispose();
+    _sideScroll.dispose();
     super.dispose();
   }
 
@@ -114,7 +127,9 @@ class _LessonScreenState extends State<LessonScreen> {
   void _go(int index) {
     if (index < 0 || index >= _course.lessons.length || index == _index) return;
     setState(() => _index = index);
-    _scroll.jumpTo(0);
+    for (final ScrollController scroll in <ScrollController>[_scroll, _sideScroll]) {
+      if (scroll.hasClients) scroll.jumpTo(0);
+    }
     _loadQuiz();
     _loadPdfs();
   }
@@ -289,166 +304,222 @@ class _LessonScreenState extends State<LessonScreen> {
       (label: context.tr('lesson.stepQuiz'), state: !lesson.hasQuiz ? _Step.none : quizPassed ? _Step.done : _Step.todo, key: _quizKey),
     ];
 
+    final Widget topBar = StudentTopBar(
+      showBack: true,
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(color: NovaColors.accent, borderRadius: BorderRadius.circular(100)),
+        child: Text(
+          context.trf('learn.lessonOf', {'i': '${_index + 1}', 'n': '${lessons.length}'}),
+          style: NovaTypography.textTheme.labelLarge!.copyWith(color: Colors.white),
+        ),
+      ),
+    );
+    final Widget heading = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(lesson.title, style: NovaTypography.textTheme.displaySmall!.copyWith(fontSize: 25)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              HeroChip(
+                icon: Icons.schedule_rounded,
+                label: lesson.minutes > 0 ? context.trf('unit.minutes', {'n': '${lesson.minutes}'}) : context.tr('lesson.durationPending'),
+              ),
+              if (lesson.fromLive)
+                HeroChip(icon: Icons.sensors_rounded, label: context.tr('lesson.fromLive'), color: const Color(0xFF2F86DA), background: const Color(0x2E4FACF0)),
+              if (lesson.completed)
+                HeroChip(icon: Icons.check_circle_outline_rounded, label: context.tr('lesson.completed'), color: NovaColors.onlineGreen, background: NovaColors.onlineGreen.withValues(alpha: 0.14)),
+            ],
+          ),
+          if (lesson.description.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(lesson.description, style: NovaTypography.muted(NovaTypography.textTheme.bodyMedium!)),
+          ],
+          const SizedBox(height: 14),
+          _StepsBar(steps: steps, onTap: _scrollTo),
+        ],
+      ),
+    );
+    final bool twoColumns = desktopLayoutOf(context) && MediaQuery.sizeOf(context).width >= _desktopTwoColumnsWidth;
+    // 1. The video meets the screen edges, as on YouTube.
+    final Widget videoBlock = Container(
+      key: _videoKey,
+      padding: const EdgeInsets.only(top: 14, bottom: 14),
+      color: NovaColors.paperCard,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _BlockTitle(number: 1, text: context.tr('lesson.blockVideo')),
+          ),
+          const SizedBox(height: 12),
+          if (twoColumns)
+            // D-193: as large as the window allows with the heading above it,
+            // so the whole video is on screen without scrolling.
+            Center(
+              child: SizedBox(
+                width: math.max(480, (MediaQuery.sizeOf(context).height - _desktopChromeHeight) * 16 / 9),
+                child: _player(),
+              ),
+            )
+          else
+            _player(),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                if (videoDone) ...[
+                  Icon(Icons.check_circle_outline_rounded, size: 18, color: NovaColors.onlineGreen),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: Text(
+                    videoDone
+                        ? context.tr('lesson.videoDone')
+                        : lesson.watched > 0
+                            ? context.trf('lesson.videoProgress', {'n': '${lesson.watched}'})
+                            : context.tr('lesson.videoHint'),
+                    style: NovaTypography.textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.w600, color: NovaColors.textStrong.withValues(alpha: 0.8)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    final Widget pdfBlock = // 2. The PDFs (D-142: one card each, in the Admin's order).
+    _Block(
+      key: _pdfKey,
+      number: 2,
+      title: context.tr(pdfs.length > 1 ? 'lesson.blockPdfs' : 'lesson.blockPdf'),
+      empty: !lesson.hasPdf,
+      child: !lesson.hasPdf
+          ? _EmptyLine(context.tr('lesson.noPdf'))
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (int i = 0; i < pdfs.length; i++) ...[
+                  if (i > 0) ...[
+                    const SizedBox(height: 14),
+                    Divider(height: 1, color: NovaColors.borderOnLight),
+                    const SizedBox(height: 14),
+                  ],
+                  _Tool(
+                    icon: Icons.description_outlined,
+                    number: pdfs.length > 1 ? i + 1 : null,
+                    iconColor: NovaColors.heartRed,
+                    iconBackground: NovaColors.heartRed.withValues(alpha: 0.1),
+                    title: pdfs[i]?.title ?? context.tr('lesson.pdfTitle'),
+                    text: _isPdfOpened(lesson, pdfs, pdfs[i]) ? context.tr('lesson.pdfOpened') : context.tr('lesson.pdfText'),
+                    note: pdfs[i]?.downloadsRemaining == null ? null : _downloadsLeftText(pdfs[i]!),
+                    button: _pdfButtons(pdfs[i]),
+                  ),
+                ],
+              ],
+            ),
+    );
+    final Widget quizBlock = // 3. The quiz.
+    _Block(
+      key: _quizKey,
+      number: 3,
+      title: context.tr('lesson.blockQuiz'),
+      empty: !lesson.hasQuiz,
+      child: !lesson.hasQuiz ? _EmptyLine(context.tr('lesson.noQuiz')) : _quizTool(lesson, quizPassed),
+    );
+    final Widget navButtons = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: NovaButton(
+              label: context.tr('lesson.previous'),
+              variant: NovaButtonVariant.ghost,
+              icon: Icons.arrow_back_rounded,
+              expand: true,
+              onTap: _index > 0 ? () => _go(_index - 1) : null,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _index < lessons.length - 1
+                ? NovaButton(
+                    label: context.tr('lesson.next'),
+                    chipIcon: Icons.arrow_forward_rounded,
+                    expand: true,
+                    onTap: () => _go(_index + 1),
+                  )
+                : NovaButton(
+                    label: context.tr('lesson.allLessons'),
+                    chipIcon: Icons.format_list_bulleted_rounded,
+                    expand: true,
+                    onTap: () => Navigator.of(context).maybePop(),
+                  ),
+          ),
+        ],
+      ),
+    );
+
+    // D-193, PC app: the website's desktop Lesson page (`.lessonPageLayout`,
+    // a main column and a side column): the video stays put while the side
+    // column (PDFs, quiz, previous/next) scrolls, sized to fit the window.
+    // The PC video lives in a native window behind the app: a video that
+    // never moves on scroll keeps scrolling smooth.
+    if (twoColumns) {
+      return Scaffold(
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            topBar,
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: ListView(
+                      controller: _scroll,
+                      padding: const EdgeInsets.only(bottom: 24),
+                      children: [heading, const SizedBox(height: 14), videoBlock],
+                    ),
+                  ),
+                  SizedBox(
+                    width: _desktopSideWidth,
+                    child: ListView(
+                      controller: _sideScroll,
+                      padding: const EdgeInsetsDirectional.only(top: 4, end: 6, bottom: 24),
+                      children: [pdfBlock, const SizedBox(height: 14), quizBlock, const SizedBox(height: 18), navButtons],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       body: ListView(
         controller: _scroll,
         padding: const EdgeInsets.only(bottom: 36),
         children: [
-          StudentTopBar(
-            showBack: true,
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(color: NovaColors.accent, borderRadius: BorderRadius.circular(100)),
-              child: Text(
-                context.trf('learn.lessonOf', {'i': '${_index + 1}', 'n': '${lessons.length}'}),
-                style: NovaTypography.textTheme.labelLarge!.copyWith(color: Colors.white),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(lesson.title, style: NovaTypography.textTheme.displaySmall!.copyWith(fontSize: 25)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    HeroChip(
-                      icon: Icons.schedule_rounded,
-                      label: lesson.minutes > 0 ? context.trf('unit.minutes', {'n': '${lesson.minutes}'}) : context.tr('lesson.durationPending'),
-                    ),
-                    if (lesson.fromLive)
-                      HeroChip(icon: Icons.sensors_rounded, label: context.tr('lesson.fromLive'), color: const Color(0xFF2F86DA), background: const Color(0x2E4FACF0)),
-                    if (lesson.completed)
-                      HeroChip(icon: Icons.check_circle_outline_rounded, label: context.tr('lesson.completed'), color: NovaColors.onlineGreen, background: NovaColors.onlineGreen.withValues(alpha: 0.14)),
-                  ],
-                ),
-                if (lesson.description.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Text(lesson.description, style: NovaTypography.muted(NovaTypography.textTheme.bodyMedium!)),
-                ],
-                const SizedBox(height: 14),
-                _StepsBar(steps: steps, onTap: _scrollTo),
-              ],
-            ),
-          ),
+          topBar,
+          heading,
           const SizedBox(height: 14),
-          // 1. The video meets the screen edges, as on YouTube.
-          Container(
-            key: _videoKey,
-            padding: const EdgeInsets.only(top: 14, bottom: 14),
-            color: NovaColors.paperCard,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _BlockTitle(number: 1, text: context.tr('lesson.blockVideo')),
-                ),
-                const SizedBox(height: 12),
-                _player(),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      if (videoDone) ...[
-                        Icon(Icons.check_circle_outline_rounded, size: 18, color: NovaColors.onlineGreen),
-                        const SizedBox(width: 8),
-                      ],
-                      Expanded(
-                        child: Text(
-                          videoDone
-                              ? context.tr('lesson.videoDone')
-                              : lesson.watched > 0
-                                  ? context.trf('lesson.videoProgress', {'n': '${lesson.watched}'})
-                                  : context.tr('lesson.videoHint'),
-                          style: NovaTypography.textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.w600, color: NovaColors.textStrong.withValues(alpha: 0.8)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          videoBlock,
           const SizedBox(height: 14),
-          // 2. The PDFs (D-142: one card each, in the Admin's order).
-          _Block(
-            key: _pdfKey,
-            number: 2,
-            title: context.tr(pdfs.length > 1 ? 'lesson.blockPdfs' : 'lesson.blockPdf'),
-            empty: !lesson.hasPdf,
-            child: !lesson.hasPdf
-                ? _EmptyLine(context.tr('lesson.noPdf'))
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (int i = 0; i < pdfs.length; i++) ...[
-                        if (i > 0) ...[
-                          const SizedBox(height: 14),
-                          Divider(height: 1, color: NovaColors.borderOnLight),
-                          const SizedBox(height: 14),
-                        ],
-                        _Tool(
-                          icon: Icons.description_outlined,
-                          number: pdfs.length > 1 ? i + 1 : null,
-                          iconColor: NovaColors.heartRed,
-                          iconBackground: NovaColors.heartRed.withValues(alpha: 0.1),
-                          title: pdfs[i]?.title ?? context.tr('lesson.pdfTitle'),
-                          text: _isPdfOpened(lesson, pdfs, pdfs[i]) ? context.tr('lesson.pdfOpened') : context.tr('lesson.pdfText'),
-                          note: pdfs[i]?.downloadsRemaining == null ? null : _downloadsLeftText(pdfs[i]!),
-                          button: _pdfButtons(pdfs[i]),
-                        ),
-                      ],
-                    ],
-                  ),
-          ),
+          pdfBlock,
           const SizedBox(height: 14),
-          // 3. The quiz.
-          _Block(
-            key: _quizKey,
-            number: 3,
-            title: context.tr('lesson.blockQuiz'),
-            empty: !lesson.hasQuiz,
-            child: !lesson.hasQuiz ? _EmptyLine(context.tr('lesson.noQuiz')) : _quizTool(lesson, quizPassed),
-          ),
+          quizBlock,
           const SizedBox(height: 18),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: NovaButton(
-                    label: context.tr('lesson.previous'),
-                    variant: NovaButtonVariant.ghost,
-                    icon: Icons.arrow_back_rounded,
-                    expand: true,
-                    onTap: _index > 0 ? () => _go(_index - 1) : null,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _index < lessons.length - 1
-                      ? NovaButton(
-                          label: context.tr('lesson.next'),
-                          chipIcon: Icons.arrow_forward_rounded,
-                          expand: true,
-                          onTap: () => _go(_index + 1),
-                        )
-                      : NovaButton(
-                          label: context.tr('lesson.allLessons'),
-                          chipIcon: Icons.format_list_bulleted_rounded,
-                          expand: true,
-                          onTap: () => Navigator.of(context).maybePop(),
-                        ),
-                ),
-              ],
-            ),
-          ),
+          navButtons,
         ],
       ),
     );

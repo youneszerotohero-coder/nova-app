@@ -155,7 +155,9 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  // D-193: the PC app opens maximized, as desktop apps do (the restored
+  // size stays the 1280×800 of Create for when the Student un-maximizes).
+  return ShowWindow(window_handle_, SW_SHOWMAXIMIZED);
 }
 
 // static

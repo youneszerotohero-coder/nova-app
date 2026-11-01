@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../desktop/desktop_layout.dart';
 import '../i18n/nova_strings.dart';
 import '../theme/nova_colors.dart';
 import '../theme/nova_typography.dart';
@@ -71,6 +72,8 @@ class _AppUpdateGateState extends State<AppUpdateGate> with WidgetsBindingObserv
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
+    // D-194: back from the store with the app still blocked: check again.
+    if (_required != null) return unawaited(_check());
     final DateTime? last = _lastCheck;
     if (last == null || DateTime.now().difference(last) >= AppUpdateGate.recheckAfter) _check();
   }
@@ -82,6 +85,7 @@ class _AppUpdateGateState extends State<AppUpdateGate> with WidgetsBindingObserv
     try {
       final UpdateOffer? offer = await _updates.check();
       if (offer == null || !mounted) return;
+      if (offer.required) return await _require(offer);
       switch (offer.action) {
         case UpdateAction.restart:
           await _offerRestart();
@@ -101,6 +105,37 @@ class _AppUpdateGateState extends State<AppUpdateGate> with WidgetsBindingObserv
     } finally {
       _checking = false;
     }
+  }
+
+  /// D-194: the required update, drawn over the whole app (every route,
+  /// the notification and chat banners) until the new version is installed;
+  /// a new launch checks again. Android first opens Google Play's
+  /// full-screen flow.
+  UpdateOffer? _required;
+
+  Future<void> _require(UpdateOffer offer) async {
+    if (offer.action == UpdateAction.immediate && _required == null) {
+      final String result = await _updates.start(immediate: true);
+      if (result == 'ok' || !mounted) return;
+    }
+    if (mounted) setState(() => _required = offer);
+  }
+
+  /// "Update" on the required page; false when it could not start.
+  Future<bool> _update(UpdateOffer offer) async {
+    if (offer.installerUrl != null) {
+      final File? installer = await _updates.downloadInstaller(offer);
+      if (installer == null) return false;
+      await _updates.installAndRestart(installer);
+      return true;
+    }
+    if (offer.storeUrl != null) return (widget.launch ?? _openStore)(offer.storeUrl!);
+    // Android: Play needs fresh details for each flow.
+    final UpdateOffer? fresh = await _updates.check();
+    if (fresh == null) return false;
+    if (fresh.action == UpdateAction.immediate) return await _updates.start(immediate: true) != 'failed';
+    if (fresh.storeUrl != null) return (widget.launch ?? _openStore)(fresh.storeUrl!);
+    return false;
   }
 
   /// Android: Play asks the Student, then downloads in the background.
@@ -200,7 +235,117 @@ class _AppUpdateGateState extends State<AppUpdateGate> with WidgetsBindingObserv
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    final UpdateOffer? required = _required;
+    final bool blocked = required != null;
+    // One tree whether blocked or not, so the app below keeps its state.
+    return Stack(
+      children: [
+        // Below the required page, unreachable: no tap, key or screen reader.
+        Positioned.fill(
+          child: ExcludeFocus(
+            excluding: blocked,
+            child: ExcludeSemantics(excluding: blocked, child: IgnorePointer(ignoring: blocked, child: widget.child)),
+          ),
+        ),
+        if (required != null)
+          Positioned.fill(
+            child: UpdateRequiredScreen(
+              version: required.version.split('+').first,
+              onUpdate: () => _update(required),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// D-194: "Update required" — over the whole app, one action: the store,
+/// Google Play's flow or the PC installer.
+class UpdateRequiredScreen extends StatefulWidget {
+  const UpdateRequiredScreen({super.key, required this.version, required this.onUpdate});
+
+  final String version;
+
+  /// Starts the update; false when it could not.
+  final Future<bool> Function() onUpdate;
+
+  @override
+  State<UpdateRequiredScreen> createState() => _UpdateRequiredScreenState();
+}
+
+class _UpdateRequiredScreenState extends State<UpdateRequiredScreen> {
+  bool _busy = false;
+  bool _failed = false;
+
+  Future<void> _update() async {
+    setState(() {
+      _busy = true;
+      _failed = false;
+    });
+    final bool started = await widget.onUpdate();
+    if (mounted) {
+      setState(() {
+        _busy = false;
+        _failed = !started;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: NovaColors.paper,
+      child: Scaffold(
+        backgroundColor: NovaColors.paper,
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: const BoxDecoration(gradient: NovaColors.accentGradient, shape: BoxShape.circle),
+                      child: const Icon(Icons.system_update_rounded, size: 34, color: Colors.white),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(context.tr('update.requiredTitle'), textAlign: TextAlign.center, style: NovaTypography.textTheme.titleLarge),
+                    const SizedBox(height: 10),
+                    Text(
+                      context.trf('update.requiredBody', <String, String>{'v': widget.version}),
+                      textAlign: TextAlign.center,
+                      style: NovaTypography.textTheme.bodyMedium!.copyWith(color: NovaColors.textMuted),
+                    ),
+                    if (_failed) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        context.tr('update.requiredFailed'),
+                        textAlign: TextAlign.center,
+                        style: NovaTypography.textTheme.bodyMedium!.copyWith(color: NovaColors.heartRed),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    NovaButton(
+                      icon: Icons.system_update_rounded,
+                      label: context.tr(_busy && isDesktopApp ? 'update.downloading' : 'update.now'),
+                      expand: true,
+                      loading: _busy,
+                      onTap: _busy ? null : _update,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// "Update available" / "Update ready": the primary action pops `true`,

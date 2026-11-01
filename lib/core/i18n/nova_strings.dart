@@ -1424,6 +1424,18 @@ const Map<String, Map<String, String>> K = {
     'ar': 'تم تنزيل الإصدار الجديد. أعد تشغيل نوفا لإكمال التثبيت.',
   },
   'update.restart': {'en': 'Restart', 'fr': 'Redémarrer', 'ar': 'إعادة التشغيل'},
+  // D-194: required updates.
+  'update.requiredTitle': {'en': 'Update required', 'fr': 'Mise à jour obligatoire', 'ar': 'التحديث إجباري'},
+  'update.requiredBody': {
+    'en': 'NOVA {v} is available. Update the app to keep using it.',
+    'fr': 'NOVA {v} est disponible. Mets à jour l’application pour continuer.',
+    'ar': 'الإصدار {v} من نوفا متوفر. حدّث التطبيق باش تكمل.',
+  },
+  'update.requiredFailed': {
+    'en': 'The update could not start. Check your connection and try again.',
+    'fr': 'La mise à jour n’a pas pu démarrer. Vérifie ta connexion et réessaie.',
+    'ar': 'ما قدرش يبدا التحديث. تأكد من الاتصال وعاود.',
+  },
   'update.downloading': {
     'en': 'Downloading the new version…',
     'fr': 'Téléchargement de la nouvelle version…',
@@ -1690,6 +1702,10 @@ const Map<String, Map<String, String>> K = {
   'menu.teachers': {'en': 'Teachers', 'fr': 'Enseignants', 'ar': 'الأساتذة'},
   'menu.units': {'en': 'Units', 'fr': 'Unités', 'ar': 'الدروس'},
   'menu.offers': {'en': 'Offers', 'fr': 'Offres', 'ar': 'العروض'},
+  // D-193: the catalogue's public pages in a signed-in Student's menu.
+  'menu.groupCatalog': {'en': 'Catalogue', 'fr': 'Catalogue', 'ar': 'الكتالوج'},
+  'menu.allUnits': {'en': 'All courses', 'fr': 'Tous les cours', 'ar': 'كل الدروس'},
+  'menu.allOffers': {'en': 'All offers', 'fr': 'Toutes les offres', 'ar': 'كل العروض'},
   'menu.needHelp': {'en': 'Need help?', 'fr': 'Besoin d’aide ?', 'ar': 'تحتاج عاونة؟'},
   'menu.talkTeam': {'en': 'Talk to the Nova team', 'fr': 'Écrire à l’équipe Nova', 'ar': 'كلّم فريق نوفا'},
   'menu.signOut': {'en': 'Sign out', 'fr': 'Se déconnecter', 'ar': 'اخرج من الحساب'},

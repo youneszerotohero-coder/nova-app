@@ -96,6 +96,12 @@ void NovaPlatform::SetFullscreen(bool on) {
     saved_style_ = ::GetWindowLongPtrW(main_window_, GWL_STYLE);
     saved_placement_.length = sizeof(WINDOWPLACEMENT);
     ::GetWindowPlacement(main_window_, &saved_placement_);
+    // D-193 (the app opens maximized): a maximized window is restored first,
+    // as Chromium does, or Windows keeps it sized to the work area; the
+    // saved placement maximizes it again on the way out.
+    if (::IsZoomed(main_window_)) {
+      ::SendMessageW(main_window_, WM_SYSCOMMAND, SC_RESTORE, 0);
+    }
     MONITORINFO monitor{};
     monitor.cbSize = sizeof(MONITORINFO);
     if (!::GetMonitorInfoW(

@@ -60,26 +60,29 @@ class NovaApp extends StatelessWidget {
             ],
             // Above every route, so no screen escapes the capture blur;
             // new notifications show over any screen.
-            builder: (BuildContext context, Widget? child) => CaptureShield(
-              child: DesktopBackKeys(
-                navigatorKey: _navigator,
-                observer: _routes,
-                child: AppUpdateGate(
+            // D-193: the PC app at desktop sizes (nothing on phones).
+            builder: (BuildContext context, Widget? child) => DesktopUiScale(
+              child: CaptureShield(
+                child: DesktopBackKeys(
                   navigatorKey: _navigator,
-                  // Store checks only in the real app, not offline previews.
-                  enabled: state.api != null,
-                  child: NotificationBannerHost(
-                    arrivals: state.account.arrivals,
-                    onOpen: (notification) {
-                      final NavigatorState? navigator = _navigator.currentState;
-                      if (navigator != null) {
-                        openNotification(state, navigator, notification);
-                      }
-                    },
-                    // D-143: chat messages for another room, above every screen.
-                    child: ChatNoticeHost(
-                      navigatorKey: _navigator,
-                      child: child ?? const SizedBox.shrink(),
+                  observer: _routes,
+                  child: AppUpdateGate(
+                    navigatorKey: _navigator,
+                    // Store checks only in the real app, not offline previews.
+                    enabled: state.api != null,
+                    child: NotificationBannerHost(
+                      arrivals: state.account.arrivals,
+                      onOpen: (notification) {
+                        final NavigatorState? navigator = DesktopShellPages.or(_navigator.currentState);
+                        if (navigator != null) {
+                          openNotification(state, navigator, notification);
+                        }
+                      },
+                      // D-143: chat messages for another room, above every screen.
+                      child: ChatNoticeHost(
+                        navigatorKey: _navigator,
+                        child: child ?? const SizedBox.shrink(),
+                      ),
                     ),
                   ),
                 ),

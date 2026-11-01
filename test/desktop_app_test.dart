@@ -10,10 +10,14 @@ import 'package:nova_mobile/core/desktop/desktop_layout.dart';
 import 'package:nova_mobile/core/desktop/desktop_navigation.dart';
 import 'package:nova_mobile/core/desktop/desktop_scroll.dart';
 import 'package:nova_mobile/core/theme/nova_theme.dart';
+import 'package:nova_mobile/core/utils/player_fullscreen.dart';
+import 'package:nova_mobile/core/widgets/hero_style.dart';
 import 'package:nova_mobile/core/widgets/motion.dart';
 import 'package:nova_mobile/core/widgets/nova_bottom_bar.dart';
 import 'package:nova_mobile/core/widgets/nova_side_rail.dart';
+import 'package:nova_mobile/core/widgets/pressable_scale.dart';
 import 'package:nova_mobile/features/catalog/offers_catalog_screen.dart';
+import 'package:nova_mobile/features/catalog/units_catalog_screen.dart';
 import 'package:nova_mobile/features/home/home_screen.dart';
 import 'package:nova_mobile/features/home/widgets/nova_product_card.dart';
 import 'package:nova_mobile/features/learning/lives_screen.dart';
@@ -74,14 +78,21 @@ void main() {
           for (final Icon icon in tester.widgetList<Icon>(inRail(find.byType(Icon)))) {
             expect(icon.size, lessThanOrEqualTo(22));
           }
+          // D-193: drawn at the desktop scale.
           final Rect rail = tester.getRect(find.byType(NovaSideRail));
-          expect(rail.width, DesktopMetrics.railWidth);
+          expect(rail.width, closeTo(DesktopMetrics.railWidth * DesktopMetrics.uiScale, 0.01));
           expect(rail.left, 0);
+          // D-193: the menu lives in the sidebar (catalogue shortcuts), so
+          // the top bar has no menu button.
+          expect(inRail(find.text('All courses')), findsOneWidget);
+          expect(inRail(find.text('All offers')), findsOneWidget);
+          expect(inRail(find.text('Sign out')), findsOneWidget);
+          expect(find.bySemanticsLabel('Menu'), findsNothing);
 
           // The content: beside the sidebar, never wider than the column.
           final Rect home = tester.getRect(find.byType(HomeScreen));
           expect(home.left, greaterThanOrEqualTo(rail.right));
-          expect(home.width, lessThanOrEqualTo(DesktopMetrics.contentMaxWidth));
+          expect(home.width, lessThanOrEqualTo(DesktopMetrics.contentMaxWidth * DesktopMetrics.uiScale));
 
           // The Units are a grid: the first cards side by side, not window-wide.
           final List<Rect> cards = tester.widgetList(find.byType(NovaProductCard)).take(2).map((Widget w) => tester.getRect(find.byWidget(w))).toList();
@@ -98,7 +109,7 @@ void main() {
           expect(shown(MyLearningScreen), findsOneWidget);
         }));
 
-    testWidgets('a pushed page fades in within 150 ms, centred, and Esc or the mouse back button go back', (tester) => asPcApp(() async {
+    testWidgets('a pushed page fades in within 150 ms beside the sidebar, and Esc or the mouse back button go back', (tester) => asPcApp(() async {
           await pumpApp(tester, const Size(1440, 900));
 
           await tester.tap(find.text('See the Offers'));
@@ -106,9 +117,12 @@ void main() {
           await tester.pump(const Duration(milliseconds: 150));
           final BuildContext page = tester.element(find.byType(OffersCatalogScreen));
           expect(ModalRoute.of(page)!.animation!.status, AnimationStatus.completed);
+          // D-193: the page opens beside the sidebar, which stays.
+          final Rect rail = tester.getRect(find.byType(NovaSideRail));
           final Rect rect = tester.getRect(find.byType(OffersCatalogScreen));
-          expect(rect.width, DesktopMetrics.contentMaxWidth);
-          expect(rect.left, (1440 - DesktopMetrics.contentMaxWidth) / 2);
+          expect(find.byType(NovaSideRail).hitTestable(), findsOneWidget);
+          expect(rect.left, closeTo(rail.right, 0.01));
+          expect(rect.right, closeTo(1440, 0.01));
 
           await tester.sendKeyEvent(LogicalKeyboardKey.escape);
           await tester.pump();
@@ -131,6 +145,65 @@ void main() {
           await tester.pump(const Duration(milliseconds: 150));
           expect(find.byType(OffersCatalogScreen), findsNothing);
         }));
+
+    testWidgets('D-193: the sidebar opens the catalogue beside itself, a tab closes it, full screen hides the sidebar', (tester) => asPcApp(() async {
+          await pumpApp(tester, const Size(1440, 900));
+
+          await tester.tap(inRail(find.text('All courses')));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 150));
+          expect(shown(UnitsCatalogScreen), findsOneWidget);
+          expect(find.byType(NovaSideRail).hitTestable(), findsOneWidget);
+
+          await tester.tap(inRail(find.text('All offers')));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 150));
+          // The sidebar replaces the open page instead of stacking pages.
+          expect(find.byType(UnitsCatalogScreen), findsNothing);
+          expect(shown(OffersCatalogScreen), findsOneWidget);
+
+          await tester.tap(inRail(find.text('Live')));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 150));
+          expect(find.byType(OffersCatalogScreen), findsNothing);
+          expect(shown(LivesScreen), findsOneWidget);
+
+          playerFullscreen.value = true;
+          await tester.pump();
+          expect(find.byType(NovaSideRail), findsNothing);
+          playerFullscreen.value = false;
+          await tester.pump();
+          expect(find.byType(NovaSideRail), findsOneWidget);
+          expect(shown(LivesScreen), findsOneWidget);
+        }));
+
+    testWidgets('D-193: a full-width button stays at most 440 px wide in the PC app, not on phones', (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      Future<double> width() async {
+        await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: SizedBox(width: 1200, child: NovaButton(label: 'Open', expand: true, onTap: () {})),
+          ),
+        ));
+        return tester.getSize(find.byType(PressableScale)).width;
+      }
+
+      expect(await width(), 1200);
+      await asPcApp(() async => expect(await width(), NovaButton.desktopMaxWidth));
+    });
+
+    testWidgets('D-193: a signed-in Student\'s phone menu has the catalogue shortcuts', (tester) async {
+      await pumpApp(tester, const Size(390, 844));
+      await tester.tap(find.bySemanticsLabel('Menu'));
+      await frames(tester, count: 8);
+      expect(find.text('All courses'), findsOneWidget);
+      expect(find.text('All offers'), findsOneWidget);
+      await tester.tap(find.text('All courses'));
+      await frames(tester, count: 8);
+      expect(find.byType(UnitsCatalogScreen), findsOneWidget);
+    });
 
     testWidgets('a PC window narrowed to a phone width keeps the bottom bar', (tester) => asPcApp(() async {
           await pumpApp(tester, const Size(700, 900));

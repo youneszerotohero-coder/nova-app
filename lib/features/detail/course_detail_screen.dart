@@ -204,6 +204,52 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final _Price price = _price(context);
+    // D-193, PC app: the website's desktop detail page — the content on the
+    // start side and the purchase card always in view beside it (no bottom
+    // bar, which is a phone's).
+    if (desktopLayoutOf(context) && MediaQuery.sizeOf(context).width >= 1100) {
+      return Scaffold(
+        backgroundColor: NovaColors.paperPublic,
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const StudentTopBar(showBack: true),
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.only(bottom: 40),
+                      children: [
+                        _band(context, price),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 36, 16, 0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (_isPack) ..._packContent(context) else ..._courseContent(context),
+                              if (!_isPack) ..._related(context),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    width: 380,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsetsDirectional.fromSTEB(8, 4, 16, 24),
+                      child: _buyCard(context, price),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: NovaColors.paperPublic,
       body: Stack(

@@ -30,8 +30,9 @@ abstract final class DesktopMetrics {
   /// Below this content width lists stay one card per row.
   static const double gridMinWidth = 600;
 
-  /// The pages' content column, centred in wider windows.
-  static const double contentMaxWidth = 1280;
+  /// The pages' content column, centred in wider windows (D-193: 1600, so a
+  /// 1920 px screen is used; 1280 left wide empty sides).
+  static const double contentMaxWidth = 1600;
 
   /// Sign-in, registration and other one-form pages.
   static const double formMaxWidth = 560;
@@ -47,6 +48,12 @@ abstract final class DesktopMetrics {
 
   /// Page transitions: a short fade instead of the phone's slide.
   static const Duration pageTransition = Duration(milliseconds: 120);
+
+  /// D-193: the desktop layout draws everything at this scale. The pages
+  /// keep the phone's sizes (44 px squares, 52 px buttons, 16 px text), which
+  /// on a PC at Windows' usual 125–150 % look too big; 0.9 gives desktop
+  /// sizes (40 px, 47 px, 14.4 px) without touching any phone layout.
+  static const double uiScale = 0.9;
 }
 
 /// Whether this context lays out as the PC app: a desktop platform and a
@@ -74,6 +81,51 @@ int desktopColumns(
 }) {
   final int fit = ((width + gap) / (minItemWidth + gap)).floor();
   return math.max(minColumns, math.min(maxColumns, fit));
+}
+
+/// D-193: lays the PC app out at [DesktopMetrics.uiScale] in a desktop
+/// window ([DesktopMetrics.minLayoutWidth] or wider): the app gets a
+/// [MediaQuery] size 1 / scale larger, with the matching pixel ratio (images
+/// decode for the real pixels), and is drawn scaled to the window. Hit
+/// testing follows the scale, and the PC video hole reports its place through
+/// the same transform. A narrower window and phones draw at 1. The tree is
+/// the same at every width, so crossing the width keeps every state.
+class DesktopUiScale extends StatelessWidget {
+  const DesktopUiScale({super.key, required this.child});
+
+  final Widget child;
+
+  /// The scale for a window [width] logical pixels wide.
+  static double scaleFor(double width) =>
+      isDesktopApp && width >= DesktopMetrics.minLayoutWidth ? DesktopMetrics.uiScale : 1;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isDesktopApp) return child;
+    final MediaQueryData media = MediaQuery.of(context);
+    final double scale = scaleFor(media.size.width);
+    final Size size = media.size / scale;
+    return SizedBox.expand(
+      child: FittedBox(
+        fit: BoxFit.fill,
+        alignment: Alignment.topLeft,
+        child: SizedBox(
+          width: size.width,
+          height: size.height,
+          child: MediaQuery(
+            data: media.copyWith(
+              size: size,
+              devicePixelRatio: media.devicePixelRatio * scale,
+              padding: media.padding / scale,
+              viewPadding: media.viewPadding / scale,
+              viewInsets: media.viewInsets / scale,
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Centres [child] in a column at most [maxWidth] wide on desktop, the sides

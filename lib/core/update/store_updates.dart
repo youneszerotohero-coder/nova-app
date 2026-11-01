@@ -24,7 +24,17 @@ enum UpdateAction {
 }
 
 class UpdateOffer {
-  const UpdateOffer({required this.action, required this.version, this.storeUrl, this.installerUrl, this.sha256});
+  const UpdateOffer({
+    required this.action,
+    required this.version,
+    this.storeUrl,
+    this.installerUrl,
+    this.sha256,
+    this.required = false,
+  });
+
+  /// D-194: the Student must update before using the app (no "Later").
+  final bool required;
 
   final UpdateAction action;
 
@@ -78,10 +88,24 @@ class StoreUpdates {
     UpdateMemory? memory,
     this._platform,
     DateTime Function()? now,
-  })  : _channel = channel ?? const MethodChannel('nova/app_update'),
+    bool? mandatory,
+  })  : mandatory = mandatory ?? mandatoryUpdates,
+        _channel = channel ?? const MethodChannel('nova/app_update'),
         _fetchJson = fetchJson ?? _getJson,
         _memory = memory ?? const SecureUpdateMemory(),
         _now = now ?? DateTime.now;
+
+  /// D-194 (owner decision 2026-11-01): every newer version is required —
+  /// a Student updates before continuing, on Android, iPhone and the PC app.
+  /// `--dart-define=NOVA_MANDATORY_UPDATES=false` builds the optional offers
+  /// back (sheets with "Later").
+  static const bool mandatoryUpdates = bool.fromEnvironment('NOVA_MANDATORY_UPDATES', defaultValue: true);
+
+  /// The Play Store page, when Play's own full-screen flow is not available.
+  static final Uri playStoreUrl = Uri.https('play.google.com', '/store/apps/details', <String, String>{'id': 'dz.nova.nova_mobile'});
+
+  /// Whether newer versions are required ([mandatoryUpdates] by default).
+  final bool mandatory;
 
   /// A declined version is offered again after this long.
   static const Duration remindAfter = Duration(days: 3);
@@ -142,6 +166,12 @@ class StoreUpdates {
     // An immediate update the Student left: Google asks to resume it.
     if (info['inProgress'] == true) return UpdateOffer(action: UpdateAction.immediate, version: version);
     if (info['available'] != true) return null;
+    if (mandatory) {
+      // D-194: Google Play's full-screen flow, or the Play Store page.
+      return info['immediate'] == true
+          ? UpdateOffer(action: UpdateAction.immediate, version: version, required: true)
+          : UpdateOffer(action: UpdateAction.prompt, version: version, storeUrl: playStoreUrl, required: true);
+    }
     final int priority = info['priority'] is int ? info['priority'] as int : 0;
     if (info['immediate'] == true && priority >= immediatePriority) {
       return UpdateOffer(action: UpdateAction.immediate, version: version);
@@ -173,6 +203,7 @@ class StoreUpdates {
       final String minimumOs = '${app['minimumOsVersion'] ?? ''}';
       final String os = '${me?['osVersion'] ?? ''}';
       if (minimumOs.isNotEmpty && os.isNotEmpty && compareVersions(os, minimumOs) < 0) return null;
+      if (mandatory) return UpdateOffer(action: UpdateAction.prompt, version: store, storeUrl: url, required: true);
       if (!await _mayOffer(store)) return null;
       return UpdateOffer(action: UpdateAction.prompt, version: store, storeUrl: url);
     }
@@ -190,6 +221,9 @@ class StoreUpdates {
     if (version.isEmpty || url == null || !trustedInstallerUrl(url)) return null;
     if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(sha256)) return null;
     if (compareVersions(version, installed) <= 0) return null;
+    if (mandatory) {
+      return UpdateOffer(action: UpdateAction.prompt, version: version, installerUrl: url, sha256: sha256, required: true);
+    }
     if (!await _mayOffer(version)) return null;
     return UpdateOffer(action: UpdateAction.prompt, version: version, installerUrl: url, sha256: sha256);
   }

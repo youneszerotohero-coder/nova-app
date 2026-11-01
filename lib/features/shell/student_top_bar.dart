@@ -17,13 +17,16 @@ class ShellNav extends InheritedWidget {
   const ShellNav({super.key, required this.select, required this.openMenu, required this.index, required super.child});
 
   final ValueChanged<int> select;
-  final VoidCallback openMenu;
+
+  /// Null in the PC app's desktop layout, where the sidebar holds the menu
+  /// (D-193): the top bar then has no menu button.
+  final VoidCallback? openMenu;
   final int index;
 
   static ShellNav? maybeOf(BuildContext context) => context.dependOnInheritedWidgetOfExactType<ShellNav>();
 
   @override
-  bool updateShouldNotify(ShellNav old) => old.index != index;
+  bool updateShouldNotify(ShellNav old) => old.index != index || (old.openMenu == null) != (openMenu == null);
 }
 
 /// The website's Student top bar (`.studentTopbar`, `profile.tsx`), in its
@@ -75,7 +78,7 @@ class StudentTopBar extends StatelessWidget {
           child: Row(
             children: [
               // Outside the shell (a page shown on its own) there is no menu.
-              if (ShellNav.maybeOf(context) != null) const _MenuButton(),
+              if (ShellNav.maybeOf(context)?.openMenu != null) const _MenuButton(),
               const Spacer(),
               if (trailing != null) ...[trailing!, const SizedBox(width: 8)],
               const _ThemeToggle(),
