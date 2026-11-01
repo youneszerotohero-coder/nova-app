@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart' show FormData;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +18,7 @@ import 'package:nova_mobile/features/messages/chat_info_screen.dart';
 import 'package:nova_mobile/features/messages/chat_list_screen.dart';
 import 'package:nova_mobile/features/messages/chat_notice_host.dart';
 import 'package:nova_mobile/features/messages/chat_room_screen.dart';
+import 'package:nova_mobile/features/messages/chat_widgets.dart';
 import 'package:nova_mobile/features/shell/student_top_bar.dart';
 
 import 'fixtures/chat_fixtures.dart';
@@ -709,6 +711,32 @@ void main() {
             ],
           },
         );
+
+    testWidgets('D-193 PC app: the chosen room opens beside the list, without a back arrow', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      try {
+        chat = roomStore();
+        await pump(tester, const ChatListScreen());
+        tester.view.physicalSize = const Size(1440, 900);
+        tester.view.devicePixelRatio = 1.0;
+        await tester.pump(const Duration(milliseconds: 600));
+        expect(find.text('Choose a conversation on the left.'), findsOneWidget);
+        expect(find.byType(ChatRoomScreen), findsNothing);
+
+        await tester.tap(find.byType(ChatRoomAvatar).first);
+        await tester.pump(const Duration(milliseconds: 600));
+        expect(find.byType(ChatListScreen), findsOneWidget);
+        expect(find.byType(ChatRoomScreen), findsOneWidget);
+        expect(find.text('From Lina'), findsOneWidget);
+        expect(find.descendant(of: find.byType(ChatRoomScreen), matching: find.byIcon(Icons.arrow_back_rounded)), findsNothing);
+        // A banner or notification for a room shows it here too.
+        expect(ChatListScreen.openBeside(3), isTrue);
+        await finish(tester);
+        await tester.pumpWidget(const SizedBox.shrink());
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
 
     goldenTestWidgets('a room shows day separators, ✓/✓✓ on own messages, the Teacher badge and NOVA Administration', (tester) async {
       chat = roomStore();

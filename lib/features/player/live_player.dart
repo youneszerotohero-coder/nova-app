@@ -4,8 +4,10 @@ import 'dart:math';
 import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/api/api_exception.dart';
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/security/capture_shield.dart';
 import '../../core/state/app_state.dart';
@@ -217,6 +219,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     CaptureMonitor.instance.addListener(_onCapture);
+    if (isDesktopApp) HardwareKeyboard.instance.addHandler(_onKey);
     _opened.start();
     _start();
   }
@@ -244,6 +247,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     _disposed = true;
     WidgetsBinding.instance.removeObserver(this);
     CaptureMonitor.instance.removeListener(_onCapture);
+    if (isDesktopApp) HardwareKeyboard.instance.removeHandler(_onKey);
     _telemetry?.record('ended');
     _telemetry?.stop();
     _retry?.cancel();
@@ -1103,6 +1107,24 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     _hideTimer = Timer(const Duration(seconds: 3), () {
       if (_video?.value.playing ?? false) _set(() => _controls = false);
     });
+  }
+
+  /// D-193, PC app: F full screen and M sound on/off while this Live is in
+  /// front and nothing is being typed (the room's comment field).
+  bool _onKey(KeyEvent event) {
+    if (event is! KeyDownEvent || !mounted || _video == null) return false;
+    if (!(ModalRoute.of(context)?.isCurrent ?? true)) return false;
+    final BuildContext? focused = FocusManager.instance.primaryFocus?.context;
+    if (focused != null && focused.findAncestorWidgetOfExactType<EditableText>() != null) return false;
+    if (event.logicalKey == LogicalKeyboardKey.keyF && widget.onToggleFullscreen != null) {
+      widget.onToggleFullscreen!();
+      return true;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.keyM) {
+      _toggleMute();
+      return true;
+    }
+    return false;
   }
 
   void _toggleMute() {

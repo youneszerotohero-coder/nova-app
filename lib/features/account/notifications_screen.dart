@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/i18n/notification_text.dart';
 import '../../core/i18n/nova_strings.dart';
-
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
 import '../../core/theme/nova_dimens.dart';
@@ -110,7 +111,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               const SizedBox(height: 20),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Entrance(child: _panel(context, state, account)),
+                // D-193, PC app: a reading column, not a window-wide list.
+                child: Align(
+                  alignment: AlignmentDirectional.topStart,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: isDesktopApp ? 880 : double.infinity),
+                    child: Entrance(child: _panel(context, state, account)),
+                  ),
+                ),
               ),
             ],
           ),

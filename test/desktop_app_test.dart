@@ -16,6 +16,7 @@ import 'package:nova_mobile/core/widgets/motion.dart';
 import 'package:nova_mobile/core/widgets/nova_bottom_bar.dart';
 import 'package:nova_mobile/core/widgets/nova_side_rail.dart';
 import 'package:nova_mobile/core/widgets/pressable_scale.dart';
+import 'package:nova_mobile/features/account/dashboard_card.dart';
 import 'package:nova_mobile/features/catalog/offers_catalog_screen.dart';
 import 'package:nova_mobile/features/catalog/units_catalog_screen.dart';
 import 'package:nova_mobile/features/home/home_screen.dart';
@@ -204,6 +205,17 @@ void main() {
       await frames(tester, count: 8);
       expect(find.byType(UnitsCatalogScreen), findsOneWidget);
     });
+
+    testWidgets('D-193: the PC Account tab lays its cards in two columns', (tester) => asPcApp(() async {
+          await pumpApp(tester, const Size(1440, 900));
+          await tester.tap(inRail(find.text('Account')));
+          await frames(tester, count: 6);
+          final List<Rect> cards =
+              tester.widgetList(find.byType(DashboardCard)).map((Widget w) => tester.getRect(find.byWidget(w))).toList();
+          expect(cards.length, greaterThanOrEqualTo(4));
+          final Set<double> lefts = cards.map((Rect r) => r.left.roundToDouble()).toSet();
+          expect(lefts, hasLength(2));
+        }));
 
     testWidgets('a PC window narrowed to a phone width keeps the bottom bar', (tester) => asPcApp(() async {
           await pumpApp(tester, const Size(700, 900));

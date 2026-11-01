@@ -20,6 +20,7 @@ import 'chat_composer.dart';
 import 'chat_format.dart';
 import 'chat_image.dart';
 import 'chat_info_screen.dart';
+import 'chat_list_screen.dart';
 import 'chat_pdf_screen.dart';
 import 'chat_pins.dart';
 import 'chat_reactions.dart';
@@ -28,6 +29,8 @@ import 'chat_widgets.dart';
 /// Opens room [roomId] above [navigator]'s pages; a room already on top
 /// is replaced rather than stacked (in-app notice, push tap).
 void openChatRoom(NavigatorState navigator, int roomId) {
+  // D-193: the PC list shows its rooms beside itself.
+  if (ChatListScreen.openBeside(roomId)) return;
   final ChatStore chat = AppState.instance.chat;
   final MaterialPageRoute<void> route = MaterialPageRoute<void>(
     settings: const RouteSettings(name: ChatRoomScreen.routeName),
@@ -48,9 +51,15 @@ void openChatRoom(NavigatorState navigator, int roomId) {
 /// room is read while its latest message is on screen. D-156: the pinned
 /// bar under the app bar, reactions and Pin / Unpin in the message menu.
 class ChatRoomScreen extends StatefulWidget {
-  const ChatRoomScreen({super.key, required this.roomId});
+  const ChatRoomScreen({super.key, required this.roomId, this.onClose});
 
   final int roomId;
+
+  /// D-193, PC app: the room shown beside the list (`ChatListScreen`), not as
+  /// its own page — no back arrow; [onClose] runs when the room goes away.
+  final VoidCallback? onClose;
+
+  bool get embedded => onClose != null;
 
   static const String routeName = 'chat-room';
 
@@ -181,6 +190,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     final NavigatorState navigator = Navigator.of(context);
     final Route<dynamic>? route = ModalRoute.of(context);
     novaToast(context, context.tr('chat.roomGone'), icon: Icons.info_outline_rounded);
+    if (widget.onClose != null) return widget.onClose!();
     if (route != null && route.isActive) {
       navigator.popUntil((Route<dynamic> r) => r == route);
       navigator.maybePop();
@@ -476,7 +486,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       backgroundColor: NovaColors.paper,
       body: Column(
         children: [
-          _RoomBar(room: room, onInfo: room == null ? null : _openInfo),
+          _RoomBar(room: room, onInfo: room == null ? null : _openInfo, embedded: widget.embedded),
           if (room != null && room.pinnedCount > 0)
             ChatPinnedBar(
               room: room,
@@ -876,7 +886,11 @@ class _JumpButton extends StatelessWidget {
 
 /// The room's bar: back, the room's picture and name, its members, info.
 class _RoomBar extends StatelessWidget {
-  const _RoomBar({required this.room, required this.onInfo});
+  const _RoomBar({required this.room, required this.onInfo, this.embedded = false});
+
+  /// Beside the PC list: no back arrow, and no Hero (the list's avatar with
+  /// the same tag is on the same page).
+  final bool embedded;
 
   final ChatRoom? room;
   final VoidCallback? onInfo;
@@ -901,14 +915,20 @@ class _RoomBar extends StatelessWidget {
         child: Row(
           children: [
             const SizedBox(width: 4),
-            ChatIconButton(
-              icon: Icons.arrow_back_rounded,
-              label: context.tr('common.back'),
-              color: NovaColors.textStrong,
-              onTap: () => Navigator.of(context).maybePop(),
-            ),
+            if (embedded)
+              const SizedBox(width: 12)
+            else
+              ChatIconButton(
+                icon: Icons.arrow_back_rounded,
+                label: context.tr('common.back'),
+                color: NovaColors.textStrong,
+                onTap: () => Navigator.of(context).maybePop(),
+              ),
             if (room != null) ...[
-              Hero(tag: 'chat-avatar-${room.id}', child: ChatRoomAvatar(room: room, size: 42)),
+              if (embedded)
+                ChatRoomAvatar(room: room, size: 42)
+              else
+                Hero(tag: 'chat-avatar-${room.id}', child: ChatRoomAvatar(room: room, size: 42)),
               const SizedBox(width: 10),
               Expanded(
                 child: GestureDetector(

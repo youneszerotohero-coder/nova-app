@@ -1861,6 +1861,12 @@ const Map<String, Map<String, String>> K = {
   'auth.groupLocation': {'en': 'Location', 'fr': 'Où j’habite', 'ar': 'وين تسكن'},
 
   // D-143 group chats
+  // D-193: the PC chat pane before a room is chosen.
+  'chat.pickRoom': {
+    'en': 'Choose a conversation on the left.',
+    'fr': 'Choisis une discussion dans la liste.',
+    'ar': 'اختر محادثة من القائمة.',
+  },
   'chat.title': {'en': 'Messages', 'fr': 'Messages', 'ar': 'الرسائل'},
   'chat.kicker': {'en': 'Your groups', 'fr': 'Tes groupes', 'ar': 'المجموعات تاعك'},
   'chat.unreadKicker': {'en': '{n} unread', 'fr': '{n} non lus', 'ar': 'رسائل جديدة: {n}'},

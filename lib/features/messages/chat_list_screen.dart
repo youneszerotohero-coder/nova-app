@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/api/api_error_text.dart';
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
@@ -24,12 +25,40 @@ class ChatListScreen extends StatefulWidget {
   /// True when shown as a shell tab (no back button).
   final bool embedded;
 
+  /// D-193, PC app: the list showing its rooms beside itself, if any.
+  static _ChatListScreenState? _beside;
+
+  /// Shows [roomId] beside the PC list when that list is the page in front;
+  /// false when there is none (the room then opens as its own page).
+  static bool openBeside(int roomId) {
+    final _ChatListScreenState? list = _beside;
+    if (list == null || !list.mounted || !list._besideShown) return false;
+    if (!(ModalRoute.of(list.context)?.isCurrent ?? true)) return false;
+    list._select(roomId);
+    return true;
+  }
+
   @override
   State<ChatListScreen> createState() => _ChatListScreenState();
 }
 
 class _ChatListScreenState extends State<ChatListScreen> {
   bool _opened = false;
+
+  /// D-193: the PC layout — the list, and the chosen room beside it.
+  bool _besideShown = false;
+  int? _selected;
+
+  void _select(int? roomId) {
+    if (roomId == _selected) return;
+    setState(() => _selected = roomId);
+  }
+
+  @override
+  void dispose() {
+    if (identical(ChatListScreen._beside, this)) ChatListScreen._beside = null;
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -43,6 +72,30 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   Widget build(BuildContext context) {
     final ChatStore chat = AppScope.of(context).chat;
+    // D-193, PC app: the rooms beside the list, as desktop messaging apps.
+    _besideShown = desktopLayoutOf(context) && MediaQuery.sizeOf(context).width >= 1000;
+    if (_besideShown) ChatListScreen._beside = this;
+    final Widget list = _list(chat);
+    if (!_besideShown) return list;
+    final int? selected = _selected;
+    return Scaffold(
+      backgroundColor: NovaColors.paper,
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(width: 400, child: list),
+          VerticalDivider(width: 1, thickness: 1, color: NovaColors.borderOnLight),
+          Expanded(
+            child: selected == null
+                ? const _PickRoom()
+                : ChatRoomScreen(key: ValueKey<int>(selected), roomId: selected, onClose: () => _select(null)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _list(ChatStore chat) {
     return ListenableBuilder(
       listenable: chat,
       builder: (BuildContext context, _) {
@@ -103,10 +156,37 @@ class _ChatListScreenState extends State<ChatListScreen> {
             Entrance(
               delay: Duration(milliseconds: 30 * i),
               offset: 8,
-              child: _RoomRow(key: ValueKey<int>(rooms[i].id), room: rooms[i]),
+              child: _RoomRow(
+                key: ValueKey<int>(rooms[i].id),
+                room: rooms[i],
+                selected: _besideShown && rooms[i].id == _selected,
+                hero: !_besideShown,
+              ),
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// D-193: the PC pane before a room is chosen.
+class _PickRoom extends StatelessWidget {
+  const _PickRoom();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.forum_outlined, size: 48, color: NovaColors.textMuted),
+            const SizedBox(height: 12),
+            Text(context.tr('chat.pickRoom'), textAlign: TextAlign.center, style: heroText(15)),
+          ],
+        ),
       ),
     );
   }
@@ -134,9 +214,15 @@ class _Panel extends StatelessWidget {
 }
 
 class _RoomRow extends StatelessWidget {
-  const _RoomRow({super.key, required this.room});
+  const _RoomRow({super.key, required this.room, this.selected = false, this.hero = true});
 
   final ChatRoom room;
+
+  /// D-193: the room shown beside the PC list.
+  final bool selected;
+
+  /// The avatar flies to the room's page (not beside the PC list).
+  final bool hero;
 
   @override
   Widget build(BuildContext context) {
@@ -145,7 +231,11 @@ class _RoomRow extends StatelessWidget {
     final String title = chatRoomTitle(context, room);
     final String sender = last == null ? '' : chatNameOf(context, last.senderRole, last.senderName);
     return Material(
-      color: room.isPublic ? NovaColors.accentMist.withValues(alpha: 0.55) : Colors.transparent,
+      color: selected
+          ? NovaColors.accentMist
+          : room.isPublic
+              ? NovaColors.accentMist.withValues(alpha: 0.55)
+              : Colors.transparent,
       borderRadius: BorderRadius.circular(18),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -154,7 +244,10 @@ class _RoomRow extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
           child: Row(
             children: [
-              Hero(tag: 'chat-avatar-${room.id}', child: ChatRoomAvatar(room: room, size: 52)),
+              if (hero)
+                Hero(tag: 'chat-avatar-${room.id}', child: ChatRoomAvatar(room: room, size: 52))
+              else
+                ChatRoomAvatar(room: room, size: 52),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

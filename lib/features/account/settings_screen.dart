@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/desktop/desktop_layout.dart';
 import '../../core/i18n/nova_strings.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/nova_colors.dart';
@@ -33,8 +34,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final AppState app = AppScope.of(context);
     final StudentProfile? student = app.profile;
-    // As a tab the floating bottom bar covers the end of the page.
-    final bool tab = ShellNav.maybeOf(context) != null;
+    final bool twoColumns = desktopLayoutOf(context) && MediaQuery.sizeOf(context).width >= 1000;
+    // As a tab the floating bottom bar covers the end of the page (none in
+    // the PC app's desktop layout).
+    final bool tab = ShellNav.maybeOf(context) != null && !desktopLayoutOf(context);
     final List<Widget> cards = <Widget>[
       _profileCard(context, student),
       _notificationsCard(context),
@@ -57,11 +60,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
               lead: context.tr('dash.settings_desc'),
             ),
             const SizedBox(height: 20),
-            for (int i = 0; i < cards.length; i++)
+            if (twoColumns)
+              // D-193, PC app: the cards in two columns (identity and security
+              // on the start side; alerts, appearance, account on the end).
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
-                child: Entrance(delay: Duration(milliseconds: 50 * i), child: cards[i]),
-              ),
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final List<int> column in const <List<int>>[<int>[0, 2], <int>[1, 3, 4]]) ...[
+                      if (column.first != 0) const SizedBox(width: 18),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (final int i in column)
+                              Padding(padding: const EdgeInsets.only(bottom: 18), child: cards[i]),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              )
+            else
+              for (int i = 0; i < cards.length; i++)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
+                  child: Entrance(delay: Duration(milliseconds: 50 * i), child: cards[i]),
+                ),
             Center(
               // D-168: a long press measures this phone's DRM now (hidden
               // support action; the app also does it once per version).
