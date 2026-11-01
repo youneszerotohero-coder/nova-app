@@ -1704,8 +1704,8 @@ const Map<String, Map<String, String>> K = {
   'menu.offers': {'en': 'Offers', 'fr': 'Offres', 'ar': 'العروض'},
   // D-193: the catalogue's public pages in a signed-in Student's menu.
   'menu.groupCatalog': {'en': 'Catalogue', 'fr': 'Catalogue', 'ar': 'الكتالوج'},
-  'menu.allUnits': {'en': 'All courses', 'fr': 'Tous les cours', 'ar': 'كل الدروس'},
-  'menu.allOffers': {'en': 'All offers', 'fr': 'Toutes les offres', 'ar': 'كل العروض'},
+  'menu.allUnits': {'en': 'All courses', 'fr': 'Tous les cours', 'ar': 'شوف الدروس'},
+  'menu.allOffers': {'en': 'All offers', 'fr': 'Toutes les offres', 'ar': 'شوف العروض'},
   'menu.needHelp': {'en': 'Need help?', 'fr': 'Besoin d’aide ?', 'ar': 'تحتاج عاونة؟'},
   'menu.talkTeam': {'en': 'Talk to the Nova team', 'fr': 'Écrire à l’équipe Nova', 'ar': 'كلّم فريق نوفا'},
   'menu.signOut': {'en': 'Sign out', 'fr': 'Se déconnecter', 'ar': 'اخرج من الحساب'},
