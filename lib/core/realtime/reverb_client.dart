@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -51,6 +52,10 @@ class ReverbClient {
   /// proxy (26,421 reconnections in an hour); like pusher-js, the client now pings by itself every 30 s.
   static const Duration keepAlive = Duration(seconds: 30);
   Timer? _keepAlive;
+
+  /// Upper bound of the random delay added to every reconnection.
+  static const int reconnectJitterMs = 4000;
+  static final math.Random _jitter = math.Random();
   int _failures = 0;
   bool _wanted = false;
 
@@ -204,6 +209,9 @@ class ReverbClient {
     if (!_wanted) return;
     _failures++;
     _retry?.cancel();
-    _retry = Timer(Duration(seconds: (2 * _failures).clamp(2, 30)), connect);
+    // Live 73 (2026-11-03): ~75 phones whose sockets dropped at the same instant all came back 2 s later, each with
+    // its channel authorizations and chat refresh (up to 345 requests in 2 s). A random 0–4 s spreads them out.
+    final int delayMs = (2000 * _failures).clamp(2000, 30000) + _jitter.nextInt(reconnectJitterMs);
+    _retry = Timer(Duration(milliseconds: delayMs), connect);
   }
 }
