@@ -103,6 +103,7 @@ class VideoState {
     this.errorCategory,
     this.errorKind,
     this.errorCode = 0,
+    this.errorCause = 0,
     this.licenseStatus = 0,
     this.bandwidthBps,
     this.videoHeight,
@@ -134,6 +135,10 @@ class VideoState {
   /// code on iPhone), telemetry `error_data_code`.
   final int errorCode;
 
+  /// D-195: what Media3 actually threw under [errorCode] (Android; 0 elsewhere or unknown), telemetry
+  /// `error_cause` — e.g. 1 a stuck playlist, 2 a reset playlist (see `ProtectedPlayerView.causeCode`).
+  final int errorCause;
+
   /// HTTP status of the last licence exchange, telemetry `license_status`.
   final int licenseStatus;
 
@@ -154,6 +159,7 @@ class VideoState {
     String? errorCategory,
     String? errorKind,
     int? errorCode,
+    int? errorCause,
     int? licenseStatus,
     int? bandwidthBps,
     int? videoHeight,
@@ -170,6 +176,7 @@ class VideoState {
         errorCategory: errorCategory ?? this.errorCategory,
         errorKind: errorKind ?? this.errorKind,
         errorCode: errorCode ?? this.errorCode,
+        errorCause: errorCause ?? this.errorCause,
         licenseStatus: licenseStatus ?? this.licenseStatus,
         bandwidthBps: bandwidthBps ?? this.bandwidthBps,
         videoHeight: videoHeight ?? this.videoHeight,
@@ -248,6 +255,7 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
           errorCategory: '${event['category']}',
           errorKind: event['kind'] is String ? event['kind'] as String : 'other',
           errorCode: event['code'] is num ? (event['code'] as num).toInt() : 0,
+          errorCause: event['cause'] is num ? (event['cause'] as num).toInt() : 0,
           licenseStatus: event['licenseStatus'] is num ? (event['licenseStatus'] as num).toInt() : 0,
           playing: false,
         );

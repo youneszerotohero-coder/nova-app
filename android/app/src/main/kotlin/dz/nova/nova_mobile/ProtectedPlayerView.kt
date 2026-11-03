@@ -155,6 +155,7 @@ class ProtectedPlayerView(
                         "category" to playbackCategory(error),
                         "kind" to kind(error),
                         "code" to error.errorCode,
+                        "cause" to causeCode(error),
                         "licenseStatus" to licenseStatus,
                         "message" to error.errorCodeName,
                     ),
@@ -363,6 +364,48 @@ class ProtectedPlayerView(
         events.setStreamHandler(null)
         player.release()
     }
+}
+
+/**
+ * D-195: what Media3 threw under a PlaybackException, as a number for the telemetry (`error_cause`). Lives 72–74 had
+ * thousands of ERROR_CODE_IO_UNSPECIFIED (2000) on Android only; the code alone cannot tell a stuck or reset playlist
+ * from a parser or network failure. The most precise class along the cause chain wins; 0 = no cause.
+ */
+internal fun causeCode(error: PlaybackException): Int {
+    // Wrappers (a loader's unexpected runtime error, an HTTP data source failure) count only when nothing more precise
+    // lies below them.
+    var wrapper = 0
+    for (cause in generateSequence(error.cause) { it.cause }.take(8)) {
+        val name = cause.javaClass.name
+        when {
+            name.endsWith("UnexpectedLoaderException") -> if (wrapper == 0) wrapper = 3
+            name.endsWith("\$HttpDataSourceException") -> if (wrapper == 0) wrapper = 6
+            else -> specificCause(cause, name)?.let { return it }
+        }
+    }
+    if (wrapper > 0) return wrapper
+    return when (error.cause) {
+        null -> 0
+        is java.io.IOException -> 98
+        else -> 99
+    }
+}
+
+private fun specificCause(cause: Throwable, name: String): Int? = when {
+    name.endsWith("PlaylistStuckException") -> 1
+    name.endsWith("PlaylistResetException") -> 2
+    name.endsWith("InvalidResponseCodeException") -> 4
+    name.endsWith("InvalidContentTypeException") -> 5
+    name.endsWith("BehindLiveWindowException") -> 7
+    name.endsWith("ParserException") -> 8
+    name.endsWith("UnexpectedSampleTimestampException") -> 9
+    cause is java.util.zip.ZipException -> 10
+    cause is java.io.EOFException -> 11
+    cause is java.net.SocketTimeoutException -> 12
+    cause is javax.net.ssl.SSLException -> 13
+    cause is java.net.UnknownHostException || cause is java.net.ConnectException -> 14
+    cause is java.net.SocketException -> 15
+    else -> null
 }
 
 /**

@@ -966,6 +966,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
     _telemetry?.record('error', <String, num>{
       'error_category': liveFailureCodes[category] ?? 0,
       'error_data_code': state.errorCode,
+      if (state.errorCause > 0) 'error_cause': state.errorCause,
       if (drmSide) 'license_status': state.licenseStatus,
       ..._deliveryField,
     });

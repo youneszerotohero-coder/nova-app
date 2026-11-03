@@ -1472,6 +1472,26 @@ void main() {
         expect(telemetry(backend).singleWhere((Map<String, dynamic> e) => e['type'] == 'reload')['error_code'],
             liveReloadRetryLater);
       });
+
+      testWidgets('D-195: the Media3 cause of an error goes with it, and only when known', (tester) async {
+        final FakeBackend backend = await pumpRoom(tester, clearLive());
+        await tester.pump(const Duration(milliseconds: 200));
+        await play(tester);
+        players.emit(<String, Object?>{'event': 'error', 'category': 'delivery', 'kind': 'other', 'code': 2000, 'cause': 1});
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pump(const Duration(milliseconds: 200));
+        players.emit(<String, Object?>{'event': 'error', 'category': 'delivery', 'kind': 'other', 'code': 2001});
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 2));
+        await leave(tester);
+        final List<Map<String, dynamic>> errors =
+            telemetry(backend).where((Map<String, dynamic> e) => e['type'] == 'error').toList();
+        expect(errors.first['error_data_code'], 2000);
+        expect(errors.first['error_cause'], 1);
+        expect(errors.last['error_data_code'], 2001);
+        expect(errors.last.containsKey('error_cause'), isFalse);
+      });
     });
 
     group('D-192 (2026-10-31)', () {
