@@ -14,10 +14,15 @@ import 'lesson_screen.dart';
 Future<void> openOwnedCourse(BuildContext context, Course course, {int? lessonId}) async {
   final AppState app = AppScope.of(context);
   final NavigatorState navigator = Navigator.of(context);
+  // The spinner is a dialog of the root navigator; on the PC app the pages
+  // beside the sidebar have their own navigator (D-193), so the spinner is
+  // closed on the root one, never on [navigator] (it stayed forever).
+  final NavigatorState spinnerNavigator = Navigator.of(context, rootNavigator: true);
   // Back cannot close the spinner: the pop below would then close the
   // screen under it instead.
   showDialog<void>(
     context: context,
+    useRootNavigator: true,
     barrierDismissible: false,
     builder: (_) => const PopScope(
       canPop: false,
@@ -34,7 +39,7 @@ Future<void> openOwnedCourse(BuildContext context, Course course, {int? lessonId
   } on ApiException catch (error) {
     failure = error;
   } finally {
-    navigator.pop();
+    spinnerNavigator.pop();
   }
   if (failure == null) {
     final ValueNotifier<Course> opened = ValueNotifier<Course>(full!);

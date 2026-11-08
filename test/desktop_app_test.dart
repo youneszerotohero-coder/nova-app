@@ -21,8 +21,10 @@ import 'package:nova_mobile/features/catalog/offers_catalog_screen.dart';
 import 'package:nova_mobile/features/catalog/units_catalog_screen.dart';
 import 'package:nova_mobile/features/home/home_screen.dart';
 import 'package:nova_mobile/features/home/widgets/nova_product_card.dart';
+import 'package:nova_mobile/features/learning/learn_screen.dart';
 import 'package:nova_mobile/features/learning/lives_screen.dart';
 import 'package:nova_mobile/features/learning/my_learning_screen.dart';
+import 'package:nova_mobile/features/shell/student_top_bar.dart';
 import 'package:nova_mobile/main.dart';
 
 import 'fixtures/fixture_app.dart';
@@ -176,6 +178,25 @@ void main() {
           await tester.pump();
           expect(find.byType(NovaSideRail), findsOneWidget);
           expect(shown(LivesScreen), findsOneWidget);
+        }));
+
+    testWidgets('an owned Unit opens beside the sidebar and its loading spinner closes', (tester) => asPcApp(() async {
+          await pumpApp(tester, const Size(1440, 900));
+
+          await tester.ensureVisible(find.text('Physics — Mechanics Masterclass'));
+          await frames(tester);
+          await tester.tap(find.text('Physics — Mechanics Masterclass'));
+          await frames(tester);
+          // The spinner was a root dialog closed on the sidebar's navigator:
+          // it stayed over the Unit forever and the home under it was popped.
+          expect(find.byType(CircularProgressIndicator), findsNothing);
+          expect(shown(LearnScreen), findsOneWidget);
+          expect(find.byType(NovaSideRail).hitTestable(), findsOneWidget);
+
+          await tester.tap(find.byType(BackPill));
+          await frames(tester);
+          expect(find.byType(LearnScreen), findsNothing);
+          expect(shown(HomeScreen), findsOneWidget);
         }));
 
     testWidgets('D-193: a full-width button stays at most 440 px wide in the PC app, not on phones', (tester) async {
