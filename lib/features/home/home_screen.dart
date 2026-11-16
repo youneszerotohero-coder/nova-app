@@ -35,12 +35,15 @@ class HomeSelection {
   /// and [offers] the Offers of their level. [ownedOfferIds] is
   /// `owned_offer_ids` of `/access-grants` (D-086); without it an Offer is
   /// the Student's when all its Units are paid (the website's rule for
-  /// payloads without the list).
+  /// payloads without the list). [heldOffers] is `owned_offers` (D-201): the
+  /// Student's Offers as the server lists them, a hidden one too (never in
+  /// [offers]); without it they are taken from [offers].
   factory HomeSelection.of({
     required List<Course> owned,
     required List<Course> catalogue,
     required List<Pack> offers,
     Set<int>? ownedOfferIds,
+    List<Pack>? heldOffers,
   }) {
     int fullRows(int value) => (value / 3).ceil() * 3;
     final Set<int> ownedIds = owned.map((Course c) => c.id).toSet();
@@ -54,7 +57,7 @@ class HomeSelection {
       for (final Course c in catalogue)
         if (!ownedIds.contains(c.id)) c.owned ? c.copyWith(owned: false) : c,
     ];
-    final List<Pack> ownedOffers = offers.where(holds).toList();
+    final List<Pack> ownedOffers = heldOffers ?? offers.where(holds).toList();
     final List<Pack> otherOffers = offers.where((Pack p) => !holds(p)).toList();
     return HomeSelection._(
       ownedUnits: owned,
@@ -100,6 +103,7 @@ class HomeScreen extends StatelessWidget {
       catalogue: app.catalog.courses,
       offers: app.catalog.offers,
       ownedOfferIds: guest ? null : app.learning.ownedOfferIds,
+      heldOffers: guest ? null : app.learning.ownedOffers,
     );
     // D-110: an open waiting room counts too: the Student goes in early.
     final LiveSession? liveNow = guest
@@ -193,7 +197,10 @@ class HomeScreen extends StatelessWidget {
                     pack,
                     width: cardWidth,
                     ownership: OfferOwnership.owned,
-                    onTap: () => _push(context, CourseDetailScreen.pack(pack: pack)),
+                    // D-201: a hidden Offer's public page answers 404 to its holders too: it opens My units.
+                    onTap: pack.hidden
+                        ? () => ShellNav.maybeOf(context)?.select(ShellScreen.units)
+                        : () => _push(context, CourseDetailScreen.pack(pack: pack)),
                     onAction: () => ShellNav.maybeOf(context)?.select(ShellScreen.units),
                   ),
                 for (final (Pack pack, bool covered) in home.otherOffers)

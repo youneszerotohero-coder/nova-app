@@ -778,6 +778,7 @@ class Pack {
     this.plannedLives = 0,
     this.image,
     this.matchesStudentProfile,
+    this.hidden = false,
   });
 
   factory Pack.fromJson(Json json) {
@@ -811,6 +812,7 @@ class Pack {
       plannedLives: json.integer('planned_live_count'),
       image: json.strOrNull('cover_url') ?? json.strOrNull('cover_original_url') ?? fallbackCover(id),
       matchesStudentProfile: _profileMatch(json),
+      hidden: json.str('status') == 'hidden',
     );
   }
 
@@ -843,6 +845,10 @@ class Pack {
   /// Public detail only (D-083): false when a Course of the Offer is outside
   /// the signed-in Student's level or filière; null when not said.
   final bool? matchesStudentProfile;
+
+  /// D-201: a hidden Offer, only in the Student's own list (`owned_offers`);
+  /// its public page answers 404, its holders open their Units instead.
+  final bool hidden;
 
   int get discountPercent => compareAtPrice > price
       ? (((compareAtPrice - price) / compareAtPrice) * 100).round()

@@ -34,6 +34,12 @@ class LearningStore extends ChangeNotifier {
   /// holds; null when the server does not send the list.
   Set<int>? _ownedOfferIds;
   Set<int>? get ownedOfferIds => _ownedOfferIds;
+
+  /// `owned_offers` of `/access-grants` (D-201): the Offers the Student
+  /// holds, a hidden one too (never in the public list), newest first; null
+  /// when the server does not send the list.
+  List<Pack>? _ownedOffers;
+  List<Pack>? get ownedOffers => _ownedOffers;
   List<LiveSession> _lives = const <LiveSession>[];
   Json _dashboard = <String, dynamic>{};
 
@@ -79,6 +85,7 @@ class LearningStore extends ChangeNotifier {
       _ownedIds = _owned.map((Course c) => c.id).toSet();
       final Object? offerIds = bodies[0]['owned_offer_ids'];
       _ownedOfferIds = offerIds is List ? <int>{for (final Object? id in offerIds) if (id is num) id.toInt()} : null;
+      _ownedOffers = bodies[0]['owned_offers'] is List ? bodies[0].list('owned_offers').map(Pack.fromJson).toList() : null;
       _dashboard = bodies[1].obj('data') ?? <String, dynamic>{};
       _lives = bodies[2].list('data').map(LiveSession.fromJson).toList();
       _state = LoadState.ready;
@@ -219,6 +226,7 @@ class LearningStore extends ChangeNotifier {
     _owned = const <Course>[];
     _ownedIds = <int>{};
     _ownedOfferIds = null;
+    _ownedOffers = null;
     _lives = const <LiveSession>[];
     _dashboard = <String, dynamic>{};
     _state = LoadState.idle;

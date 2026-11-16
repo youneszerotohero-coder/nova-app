@@ -10,6 +10,7 @@ import 'package:nova_mobile/core/widgets/hero_style.dart';
 import 'package:nova_mobile/core/widgets/nova_bottom_bar.dart';
 import 'package:nova_mobile/core/widgets/pressable_scale.dart';
 import 'package:nova_mobile/data/catalog_store.dart';
+import 'package:nova_mobile/data/learning_store.dart';
 import 'package:nova_mobile/data/models.dart';
 import 'package:nova_mobile/features/account/orders_screen.dart';
 import 'package:nova_mobile/features/account/settings_screen.dart';
@@ -683,6 +684,33 @@ void main() {
     });
   });
 
+  // D-201 (owner report 2026-11-15): the holders of a hidden Offer did not see it on their Home.
+  testWidgets('a hidden Offer the Student holds shows as Purchased on the Home and opens My units', (tester) async {
+    final LearningStore learning = LearningStore(fakeApi(FakeBackend(<String, FakeResponse>{
+      'GET /access-grants': const FakeResponse(200, <String, Object?>{
+        'data': <Object>[],
+        'owned_offer_ids': <int>[990],
+        'owned_offers': <Object>[
+          <String, Object?>{'id': 990, 'slug': 'hidden-pack', 'title': 'Hidden Pack', 'status': 'hidden', 'cover_url': null},
+        ],
+      }),
+      'GET /me/dashboard': const FakeResponse(200, <String, Object>{'data': <String, Object>{}}),
+      'GET /lives': const FakeResponse(200, <String, Object>{'data': <Object>[]}),
+    })));
+    installFixtureApp(learning: learning);
+    learning.load();
+    await pumpApp(tester);
+
+    expect(find.text('Hidden Pack'), findsOneWidget);
+    expect(find.text('Purchased'), findsOneWidget);
+    // Its public page answers 404 to its holders too: the card opens My units.
+    await tester.tap(find.text('Hidden Pack'));
+    await frames(tester);
+    expect(tester.widget<NovaBottomBar>(find.byType(NovaBottomBar)).currentIndex, ShellScreen.units);
+    expect(shown(MyLearningScreen), findsOneWidget);
+    expect(find.byType(CourseDetailScreen), findsNothing);
+  });
+
   group('what the Home shows (website `AccountHome`)', () {
     Course unit(int id, {bool free = false}) => Course.fromJson(<String, dynamic>{'id': id, 'title': 'U$id', 'is_free': free});
     Pack offer(int id, List<int> units) => Pack.fromJson(<String, dynamic>{
@@ -721,6 +749,21 @@ void main() {
       home = HomeSelection.of(owned: owned, catalogue: catalogue, offers: offers);
       expect(home.ownedOffers.map((Pack p) => p.id), <int>[10]);
       expect(home.otherOffers.map(((Pack, bool) e) => e.$1.id), <int>[11, 12, 13]);
+    });
+
+    test('the Student\'s Offers come from the server\'s list, a hidden one too (D-201 owned_offers)', () {
+      final List<Pack> offers = <Pack>[offer(10, <int>[1]), offer(13, <int>[5])];
+      final Pack hidden = Pack.fromJson(<String, dynamic>{'id': 20, 'title': 'O20', 'status': 'hidden'});
+      final HomeSelection home = HomeSelection.of(
+        owned: <Course>[unit(1)],
+        catalogue: catalogue,
+        offers: offers,
+        ownedOfferIds: <int>{13, 20},
+        heldOffers: <Pack>[hidden, offers[1]],
+      );
+      // The hidden Offer is never in the public list, yet it is theirs.
+      expect(home.ownedOffers.map((Pack p) => (p.id, p.hidden)), <(int, bool)>[(20, true), (13, false)]);
+      expect(home.otherOffers.map(((Pack, bool) e) => (e.$1.id, e.$2)), <(int, bool)>[(10, true)]);
     });
   });
 

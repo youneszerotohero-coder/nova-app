@@ -250,8 +250,31 @@ void main() {
       final LearningStore older = LearningStore(fakeApi(grants(<String, Object?>{'data': <Object>[]})));
       await older.load();
       expect(older.ownedOfferIds, isNull);
+      expect(older.ownedOffers, isNull);
       held.clear();
       expect(held.ownedOfferIds, isNull);
+    });
+
+    test('access grants list the Offers the Student holds, a hidden one too (D-201 owned_offers)', () async {
+      final LearningStore held = LearningStore(fakeApi(FakeBackend(<String, FakeResponse>{
+        'GET /access-grants': const FakeResponse(200, <String, Object?>{
+          'data': <Object>[],
+          'owned_offer_ids': <int>[9, 11],
+          'owned_offers': <Object>[
+            <String, Object?>{'id': 11, 'slug': 'hidden-pack', 'title': 'Hidden Pack', 'status': 'hidden', 'cover_url': null},
+            <String, Object?>{'id': 9, 'slug': 'annual-pack', 'title': 'Annual Pack', 'status': 'published', 'cover_url': null},
+          ],
+        }),
+        'GET /me/dashboard': const FakeResponse(200, <String, Object>{'data': <String, Object>{}}),
+        'GET /lives': const FakeResponse(200, <String, Object>{'data': <Object>[]}),
+      })));
+      await held.load();
+      expect(held.ownedOffers!.map((Pack p) => (p.id, p.slug, p.name, p.hidden)), <(int, String, String, bool)>[
+        (11, 'hidden-pack', 'Hidden Pack', true),
+        (9, 'annual-pack', 'Annual Pack', false),
+      ]);
+      held.clear();
+      expect(held.ownedOffers, isNull);
     });
 
     test('courses, offers and teachers parse from real /api/v1 payloads', () async {
