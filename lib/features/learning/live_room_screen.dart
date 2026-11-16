@@ -20,6 +20,7 @@ import '../../data/live_store.dart';
 import '../../data/models.dart';
 import '../player/live_player.dart';
 import '../player/playback_rules.dart';
+import 'live_comment_reply.dart';
 import 'live_pinned_comment.dart';
 import 'live_speaker.dart';
 import 'live_speaking_stage.dart';
@@ -89,6 +90,13 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
 
   /// D-186: the comment the Admin pinned, from the Live and its broadcasts.
   LivePinnedComment? _pinned;
+
+  /// D-204: the Admin's private answers to this Student's comments (newest
+  /// first) and, per Live for the app session, the ones the Student hid.
+  List<LiveCommentReply> _replies = const <LiveCommentReply>[];
+  static final Map<int, Set<int>> _hiddenRepliesByLive = <int, Set<int>>{};
+  Set<int> get _hiddenReplies => _hiddenRepliesByLive.putIfAbsent(_id, () => <int>{});
+  LiveCommentReply? get _visibleReply => _replies.where((LiveCommentReply reply) => !_hiddenReplies.contains(reply.id)).firstOrNull;
   final Set<Timer> _speakerTimers = <Timer>{};
 
   Timer? _poll;
@@ -158,6 +166,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
         // Realtime is the fresher source once it has spoken.
         if (!_speakerFromRealtime) _speakerName = detail.isLive ? detail.speaker : null;
         _pinned = detail.pinnedComment;
+        _replies = detail.commentReplies;
       });
       if (detail.isOver && detail.live.lessonId != null) {
         _openLesson(detail.live);
@@ -205,6 +214,7 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
       if (event == 'LiveStateChanged') _load();
       if (event == 'LiveHandChanged') _applyHandStatus(data.strOrNull('status'));
       if (event == 'LivePinnedCommentChanged') _applyPinned(data);
+      if (event == 'LiveCommentReplied') _applyReply(data);
     }));
   }
 
@@ -230,6 +240,28 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
   void _applyPinned(Json data) {
     if (data.integer('live_id') != _id || !mounted) return;
     setState(() => _pinned = LivePinnedComment.fromJson(data.obj('pinned_comment')));
+  }
+
+  /// `LiveCommentReplied` (D-204): the Admin answered one of this Student's
+  /// comments; shown over the picture at once.
+  void _applyReply(Json data) {
+    final LiveCommentReply? reply = LiveCommentReply.fromJson(data.obj('reply'));
+    if (reply == null || !mounted || _replies.any((LiveCommentReply known) => known.id == reply.id)) return;
+    setState(() => _replies = <LiveCommentReply>[reply, ..._replies]);
+  }
+
+  void _hideReply(int id) => setState(() => _hiddenReplies.add(id));
+
+  /// The answer card over the picture, under the speaker label when one is shown.
+  Widget? _replyOverlay({required bool isLive, required bool speakerShown, required double top}) {
+    final LiveCommentReply? reply = _visibleReply;
+    if (!isLive || reply == null) return null;
+    return PositionedDirectional(
+      top: speakerShown ? top + 46 : top,
+      start: 12,
+      end: 12,
+      child: Center(child: LiveCommentReplyCard(reply: reply, onHide: () => _hideReply(reply.id))),
+    );
   }
 
   /// `LiveSpeakerChanged` (D-073): shown to the other Students once the
@@ -407,6 +439,8 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
     final bool isLive = detail != null &&
         detail.showsBroadcast(waited: _waited, serverNow: DateTime.now().add(_skew));
     final Widget? player = detail == null ? null : _player(detail, broadcast: isLive);
+    final bool speakerShown = isLive && _speakerName != null && _hand != _Hand.interactive && _hand != _Hand.connecting;
+    final Widget? replyOverlay = _replyOverlay(isLive: isLive, speakerShown: speakerShown, top: _fullscreen ? 14 : 12);
 
     if (_fullscreen && player != null) {
       return PopScope(
@@ -419,13 +453,14 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
           body: Stack(
             children: [
               SizedBox.expand(child: player),
-              if (isLive && _speakerName != null && _hand != _Hand.interactive && _hand != _Hand.connecting)
+              if (speakerShown)
                 PositionedDirectional(
                   top: 14,
                   start: 16,
                   end: 16,
                   child: Center(child: LiveSpeakerLabel(speaker: _speakerName!)),
                 ),
+              if (replyOverlay != null) replyOverlay,
             ],
           ),
         ),
@@ -462,13 +497,14 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
                           : player ?? _statusCard(context, detail),
                     ),
                   ),
-                  if (isLive && _speakerName != null && _hand != _Hand.interactive && _hand != _Hand.connecting)
+                  if (speakerShown)
                     PositionedDirectional(
                       top: 12,
                       start: 16,
                       end: 16,
                       child: Center(child: LiveSpeakerLabel(speaker: _speakerName!)),
                     ),
+                  if (replyOverlay != null) replyOverlay,
                 ],
               ),
             ),

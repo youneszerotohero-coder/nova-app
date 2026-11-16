@@ -17,6 +17,7 @@ import 'package:nova_mobile/data/live_store.dart';
 import 'package:nova_mobile/data/session_store.dart';
 import 'package:nova_mobile/features/learning/learn_screen.dart';
 import 'package:nova_mobile/features/learning/lesson_screen.dart';
+import 'package:nova_mobile/features/learning/live_comment_reply.dart';
 import 'package:nova_mobile/features/learning/live_pinned_comment.dart';
 import 'package:nova_mobile/features/learning/live_room_screen.dart';
 import 'package:nova_mobile/features/learning/live_speaker.dart';
@@ -54,6 +55,7 @@ Map<String, Object?> _detail(
   bool waitingRoom = false,
   String serverTime = '2026-09-24T18:10:00+00:00',
   Map<String, Object?>? pinned,
+  List<Map<String, Object?>>? replies,
 }) =>
     <String, Object?>{
       'data': <String, Object?>{
@@ -82,6 +84,7 @@ Map<String, Object?> _detail(
       'hand_status': hand,
       'muted': false,
       'speaker': speaker,
+      'comment_replies': ?replies,
     };
 
 /// `POST /lives/{id}/playback-policy`: mode A (`clearDelivery: false`),
@@ -200,6 +203,18 @@ void main() {
       final Map<String, dynamic> event = <String, dynamic>{'live_id': 301, 'pinned_comment': <String, dynamic>{'id': 9, 'message': 'Exercise 3'}};
       expect(LivePinnedComment.fromJson(event['pinned_comment'] as Map<String, dynamic>)?.message, 'Exercise 3');
       expect(LivePinnedComment.fromJson(null), isNull);
+    });
+
+    test('D-204: the Admin answers to this Student come with the question they answer', () {
+      final LiveDetail detail = LiveDetail.fromJson(_detail('live', replies: <Map<String, Object?>>[
+        <String, Object?>{'id': 7, 'comment_id': 70, 'comment_message': ' Is chapter 4 in? ', 'message': ' Yes ', 'created_at': '2026-09-24T18:06:00+00:00'},
+        <String, Object?>{'id': 6, 'comment_id': 69, 'comment_message': 'Hello', 'message': '   ', 'created_at': '2026-09-24T18:05:00+00:00'},
+      ]));
+      expect(detail.commentReplies.map((LiveCommentReply reply) => reply.id), <int>[7]);
+      expect(detail.commentReplies.single.question, 'Is chapter 4 in?');
+      expect(detail.commentReplies.single.message, 'Yes');
+      // Older servers send nothing.
+      expect(LiveDetail.fromJson(_detail('live')).commentReplies, isEmpty);
     });
   });
 
@@ -1060,6 +1075,30 @@ void main() {
       expect(find.descendant(of: banner, matching: find.text('Read chapter 4 before Sunday')), findsOneWidget);
       // Above the question field, in the chat area.
       expect(tester.getTopLeft(banner).dy, lessThan(tester.getTopLeft(find.byType(TextField)).dy));
+      await leave(tester);
+    });
+
+    testWidgets('D-204: the Admin answer is over the picture with the question until the Student hides it', (tester) async {
+      await pumpRoom(tester, <String, FakeResponse>{
+        'GET /lives/301': FakeResponse(200, _detail('live', mediaState: 'ready', replies: <Map<String, Object?>>[
+          <String, Object?>{'id': 7, 'comment_id': 70, 'comment_message': 'Is chapter 4 in the exam?', 'message': 'Yes, all of it.', 'created_at': '2026-09-24T18:06:00+00:00'},
+        ])),
+        'POST /lives/301/playback-policy': FakeResponse(200, _policy(mode: 'clear')),
+        'POST /lives/301/join': _clearJoin,
+      });
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final Finder card = find.byType(LiveCommentReplyCard);
+      expect(card, findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('Answer from the teaching team')), findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('Your question: Is chapter 4 in the exam?')), findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('Yes, all of it.')), findsOneWidget);
+      // Over the picture, above the question field.
+      expect(tester.getTopLeft(card).dy, lessThan(tester.getTopLeft(find.byType(TextField)).dy));
+
+      await tester.tap(find.descendant(of: card, matching: find.byIcon(Icons.close_rounded)));
+      await tester.pump();
+      expect(find.byType(LiveCommentReplyCard), findsNothing);
       await leave(tester);
     });
 

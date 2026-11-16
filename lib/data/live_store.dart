@@ -18,6 +18,7 @@ class LiveDetail {
     this.audienceOpen = true,
     this.audienceOpenedAt,
     this.pinnedComment,
+    this.commentReplies = const <LiveCommentReply>[],
   });
 
   /// D-128 (web `LIVE_REVEAL_DELAY_MS`): when the doors open, the newest
@@ -43,6 +44,8 @@ class LiveDetail {
       audienceOpen: data.flag('audience_open', true),
       audienceOpenedAt: data.date('audience_opened_at'),
       pinnedComment: LivePinnedComment.fromJson(data.obj('pinned_comment')),
+      // D-204: absent on older servers.
+      commentReplies: body.list('comment_replies').map(LiveCommentReply.fromJson).whereType<LiveCommentReply>().toList(),
     );
   }
 
@@ -71,6 +74,11 @@ class LiveDetail {
   /// D-186: the comment the Admin pinned for every Student, while the Live
   /// runs (null otherwise); kept current by `LivePinnedCommentChanged`.
   final LivePinnedComment? pinnedComment;
+
+  /// D-204: the Admin's private answers to this Student's comments in this
+  /// running Live, newest first (top-level `comment_replies`); new ones come
+  /// with `LiveCommentReplied` on the Student's channel.
+  final List<LiveCommentReply> commentReplies;
 
   String get status => live.rawStatus;
 
@@ -131,6 +139,24 @@ class LivePinnedComment {
   }
 
   final int id;
+  final String message;
+}
+
+/// D-204: the Admin's private answer to one of this Student's comments,
+/// with the question it answers. Only this Student and the Admins see it.
+class LiveCommentReply {
+  const LiveCommentReply({required this.id, required this.question, required this.message});
+
+  static LiveCommentReply? fromJson(Json? json) {
+    if (json == null) return null;
+    final String message = json.str('message').trim();
+    return message.isEmpty
+        ? null
+        : LiveCommentReply(id: json.integer('id'), question: json.str('comment_message').trim(), message: message);
+  }
+
+  final int id;
+  final String question;
   final String message;
 }
 
