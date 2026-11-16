@@ -185,10 +185,14 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
   void _openLesson(LiveSession live) {
     final AppState app = AppScope.of(context);
     final NavigatorState navigator = Navigator.of(context);
-    final Course? course = app.learning.owned.where((Course c) => c.slug == live.courseSlug).firstOrNull;
+    // D-207: the Lesson of a Unit of the Live this Student holds (older servers: the Live's one Course).
+    final Course? course = app.learning.owned
+            .where((Course c) => live.replayLessons.containsKey(c.slug))
+            .firstOrNull ??
+        app.learning.owned.where((Course c) => c.slug == live.courseSlug).firstOrNull;
     if (course == null) return;
     navigator.pop();
-    openOwnedCourse(navigator.context, course, lessonId: live.lessonId);
+    openOwnedCourse(navigator.context, course, lessonId: live.replayLessons[course.slug] ?? live.lessonId);
   }
 
   /// Web cadence: every 20 s with realtime, every 8 s without, while the

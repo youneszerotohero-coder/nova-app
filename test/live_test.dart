@@ -14,6 +14,7 @@ import 'package:nova_mobile/data/catalog_store.dart';
 import 'package:nova_mobile/data/commerce_store.dart';
 import 'package:nova_mobile/data/learning_store.dart';
 import 'package:nova_mobile/data/live_store.dart';
+import 'package:nova_mobile/data/models.dart' show LiveSession;
 import 'package:nova_mobile/data/session_store.dart';
 import 'package:nova_mobile/features/learning/learn_screen.dart';
 import 'package:nova_mobile/features/learning/lesson_screen.dart';
@@ -203,6 +204,27 @@ void main() {
       final Map<String, dynamic> event = <String, dynamic>{'live_id': 301, 'pinned_comment': <String, dynamic>{'id': 9, 'message': 'Exercise 3'}};
       expect(LivePinnedComment.fromJson(event['pinned_comment'] as Map<String, dynamic>)?.message, 'Exercise 3');
       expect(LivePinnedComment.fromJson(null), isNull);
+    });
+
+    test('D-207: a Live of several Units shows every Unit and knows its Lesson in each', () {
+      final Map<String, Object?> data = <String, Object?>{
+        ...(_detail('ended', lessonId: 10)['data']! as Map<String, Object?>),
+        'courses': <Map<String, Object?>>[
+          <String, Object?>{'id': 102, 'title': 'Maths SE', 'slug': 'maths-se'},
+          <String, Object?>{'id': 103, 'title': 'Maths MT', 'slug': 'maths-mt'},
+        ],
+        'lessons': <Map<String, Object?>>[
+          <String, Object?>{'course_id': 102, 'course_slug': 'maths-se', 'lesson_id': 10},
+          <String, Object?>{'course_id': 103, 'course_slug': 'maths-mt', 'lesson_id': 11},
+        ],
+      };
+      final LiveSession live = LiveSession.fromJson(data);
+      expect(live.course, 'Maths SE · Maths MT');
+      expect(live.replayLessons, <String, int>{'maths-se': 10, 'maths-mt': 11});
+      // Older servers: the one Course and no Lesson map.
+      final LiveSession older = LiveSession.fromJson(_detail('ended', lessonId: 10)['data']! as Map<String, Object?>);
+      expect(older.course, 'Physics — Mechanics Masterclass');
+      expect(older.replayLessons, isEmpty);
     });
 
     test('D-204: the Admin answers to this Student come with the question they answer', () {
