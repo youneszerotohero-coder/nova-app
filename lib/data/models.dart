@@ -294,6 +294,7 @@ class LiveSession {
     this.lessonId,
     this.waitingRoomOpen = false,
     this.watchingNow,
+    this.replayLessons = const <String, int>{},
   });
 
   factory LiveSession.fromJson(Json json) {
@@ -302,7 +303,10 @@ class LiveSession {
     return LiveSession(
       id: json.integer('id'),
       title: json.str('title'),
-      course: json.str('course_title'),
+      // D-207: every Unit of the Live (older servers: its one Course).
+      course: json.list('courses').isEmpty
+          ? json.str('course_title')
+          : json.list('courses').map((Json unit) => unit.str('title')).where((String title) => title.isNotEmpty).join(' · '),
       courseSlug: json.str('course_slug'),
       teacher: json.str('teacher_name'),
       subject: '',
@@ -324,6 +328,10 @@ class LiveSession {
       commentsEnabled: json.flag('comments_enabled', true),
       commentMaxLength: json.integer('comment_max_length', 500),
       lessonId: json['lesson_id'] is int ? json['lesson_id'] as int : null,
+      replayLessons: <String, int>{
+        for (final Json lesson in json.list('lessons'))
+          if (lesson.str('course_slug').isNotEmpty) lesson.str('course_slug'): lesson.integer('lesson_id'),
+      },
       waitingRoomOpen: json.obj('waiting_room') != null,
     );
   }
@@ -356,6 +364,9 @@ class LiveSession {
 
   /// D-132: the Lesson this Live became once its recording was ready.
   final int? lessonId;
+
+  /// D-207: the replay's Lesson in each Unit of the Live (Unit slug → Lesson id).
+  final Map<String, int> replayLessons;
 
   /// D-110: the waiting room is open.
   final bool waitingRoomOpen;
