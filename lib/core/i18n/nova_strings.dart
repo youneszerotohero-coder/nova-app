@@ -380,6 +380,32 @@ const Map<String, Map<String, String>> K = {
   'live.raiseHand': {'en': 'Raise hand to speak', 'fr': 'Lève la main pour parler', 'ar': 'ارفع يدك للتحدث'},
   'live.handInQueue': {'en': 'Your hand is in the queue', 'fr': 'Ta main est dans la file', 'ar': 'يدك في قائمة الانتظار'},
   'live.pinned': {'en': 'Pinned by the teaching team', 'fr': 'Épinglé par l’équipe pédagogique', 'ar': 'مثبّت من فريق التدريس'},
+  // D-110: the waiting room (web `waiting.*`).
+  'waiting.title': {'en': 'Waiting room', 'fr': 'Salle d’attente', 'ar': 'قاعة الانتظار'},
+  'waiting.startsIn': {'en': 'The live starts in', 'fr': 'Le Live commence dans', 'ar': 'يبدأ البث المباشر بعد'},
+  'waiting.soon': {'en': 'The live starts in a moment', 'fr': 'Le Live commence dans un instant', 'ar': 'سيبدأ البث المباشر بعد لحظات'},
+  'waiting.soundOff': {'en': 'Mute', 'fr': 'Couper le son', 'ar': 'كتم الصوت'},
+  'waiting.soundOn': {'en': 'Turn sound on', 'fr': 'Activer le son', 'ar': 'تشغيل الصوت'},
+  'waiting.voice1': {
+    'en': 'Welcome to NOVA, your distance-learning platform!',
+    'fr': 'Bienvenue sur NOVA, votre plateforme d’apprentissage à distance !',
+    'ar': 'أهلًا وسهلًا بكم في نوفا، منصّتكم للتعلّم عن بُعد!',
+  },
+  'waiting.voice2': {
+    'en': 'Get ready, the live class starts shortly.',
+    'fr': 'Préparez-vous, le cours en direct commence bientôt.',
+    'ar': 'استعدّوا، الحصّة المباشرة ستبدأ بعد قليل.',
+  },
+  'waiting.voice3': {
+    'en': 'Get your notebooks and pens ready, and stay with us!',
+    'fr': 'Préparez vos cahiers et vos stylos, et restez avec nous !',
+    'ar': 'جهّزوا دفاتركم وأقلامكم، وابقوا معنا!',
+  },
+  'waiting.voice4': {
+    'en': 'NOVA… we learn together, wherever we are!',
+    'fr': 'NOVA… on apprend ensemble, où que nous soyons !',
+    'ar': 'نوفا… نتعلّم معًا، أينما كنّا!',
+  },
   'live.replyFromTeam': {'en': 'Answer from the teaching team', 'fr': 'Réponse de l’équipe pédagogique', 'ar': 'ردّ فريق التدريس'},
   'live.yourQuestion': {'en': 'Your question: {question}', 'fr': 'Ta question : {question}', 'ar': 'سؤالك: {question}'},
   'live.hideReply': {'en': 'Hide this answer', 'fr': 'Masquer cette réponse', 'ar': 'إخفاء هذا الرد'},

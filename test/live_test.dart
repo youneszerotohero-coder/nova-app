@@ -23,6 +23,7 @@ import 'package:nova_mobile/features/learning/live_pinned_comment.dart';
 import 'package:nova_mobile/features/learning/live_room_screen.dart';
 import 'package:nova_mobile/features/learning/live_speaker.dart';
 import 'package:nova_mobile/features/learning/live_speaking_stage.dart';
+import 'package:nova_mobile/features/learning/live_waiting_room.dart';
 import 'package:nova_mobile/features/player/live_player.dart';
 import 'package:nova_mobile/features/player/playback_rules.dart';
 import 'package:nova_mobile/features/player/protected_video.dart';
@@ -1026,6 +1027,42 @@ void main() {
       // 12 s after the doors opened, minus the 9 s the picture takes.
       expect(find.textContaining(RegExp(r'LIVE CLASS · 0:0[34]')), findsOneWidget);
       await leave(tester);
+    });
+
+    testWidgets('D-110: the waiting room counts down on the server clock, speaks and tells the Admin', (tester) async {
+      // Owner report 2026-11-17: the apps only said when the Live starts.
+      final FakeBackend backend = await pumpRoom(tester, <String, FakeResponse>{
+        'GET /lives/301': FakeResponse(200, _detail('scheduled', waitingRoom: true, serverTime: '2026-09-24T17:50:00+00:00')),
+        'POST /lives/301/waiting-room/presence': FakeResponse(204, null),
+      });
+      Iterable<FakeRequest> beats() => backend.requests.where((FakeRequest r) => r.path == '/lives/301/waiting-room/presence');
+
+      // Ten minutes before the end the Admin set, whatever this phone's clock says.
+      expect(find.text('The live starts in'), findsOneWidget);
+      expect(find.text('10:00'), findsOneWidget);
+      expect(beats(), hasLength(1));
+      expect(players.created, isEmpty);
+
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Welcome to NOVA, your distance-learning platform!'), findsOneWidget);
+      await tester.tap(find.text('Mute'));
+      await tester.pump();
+      expect(find.text('Turn sound on'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 30));
+      expect(beats(), hasLength(2));
+      await leave(tester);
+    });
+
+    test('D-110: the waiting room shows mm:ss rounded up and the caption of each sentence', () {
+      expect(waitingCountdown(const Duration(minutes: 9, seconds: 59, milliseconds: 1)), '10:00');
+      expect(waitingCountdown(const Duration(seconds: 5)), '00:05');
+      expect(waitingCaptionAt(0.5), -1);
+      expect(waitingCaptionAt(1), 0);
+      expect(waitingCaptionAt(24 + 6), 1);
+      expect(waitingCaptionAt(21), -1);
+      final LiveSession live = LiveSession.fromJson(_detail('scheduled', waitingRoom: true)['data']! as Map<String, Object?>);
+      expect(live.waitingRoomEndsAt, DateTime.parse('2026-09-24T18:00:00+00:00').toLocal());
     });
 
     testWidgets('D-117: a Student arriving after the doors opened sees the Live at once', (tester) async {

@@ -129,8 +129,8 @@ class LearningStore extends ChangeNotifier {
     return PlaybackAuthorization.fromJson(body.obj('data') ?? <String, dynamic>{});
   }
 
-  /// Reports the playhead; the server caps it by real elapsed time and
-  /// never lets progress regress. Returns the updated lesson progress.
+  /// Reports the playhead; the server keeps the furthest second reached as
+  /// the progress (D-208), never lower. Returns the updated lesson progress.
   Future<Json> saveProgress(int lessonId, {required int positionSeconds, required String session}) async {
     final Json body = await _api!.put('/lessons/$lessonId/progress', <String, Object>{
       'position_seconds': positionSeconds,

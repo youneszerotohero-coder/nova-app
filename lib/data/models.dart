@@ -293,6 +293,7 @@ class LiveSession {
     this.commentMaxLength = 500,
     this.lessonId,
     this.waitingRoomOpen = false,
+    this.waitingRoomEndsAt,
     this.watchingNow,
     this.replayLessons = const <String, int>{},
   });
@@ -333,6 +334,7 @@ class LiveSession {
           if (lesson.str('course_slug').isNotEmpty) lesson.str('course_slug'): lesson.integer('lesson_id'),
       },
       waitingRoomOpen: json.obj('waiting_room') != null,
+      waitingRoomEndsAt: json.obj('waiting_room')?.date('ends_at'),
     );
   }
 
@@ -370,6 +372,9 @@ class LiveSession {
 
   /// D-110: the waiting room is open.
   final bool waitingRoomOpen;
+
+  /// D-110: the end of its countdown, on the server's clock (null: none).
+  final DateTime? waitingRoomEndsAt;
 
   /// Running or coming (the website's `isCurrentLive`); a finished Live is a
   /// Lesson of its Unit (D-132).

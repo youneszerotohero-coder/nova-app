@@ -24,6 +24,7 @@ import 'live_comment_reply.dart';
 import 'live_pinned_comment.dart';
 import 'live_speaker.dart';
 import 'live_speaking_stage.dart';
+import 'live_waiting_room.dart';
 import 'open_course.dart';
 
 /// The Student's hand, web `live-room.tsx` states.
@@ -581,6 +582,14 @@ class _LiveRoomScreenState extends State<LiveRoomScreen> {
     if (detail.isLive && !detail.doorsClosed) {
       // D-128: the doors just opened; the first picture is on its way.
       return _message(context, null, context.tr('live.starting'));
+    }
+    if (detail.inWaitingRoom) {
+      return LiveWaitingRoom(
+        endsAt: detail.live.waitingRoomEndsAt,
+        countsDown: detail.status == 'scheduled' || detail.doorsClosed,
+        serverNow: () => DateTime.now().add(_skew),
+        presence: () => _store.waitingRoomPresence(_id),
+      );
     }
     if (detail.isWaiting) {
       final DateTime? at = detail.live.scheduledAt;

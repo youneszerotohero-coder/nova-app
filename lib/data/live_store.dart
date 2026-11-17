@@ -394,6 +394,9 @@ class LiveStore {
 
   Future<void> raiseHand(int id) => _api.post('/lives/$id/raise-hand');
 
+  /// D-110: this Student is in the waiting room (every 30 s, web `waitingRoomPresence`).
+  Future<void> waitingRoomPresence(int id) => _api.post('/lives/$id/waiting-room/presence');
+
   Future<void> lowerHand(int id) => _api.delete('/lives/$id/raise-hand');
 
   Future<SpeakerGrant> speaker(int id) async =>
