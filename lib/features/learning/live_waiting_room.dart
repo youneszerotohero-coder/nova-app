@@ -94,7 +94,15 @@ class _LiveWaitingRoomState extends State<LiveWaitingRoom> with SingleTickerProv
     unawaited(_startVoice());
   }
 
-  void _beat() => unawaited(widget.presence().catchError((Object _) {}));
+  void _beat() => unawaited(_sendPresence());
+
+  Future<void> _sendPresence() async {
+    try {
+      await widget.presence();
+    } catch (_) {
+      // A missed beat only lowers the Admin's count until the next one.
+    }
+  }
 
   Future<void> _startVoice() async {
     if (_underTest) return;
