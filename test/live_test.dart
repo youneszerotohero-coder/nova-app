@@ -406,6 +406,29 @@ void main() {
         expect(watch.stuck(restarts: 0), isTrue);
       });
 
+      test('D-212: PlayReady on the PC waits 20 s, then 25 and 30 s, as its software starts took 12–19 s', () {
+        expect(LivePlaybackWatch.startTimeout(0, slowDrm: true), const Duration(seconds: 20));
+        expect(LivePlaybackWatch.startTimeout(1, slowDrm: true), const Duration(seconds: 25));
+        expect(LivePlaybackWatch.startTimeout(9, slowDrm: true), const Duration(seconds: 30));
+        final LivePlaybackWatch watch = LivePlaybackWatch();
+        feed(watch, 0, 19);
+        expect(watch.stuck(restarts: 0, slowDrm: true), isFalse);
+        expect(watch.stuck(restarts: 0), isTrue, reason: 'the phones keep 10 s');
+        feed(watch, 19, 1);
+        expect(watch.stuck(restarts: 0, slowDrm: true), isTrue);
+        expect(watch.waited, const Duration(seconds: 20));
+      });
+
+      test('D-212: hardware PlayReady without a picture after 6 s asks for software, once', () {
+        bool due({bool hardware = true, bool asked = false, bool firstFrame = false, int seconds = 6}) =>
+            PcHardwareStart.fallbackDue(hardware: hardware, asked: asked, firstFrame: firstFrame, waited: Duration(seconds: seconds));
+        expect(due(seconds: 5), isFalse);
+        expect(due(), isTrue);
+        expect(due(asked: true), isFalse);
+        expect(due(firstFrame: true), isFalse);
+        expect(due(hardware: false, seconds: 30), isFalse, reason: 'software and clear streams are left to the watch');
+      });
+
       test('ready_state follows the website (HTMLMediaElement)', () {
         expect(liveReadyState(phase: 'idle', firstFrame: false, playing: false), 0);
         expect(liveReadyState(phase: 'buffering', firstFrame: false, playing: false), 1);

@@ -439,6 +439,10 @@ const int liveReloadExpired = 9006;
 const int liveReloadClearFallback = 9007;
 const int liveReloadRenewal = 9008;
 
+/// D-212 (PC app only): hardware PlayReady showed no picture and the same
+/// player went on in software; not a new join (no `ready` follows).
+const int liveReloadSoftwareFallback = 9009;
+
 /// D-190: a Live behind its live window (Media3 1002) went back to the live
 /// edge in place — telemetry event `edge_jump` with `error_code` 1002 and
 /// `attempt` (1 or 2 within 60 s), not a `reload`: same player, same

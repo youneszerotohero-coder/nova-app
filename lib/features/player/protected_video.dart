@@ -107,6 +107,7 @@ class VideoState {
     this.licenseStatus = 0,
     this.bandwidthBps,
     this.videoHeight,
+    this.drmFallbacks = 0,
   });
 
   /// idle | buffering | ready | ended.
@@ -147,6 +148,10 @@ class VideoState {
   final int? bandwidthBps;
   final int? videoHeight;
 
+  /// PC app (D-212): how many times this player went on in software
+  /// PlayReady after hardware showed no picture (the page's `drm` event).
+  final int drmFallbacks;
+
   VideoState copyWith({
     String? phase,
     bool? playing,
@@ -163,6 +168,7 @@ class VideoState {
     int? licenseStatus,
     int? bandwidthBps,
     int? videoHeight,
+    int? drmFallbacks,
   }) =>
       VideoState(
         phase: phase ?? this.phase,
@@ -180,6 +186,7 @@ class VideoState {
         licenseStatus: licenseStatus ?? this.licenseStatus,
         bandwidthBps: bandwidthBps ?? this.bandwidthBps,
         videoHeight: videoHeight ?? this.videoHeight,
+        drmFallbacks: drmFallbacks ?? this.drmFallbacks,
       );
 }
 
@@ -246,6 +253,8 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
         );
       case 'firstFrame':
         value = value.copyWith(firstFrame: true);
+      case 'drm':
+        if (event['fallback'] == true) value = value.copyWith(drmFallbacks: value.drmFallbacks + 1);
       case 'tracks':
         value = value.copyWith(
           heights: <int>[for (final Object? h in event['heights'] as List) (h as num).toInt()],
@@ -294,6 +303,7 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
       firstFrame: failed.firstFrame,
       liveOffset: failed.liveOffset,
       licenseStatus: failed.licenseStatus,
+      drmFallbacks: failed.drmFallbacks,
     );
     final MethodChannel? methods = _methods;
     if (methods == null) return false;
@@ -332,6 +342,11 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
 
   /// A renewed Live entitlement for future licence requests.
   Future<void> renewToken(String token) => _call('renewToken', <String, Object>{'token': token});
+
+  /// PC app (D-212): hardware PlayReady shows no picture, go on in software
+  /// in this player. The page answers with a `drm` fallback event, and does
+  /// nothing on software PlayReady or a clear stream. False elsewhere.
+  Future<bool> softwareFallback() => _optional('softwareFallback', const <String, Object>{});
 
   @override
   void dispose() {

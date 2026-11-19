@@ -269,15 +269,22 @@ class ProtectedStartWatch {
 /// playing for three times as long; once it played, after [stallTimeout]
 /// without progress. Times come from the caller's ticks, so the rule is the
 /// same on a phone and under fake timers.
+///
+/// PlayReady in the PC app (`slowDrm`, D-212) starts slower: Lives 102–103
+/// (2026-11-18/19) showed software starts of 12–19 s that the 10 s budget
+/// killed, each restart beginning again. Its budget is 20 s, then 25 and 30 s.
 class LivePlaybackWatch {
   static const List<int> _startSeconds = <int>[10, 15, 20, 30];
+  static const List<int> _slowDrmStartSeconds = <int>[20, 25, 30, 30];
   static const Duration stallTimeout = Duration(seconds: 20);
 
   /// Below this, more media ahead is jitter, not loading.
   static const Duration _loaded = Duration(milliseconds: 500);
 
-  static Duration startTimeout(int restarts) =>
-      Duration(seconds: _startSeconds[restarts.clamp(0, _startSeconds.length - 1)]);
+  static Duration startTimeout(int restarts, {bool slowDrm = false}) {
+    final List<int> seconds = slowDrm ? _slowDrmStartSeconds : _startSeconds;
+    return Duration(seconds: seconds[restarts.clamp(0, seconds.length - 1)]);
+  }
 
   Duration _now = Duration.zero;
   Duration _lastProgress = Duration.zero;
@@ -311,13 +318,35 @@ class LivePlaybackWatch {
   /// Time without progress so far.
   Duration get idle => _now - _lastProgress;
 
+  /// Time the player has been meant to play so far.
+  Duration get waited => _now - _expectedSince;
+
   /// True when the player should be restarted; [restarts] counts the
   /// watchdog restarts since the Live last played.
-  bool stuck({required int restarts}) {
+  bool stuck({required int restarts, bool slowDrm = false}) {
     if (played) return idle >= stallTimeout;
-    final Duration timeout = startTimeout(restarts);
-    return idle >= timeout || _now - _expectedSince >= timeout * 3;
+    final Duration timeout = startTimeout(restarts, slowDrm: slowDrm);
+    return idle >= timeout || waited >= timeout * 3;
   }
+}
+
+/// D-212 (Lives 102–103, 2026-11-18/19): on part of the PCs, hardware
+/// PlayReady (SL3000) loads the Live and shows no picture, or never gets
+/// through its DRM start. The page's own switch to software waited 12 s and
+/// needed 2 s of media, so the Live watch restarted first, and every restart
+/// began in hardware again (24–87 s of black picture). The app now asks the
+/// page for software after [giveUp] without a first frame; the page then
+/// reports the switch and the watch counts again from it.
+abstract final class PcHardwareStart {
+  static const Duration giveUp = Duration(seconds: 6);
+
+  static bool fallbackDue({
+    required bool hardware,
+    required bool asked,
+    required bool firstFrame,
+    required Duration waited,
+  }) =>
+      hardware && !asked && !firstFrame && waited >= giveUp;
 }
 
 /// The native player's state as an HTMLMediaElement `readyState`

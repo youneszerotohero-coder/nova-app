@@ -13,6 +13,7 @@ import 'package:nova_mobile/data/live_store.dart';
 import 'package:nova_mobile/data/models.dart';
 import 'package:nova_mobile/data/playback_models.dart';
 import 'package:nova_mobile/features/learning/lesson_screen.dart';
+import 'package:nova_mobile/features/learning/live_room_screen.dart';
 import 'package:nova_mobile/features/player/playback_rules.dart';
 import 'package:nova_mobile/features/player/protected_video.dart';
 
@@ -58,6 +59,66 @@ Map<String, Object?> _pcAuthorization({bool hardware = true}) => <String, Object
 
 /// Stands in for `protected_player.cpp`: `nova/protected_player` create,
 /// each player's commands, and its events sent as JSON text.
+/// A running Live as the PC app sees it (D-212): `GET /lives/301`, the
+/// PlayReady policy (hardware first, mode A), the protected join, telemetry.
+Map<String, FakeResponse> _pcLive() => <String, FakeResponse>{
+      'GET /lives/301': const FakeResponse(200, <String, Object?>{
+        'data': <String, Object?>{
+          'id': 301,
+          'course_id': 102,
+          'title': 'Mechanics live',
+          'course_title': 'Physics — Mechanics Masterclass',
+          'teacher_name': 'Amel Khaldi',
+          'attendees_count': 14,
+          'scheduled_at': '2026-09-24T18:00:00+00:00',
+          'started_at': '2026-09-24T18:01:00+00:00',
+          'server_time': '2026-09-24T18:10:00+00:00',
+          'status': 'live',
+          'audience_opened_at': null,
+          'waiting_room': null,
+          'media_state': 'ready',
+          'comments_enabled': true,
+          'comment_max_length': 500,
+          'course_slug': 'physics-mechanics',
+          'lesson_id': null,
+          'pinned_comment': null,
+        },
+        'hand_status': null,
+        'muted': false,
+        'speaker': null,
+      }),
+      'POST /lives/301/playback-policy': FakeResponse(200, <String, Object?>{
+        'data': <String, Object?>{
+          'mode': 'protected',
+          'challenge': 'c' * 64,
+          'expires_at': 1790000000,
+          'candidates': const <Object>[
+            <String, Object?>{'drm': 'playready', 'key_system': playReadyHardwareKeySystem, 'robustness': '3000'},
+            <String, Object?>{'drm': 'playready', 'key_system': playReadyKeySystem, 'robustness': '2000'},
+          ],
+          'policy': const <String, Object?>{'mode': 'compatible', 'software_fallback': true, 'max_height': null},
+          'clear_fallback_available': false,
+          'clear_delivery_available': false,
+          'telemetry': true,
+        },
+      }),
+      'POST /lives/301/join': const FakeResponse(200, <String, Object?>{
+        'data': <String, Object?>{
+          'mode': 'protected',
+          'manifests': <String, String>{'dash': 'https://live.test/301/manifest.mpd', 'hls': 'https://live.test/301/master.m3u8'},
+          'drm': <String, Object>{
+            'token': 'ey.live',
+            'license_urls': <String, String>{'playready': 'https://pr.test/AcquireLicense'},
+          },
+          'protection': <String, Object?>{'max_height': null},
+          'expires_at': 1790000240,
+          'renew_after_seconds': 240,
+          'url_protection': 'none',
+        },
+      }),
+      'POST /lives/301/playback-telemetry': const FakeResponse(204),
+    };
+
 class _WindowsPlayers {
   final List<Map<String, Object?>> created = <Map<String, Object?>>[];
   final List<MethodCall> commands = <MethodCall>[];
@@ -177,6 +238,120 @@ void main() {
       expect(strict.playreadyFor(hardware: false), isNull);
       expect(strict.playreadyFor(hardware: true)?.keySystem, 'com.microsoft.playready.recommendation.3000');
     });
+  });
+
+  group('PC app Live player (D-212)', () {
+    setUpAll(loadNovaFonts);
+    setUp(ClearDeliveryMemory.reset);
+
+    late _WindowsPlayers players;
+
+    Future<FakeBackend> pumpLive(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.25;
+      addTearDown(tester.view.reset);
+      const MethodChannel drm = MethodChannel('nova/drm');
+      final TestDefaultBinaryMessenger messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(drm, (MethodCall call) async => 'SL3000');
+      addTearDown(() => messenger.setMockMethodCallHandler(drm, null));
+      players = _WindowsPlayers()..install();
+      addTearDown(players.uninstall);
+
+      final FakeBackend backend = FakeBackend(_pcLive());
+      final AppState app = installFixtureApp(live: LiveStore(fakeApi(backend)));
+      app.setLang(NovaLang.en);
+      await tester.pumpWidget(
+        AppScope(
+          state: app,
+          child: MaterialApp(theme: NovaTheme.light, home: LiveRoomScreen(live: HomeData.lives.first)),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 200));
+      return backend;
+    }
+
+    /// Unmounts the room; its telemetry is flushed on the way out.
+    Future<void> leave(WidgetTester tester) async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 30));
+    }
+
+    Future<void> asPcApp(Future<void> Function() body) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      try {
+        await body();
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    }
+
+    /// One `position` report of the page: the playhead and 14 s of media loaded ahead.
+    Map<String, Object?> loaded() =>
+        <String, Object?>{'event': 'position', 'position': 600000, 'duration': 0, 'buffered': 614000, 'liveOffset': 12000};
+
+    List<String> sent() => <String>[for (final MethodCall c in players.commands) c.method];
+
+    testWidgets('hardware PlayReady with media and no picture goes on in software at 6 s, in the same player',
+        (tester) => asPcApp(() async {
+      final FakeBackend backend = await pumpLive(tester);
+      expect(players.created.single['robustness'], '3000');
+      expect(players.created.single['keySystem'], playReadyHardwareKeySystem);
+
+      // Lives 102–103: SL3000 loads the Live and shows nothing.
+      players.emit(<String, Object?>{'event': 'state', 'state': 'buffering'});
+      for (int i = 0; i < 5; i++) {
+        players.emit(loaded());
+        await tester.pump(const Duration(seconds: 1));
+      }
+      expect(sent(), isNot(contains('softwareFallback')), reason: 'not before 6 s');
+      for (int i = 0; i < 2; i++) {
+        players.emit(loaded());
+        await tester.pump(const Duration(seconds: 1));
+      }
+      expect(sent().where((String m) => m == 'softwareFallback'), hasLength(1));
+
+      // The page switches; its software start gets a full 20 s without a restart.
+      players.emit(<String, Object?>{'event': 'drm', 'keySystem': playReadyKeySystem, 'robustness': '2000', 'fallback': true});
+      for (int i = 0; i < 18; i++) {
+        players.emit(loaded());
+        await tester.pump(const Duration(seconds: 1));
+      }
+      expect(players.created, hasLength(1), reason: 'no restart: it would begin in hardware again');
+      expect(backend.requests.where((FakeRequest r) => r.path == '/lives/301/join'), hasLength(1));
+      expect(sent().where((String m) => m == 'softwareFallback'), hasLength(1), reason: 'asked once');
+
+      players.emit(<String, Object?>{'event': 'firstFrame'});
+      players.emit(<String, Object?>{'event': 'playing', 'value': true});
+      await tester.pump(const Duration(seconds: 1));
+      await leave(tester);
+
+      final List<Map<String, dynamic>> events = <Map<String, dynamic>>[
+        for (final FakeRequest r in backend.requests.where((FakeRequest r) => r.path == '/lives/301/playback-telemetry'))
+          for (final Object? event in (r.data! as Map<String, Object?>)['events']! as List<Object?>) event! as Map<String, dynamic>,
+      ];
+      final Map<String, dynamic> fallback = events.singleWhere((Map<String, dynamic> e) => e['type'] == 'reload');
+      expect(fallback['error_code'], liveReloadSoftwareFallback);
+      expect(fallback['drm_hardware'], 0);
+      expect(fallback['buffer_ahead_s'], 14);
+      expect(events.where((Map<String, dynamic> e) => e['type'] == 'error'), isEmpty);
+    }));
+
+    testWidgets('the page switching by itself (a hardware DRM error) is followed the same way', (tester) => asPcApp(() async {
+      await pumpLive(tester);
+      players.emit(<String, Object?>{'event': 'state', 'state': 'buffering'});
+      await tester.pump(const Duration(seconds: 2));
+      players.emit(<String, Object?>{'event': 'drm', 'keySystem': playReadyKeySystem, 'robustness': '2000', 'fallback': true});
+      for (int i = 0; i < 19; i++) {
+        players.emit(<String, Object?>{'event': 'position', 'position': 600000, 'duration': 0, 'buffered': 600000, 'liveOffset': 12000});
+        await tester.pump(const Duration(seconds: 1));
+      }
+      expect(sent(), isNot(contains('softwareFallback')), reason: 'already software');
+      expect(players.created, hasLength(1));
+      await leave(tester);
+    }));
   });
 
   group('PC app Lesson player', () {

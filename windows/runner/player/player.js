@@ -10,13 +10,14 @@
 //   window.nova.command({method, args})   play, pause, seekTo{ms},
 //                                seekToLiveEdge, setSpeed{speed},
 //                                setVolume{volume}, setQuality{height},
-//                                renewToken{token}, release
+//                                renewToken{token}, softwareFallback, release
 //   window.nova.probe()          which PlayReady level this PC has
 //
 // Messages to the host are strings: "ready", "probe:3000|2000|none",
 // "hwfail" (hardware PlayReady failed here: software from now on) and
 // "event:<json>" (forwarded as is to Dart: state, playing, position,
-// firstFrame, tracks, error, drm).
+// firstFrame, tracks, error, drm; a `drm` event with `fallback: true` is a
+// switch to software in this player).
 'use strict';
 
 (function () {
@@ -179,6 +180,8 @@
     send('hwfail');
     keySystem = PLAYREADY;
     robustness = '2000';
+    // The app's Live watch starts counting again for the software start.
+    emit({ event: 'drm', keySystem, robustness, fallback: true });
     const resume = Object.assign({}, params, { startMs: Math.round((video.currentTime || startTime) * 1000) });
     start(resume).catch(onError);
     return true;
@@ -366,6 +369,9 @@
       case 'setQuality': setQuality(Number(args.height) || 0); break;
       // A renewed Live entitlement: future licence requests only.
       case 'renewToken': token = typeof args.token === 'string' ? args.token : token; break;
+      // The app saw no picture on hardware PlayReady (2026-11-19, D-212):
+      // software now, without waiting for this page's own start watch.
+      case 'softwareFallback': hardwareFailed(); break;
       case 'release': release(); break;
       default: break;
     }

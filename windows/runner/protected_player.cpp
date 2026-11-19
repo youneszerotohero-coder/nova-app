@@ -454,7 +454,7 @@ void VideoWindow::OnMethodCall(
     std::unique_ptr<MethodResult<EncodableValue>> result) {
   static const std::set<std::string> commands = {
       "play",       "pause",      "seekTo",     "seekToLiveEdge", "setSpeed",
-      "setQuality", "setVolume",  "renewToken",
+      "setQuality", "setVolume",  "renewToken", "softwareFallback",
   };
   const std::string& method = call.method_name();
   if (closing_) {

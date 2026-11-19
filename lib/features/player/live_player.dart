@@ -144,6 +144,11 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   /// Watchdog restarts since the Live last played (longer waits each time).
   int _watchRestarts = 0;
 
+  /// D-212, PC app: software asked of this native player, and its software
+  /// switches already handled ([VideoState.drmFallbacks]).
+  bool _softwareAsked = false;
+  int _seenFallbacks = 0;
+
   /// iPhone: the last drift seek, on the watchdog's clock ([liveDriftNeedsSeek]).
   Duration? _lastDriftSeek;
 
@@ -576,6 +581,8 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
 
   void _play(LiveJoin join) {
     final ProtectedVideoController video = ProtectedVideoController()..addListener(_onVideo);
+    _softwareAsked = false;
+    _seenFallbacks = 0;
     _overlay.value = _overlayOf(video.value);
     _qualityApplied = false;
     // A new native player starts playing by itself.
@@ -631,12 +638,43 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
         position: state.position,
         buffered: state.buffered,
       );
+      // D-212: hardware PlayReady with no picture goes on in software first.
+      if (state.drmFallbacks > _seenFallbacks) return _wentSoftware(video, state);
+      if (PcHardwareStart.fallbackDue(
+        hardware: _hardwarePlayReady,
+        asked: _softwareAsked,
+        firstFrame: state.firstFrame,
+        waited: watch.waited,
+      )) {
+        _softwareAsked = true;
+        unawaited(video.softwareFallback());
+      }
       // Mode B: the protected start watch decides first (D-077).
       if (_startWatch?.isActive ?? false) return;
-      if (watch.stuck(restarts: _watchRestarts)) return _restartStuck(video, state, played: watch.played);
+      if (watch.stuck(restarts: _watchRestarts, slowDrm: isWindowsApp && !_clear)) {
+        return _restartStuck(video, state, played: watch.played);
+      }
       _keepNearEdge(video, state);
       _adapt(video, state);
     });
+  }
+
+  /// The PC app's player on hardware PlayReady (SL3000).
+  bool get _hardwarePlayReady => isWindowsApp && !_clear && _candidate?.robustness == '3000';
+
+  /// D-212: the PC page went on in software PlayReady (asked above, or after
+  /// its own DRM error or start check). The watch counts again from here, and
+  /// later starts in this app run are software (the native side remembers).
+  void _wentSoftware(ProtectedVideoController video, VideoState state) {
+    _seenFallbacks = state.drmFallbacks;
+    _candidate = _policy?.playreadyFor(hardware: false) ?? _candidate;
+    _telemetry?.record('reload', <String, num>{
+      'error_code': liveReloadSoftwareFallback,
+      'drm_hardware': 0,
+      ..._mediaFields(state),
+      ..._deliveryField,
+    });
+    _watchPlayback(video);
   }
 
   /// D-192: Android's Media3 player only (track disabling, target offset override).
