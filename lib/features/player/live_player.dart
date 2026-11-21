@@ -1292,8 +1292,6 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
             ),
           ] else
             _stageNotice(context),
-          if (_policy != null || join != null)
-            Positioned(top: 10, left: 10, child: ProtectedBadge(clear: _neutral)),
         ],
       ),
     );

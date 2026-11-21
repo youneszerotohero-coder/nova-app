@@ -778,11 +778,6 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
           if (_stage == _Stage.idle) _center(_checkButton(context)),
           if (_stage == _Stage.checking) _center(_checking(context)),
           if (_stage == _Stage.failed) _center(_failed(context)),
-          Positioned(
-            top: 10,
-            left: 10,
-            child: ProtectedBadge(clear: _neutral),
-          ),
         ],
       ),
     );
@@ -1019,40 +1014,6 @@ String playerFailureKey(String category, {required bool clear}) {
     'processing' || 'timeout' || 'session_expired' || 'decode' => 'player.clearErr.$category',
     _ => 'player.clearErr.delivery',
   };
-}
-
-class ProtectedBadge extends StatelessWidget {
-  const ProtectedBadge({super.key, this.clear = false});
-
-  /// The clear copy (D-070): a personal copy under the identity watermark.
-  final bool clear;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(clear ? Icons.badge_rounded : Icons.shield_rounded, size: 12, color: Colors.white),
-          const SizedBox(width: 5),
-          Text(
-            context.tr(clear ? 'player.clearBadge' : 'player.protected'),
-            style: const TextStyle(
-              fontFamily: 'Geist',
-              fontWeight: FontWeight.w700,
-              fontSize: 10,
-              color: Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 /// Full name, full phone and the rotating session reference (D-029).

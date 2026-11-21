@@ -1133,7 +1133,8 @@ void main() {
       expect(players.created.single['clear'], isTrue);
       expect(players.created.single['manifest'], endsWith('master.m3u8'));
       expect(players.created.single['live'], isTrue);
-      expect(find.text('Personal copy · identity watermark'), findsOneWidget);
+      // Owner, 2026-11-21: no badge over the picture; the identity watermark stays.
+      expect(find.text('Personal copy · identity watermark'), findsNothing);
       expect(find.textContaining(HomeData.student.phone), findsOneWidget);
       expect(ClearDeliveryMemory.live, isTrue);
       await leave(tester);

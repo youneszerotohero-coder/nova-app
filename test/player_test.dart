@@ -511,7 +511,8 @@ void main() {
         expect(players.created.single['clear'], isTrue);
         expect(players.created.single['manifest'], 'https://cdn.test/v/hls-clear/master.m3u8?token=abc');
         expect(players.created.single['startMs'], 312000);
-        expect(find.text('Personal copy · identity watermark'), findsOneWidget);
+        // Owner, 2026-11-21: no badge over the picture; the identity watermark stays.
+        expect(find.text('Personal copy · identity watermark'), findsNothing);
         expect(find.textContaining('Ines Benali'), findsOneWidget);
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump(const Duration(seconds: 1));
@@ -945,7 +946,8 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       await open();
       expect(find.text('Check & play'), findsOneWidget);
-      expect(find.text('Protected lesson'), findsOneWidget);
+      // Owner, 2026-11-21: the badge is gone in every mode.
+      expect(find.text('Protected lesson'), findsNothing);
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(seconds: 1));
     });

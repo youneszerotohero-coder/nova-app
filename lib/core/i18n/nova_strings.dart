@@ -1133,7 +1133,6 @@ const Map<String, Map<String, String>> K = {
 
   // Protected player (D-067 Phase 2) — same states as the web player.
   'player.checkPlay': {'en': 'Check & play', 'fr': 'Vérifier et lire', 'ar': 'تحقّق وشغّل'},
-  'player.protected': {'en': 'Protected lesson', 'fr': 'Leçon protégée', 'ar': 'درس محمي'},
   'player.phaseAccess': {'en': 'Confirming your access…', 'fr': 'Vérification de ton accès…', 'ar': 'جارٍ التحقق من وصولك…'},
   'player.phaseDevice': {'en': 'Checking device protection…', 'fr': 'Vérification de la protection de l’appareil…', 'ar': 'جارٍ التحقق من حماية الجهاز…'},
   'player.phaseMedia': {'en': 'Loading protected media…', 'fr': 'Chargement du média protégé…', 'ar': 'جارٍ تحميل الوسائط المحمية…'},
@@ -1228,11 +1227,6 @@ const Map<String, Map<String, String>> K = {
   },
   // D-070 clear copy (web `player.clear.*`): its messages never speak of
   // protected media.
-  'player.clearBadge': {
-    'en': 'Personal copy · identity watermark',
-    'fr': 'Copie personnelle · filigrane nominatif',
-    'ar': 'نسخة شخصية · علامة مائية باسمك',
-  },
   'player.clearLoading': {'en': 'Loading the video…', 'fr': 'Chargement de la vidéo…', 'ar': 'جارٍ تحميل الفيديو…'},
   'player.clearChecking': {'en': 'Preparing the video…', 'fr': 'Préparation de la vidéo…', 'ar': 'جارٍ تجهيز الفيديو…'},
   'player.play': {'en': 'Play', 'fr': 'Lire', 'ar': 'تشغيل'},
