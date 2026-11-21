@@ -478,6 +478,12 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
 
         expect(players.created, hasLength(1));
+        // Owner 2026-11-21: full screen fills the screen (cropped, never stretched), and back to the whole picture.
+        final List<Object?> fills = <Object?>[
+          for (final MethodCall c in players.commands.values.expand((List<MethodCall> calls) => calls))
+            if (c.method == 'setFill') (c.arguments as Map<Object?, Object?>)['on'],
+        ];
+        expect(fills, <Object?>[true, false]);
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump(const Duration(seconds: 1));
       } finally {

@@ -248,6 +248,13 @@ class ProtectedPlayerView(
             "setSpeed" -> player.playbackParameters =
                 PlaybackParameters((call.argument<Number>("speed") ?: 1.0).toFloat())
             "setVolume" -> player.volume = (call.argument<Number>("volume") ?: 1.0).toFloat()
+            // Owner 2026-11-21: in full screen the picture fills the whole screen without
+            // stretching (cropped to the screen's shape); the inline 16:9 box is unchanged.
+            "setFill" -> player.videoScalingMode = if (call.argument<Boolean>("on") == true) {
+                C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
+            } else {
+                C.VIDEO_SCALING_MODE_SCALE_TO_FIT
+            }
             "setQuality" -> setQuality(call.argument<Number>("height")?.toInt() ?: 0)
             // D-192 F: the sound only — no video renderer, so no video segment is loaded;
             // the DRM session (audio key) and the playback position stay.

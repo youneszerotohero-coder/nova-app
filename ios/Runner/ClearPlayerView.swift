@@ -334,6 +334,9 @@ final class ClearPlayerView: NSObject, FlutterPlatformView, FlutterStreamHandler
       if player.timeControlStatus != .paused { player.rate = speed }
     case "setVolume":
       player.volume = (args["volume"] as? NSNumber)?.floatValue ?? 1
+    case "setFill":
+      // Owner 2026-11-21: in full screen the picture fills the whole screen (cropped, never stretched).
+      container.playerLayer.videoGravity = (args["on"] as? Bool ?? false) ? .resizeAspectFill : .resizeAspect
     case "setQuality":
       setQuality((args["height"] as? NSNumber)?.intValue ?? 0)
     case "renewToken":

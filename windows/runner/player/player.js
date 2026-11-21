@@ -10,7 +10,8 @@
 //   window.nova.command({method, args})   play, pause, seekTo{ms},
 //                                seekToLiveEdge, setSpeed{speed},
 //                                setVolume{volume}, setQuality{height},
-//                                renewToken{token}, softwareFallback, release
+//                                renewToken{token}, softwareFallback, setFill{on},
+//                                release
 //   window.nova.probe()          which PlayReady level this PC has
 //
 // Messages to the host are strings: "ready", "probe:3000|2000|none",
@@ -367,6 +368,8 @@
       case 'setSpeed': video.playbackRate = Number(args.speed) || 1; break;
       case 'setVolume': video.volume = Math.min(1, Math.max(0, Number(args.volume))); break;
       case 'setQuality': setQuality(Number(args.height) || 0); break;
+      // Owner 2026-11-21: in full screen the picture fills the window (cropped, never stretched).
+      case 'setFill': video.style.objectFit = args.on === true ? 'cover' : 'contain'; break;
       // A renewed Live entitlement: future licence requests only.
       case 'renewToken': token = typeof args.token === 'string' ? args.token : token; break;
       // The app saw no picture on hardware PlayReady (2026-11-19, D-212):

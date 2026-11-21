@@ -219,6 +219,7 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
         .listen(_onEvent, onError: (Object _) {
       value = value.copyWith(errorCategory: 'delivery');
     });
+    if (_fill) unawaited(setFill(true));
   }
 
   void _onEvent(dynamic message) {
@@ -339,6 +340,17 @@ class ProtectedVideoController extends ValueNotifier<VideoState> {
       return false;
     }
   }
+
+  /// Owner 2026-11-21: in full screen the picture fills the whole screen
+  /// (cropped to its shape, never stretched); false = the whole picture.
+  /// False when the native player cannot.
+  Future<bool> setFill(bool on) {
+    _fill = on;
+    return _optional('setFill', <String, Object>{'on': on});
+  }
+
+  /// Kept for a native view attached later (a player created in full screen).
+  bool _fill = false;
 
   /// A renewed Live entitlement for future licence requests.
   Future<void> renewToken(String token) => _call('renewToken', <String, Object>{'token': token});

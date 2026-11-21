@@ -234,6 +234,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(LivePlayer old) {
     super.didUpdateWidget(old);
+    if (old.fullscreen != widget.fullscreen) unawaited(_video?.setFill(widget.fullscreen));
     if (widget.suspended && !old.suspended) _suspend();
     if (!widget.suspended && old.suspended) return _endTurn();
     if (widget.suspended && widget.downlinkWeak && !_pausedForDownlink) {
@@ -582,6 +583,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
 
   void _play(LiveJoin join) {
     final ProtectedVideoController video = ProtectedVideoController()..addListener(_onVideo);
+    if (widget.fullscreen) unawaited(video.setFill(true));
     _softwareAsked = false;
     _seenFallbacks = 0;
     _overlay.value = _overlayOf(video.value);

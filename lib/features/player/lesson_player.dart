@@ -152,6 +152,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
   @override
   void didUpdateWidget(LessonPlayer old) {
     super.didUpdateWidget(old);
+    if (old.fullscreen != widget.fullscreen) unawaited(_video?.setFill(widget.fullscreen));
     if (old.mediaKey != widget.mediaKey) _reset();
   }
 
@@ -428,6 +429,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
       auth.durationSeconds,
     );
     final ProtectedVideoController video = ProtectedVideoController()..addListener(_onVideo);
+    if (widget.fullscreen) unawaited(video.setFill(true));
     if (reconnect) _resumedFrom = Duration(seconds: start);
     setState(() {
       _auth = auth;
