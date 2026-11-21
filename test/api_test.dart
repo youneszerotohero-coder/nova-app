@@ -255,6 +255,28 @@ void main() {
       expect(held.ownedOfferIds, isNull);
     });
 
+    test('every page of Lives is read: page 1 alone hid the newest Lives (Live 103, 2026-11-19)', () async {
+      Map<String, Object?> live(int id) => <String, Object?>{'id': id, 'title': 'Live $id', 'status': 'scheduled', 'scheduled_at': '2026-11-21T17:00:00+00:00'};
+      final FakeBackend backend = FakeBackend(<String, FakeResponse>{
+        'GET /access-grants': const FakeResponse(200, <String, Object>{'data': <Object>[]}),
+        'GET /me/dashboard': const FakeResponse(200, <String, Object>{'data': <String, Object>{}}),
+        'GET /lives?page=1': FakeResponse(200, <String, Object?>{
+          'data': <Object>[for (int id = 1; id <= 50; id++) live(id)],
+          'meta': const <String, Object>{'current_page': 1, 'last_page': 2},
+        }),
+        'GET /lives?page=2': FakeResponse(200, <String, Object?>{
+          'data': <Object>[live(103)],
+          'meta': const <String, Object>{'current_page': 2, 'last_page': 2},
+        }),
+      });
+      final LearningStore learning = LearningStore(fakeApi(backend));
+      await learning.load();
+
+      expect(learning.lives, hasLength(51));
+      expect(learning.lives.last.id, 103);
+      expect(backend.requests.where((FakeRequest r) => r.path == '/lives'), hasLength(2));
+    });
+
     test('access grants list the Offers the Student holds, a hidden one too (D-201 owned_offers)', () async {
       final LearningStore held = LearningStore(fakeApi(FakeBackend(<String, FakeResponse>{
         'GET /access-grants': const FakeResponse(200, <String, Object?>{

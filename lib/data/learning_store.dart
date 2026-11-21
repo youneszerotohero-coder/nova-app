@@ -72,7 +72,7 @@ class LearningStore extends ChangeNotifier {
       final List<Json> bodies = await Future.wait(<Future<Json>>[
         api.get('/access-grants'),
         api.get('/me/dashboard'),
-        api.get('/lives'),
+        _allLives(api),
       ]);
       final Map<int, Json> progress = <int, Json>{
         for (final Json row in bodies[1].obj('data')?.list('courses') ?? <Json>[])
@@ -93,6 +93,22 @@ class LearningStore extends ChangeNotifier {
       _state = LoadState.failed;
     }
     notifyListeners();
+  }
+
+  /// Every Live the Student can see, all pages (50 each, at most 20 pages, as
+  /// the website reads them): page 1 alone hid the newest Lives of a Student
+  /// holding more than 50 (Live 103, 2026-11-19).
+  static Future<Json> _allLives(NovaApi api) async {
+    final List<Json> rows = <Json>[];
+    int page = 1;
+    int last = 1;
+    do {
+      final Json body = await api.get('/lives', query: <String, Object?>{'page': page});
+      rows.addAll(body.list('data'));
+      last = body.obj('meta')?.integer('last_page', 1) ?? 1;
+      page++;
+    } while (page <= last && page <= 20);
+    return <String, dynamic>{'data': rows};
   }
 
   /// Curriculum merged with the Student's per-lesson progress (lock,
