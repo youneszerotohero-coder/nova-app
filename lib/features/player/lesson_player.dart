@@ -134,7 +134,9 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
   WatermarkSpot _spot = const WatermarkSpot(top: 0.12, inset: 0.06, right: false);
   Timer? _watermarkTimer;
 
-  bool _controls = true;
+  /// Owner, 2026-11-21: nothing over the video until the Student taps it;
+  /// a tap shows the controls for 3 s.
+  bool _controls = false;
   Timer? _hideTimer;
   double _speed = 1;
   int _quality = 0;
@@ -438,7 +440,7 @@ class _LessonPlayerState extends State<LessonPlayer> with WidgetsBindingObserver
       _video = video;
       _reporter = ProgressReporter(initialSeconds: start);
       _stage = _Stage.playing;
-      _controls = true;
+      _controls = false;
     });
     _moveWatermark();
     _scheduleHide();

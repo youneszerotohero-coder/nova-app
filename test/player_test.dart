@@ -19,6 +19,7 @@ import 'package:nova_mobile/features/learning/lesson_screen.dart';
 import 'package:nova_mobile/features/learning/quiz_runner.dart';
 import 'package:nova_mobile/features/player/lesson_player.dart';
 import 'package:nova_mobile/features/player/playback_rules.dart';
+import 'package:nova_mobile/features/player/protected_video.dart';
 import 'package:nova_mobile/features/shell/student_top_bar.dart';
 
 import 'fixtures/fake_api.dart';
@@ -340,6 +341,8 @@ void main() {
       expect(saved(), <int>[905]);
 
       // Jumps forward and back are saved at once, wherever they land.
+      await tester.tap(find.byType(ProtectedVideoView).last, warnIfMissed: false); // the controls show on a tap
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.byIcon(Icons.forward_10_rounded));
       await tester.pump(const Duration(milliseconds: 50));
       await tester.tap(find.byIcon(Icons.replay_10_rounded));
@@ -462,10 +465,14 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
         expect(players.created, hasLength(1));
 
+        await tester.tap(find.byType(ProtectedVideoView).last, warnIfMissed: false); // the controls show on a tap
+        await tester.pump(const Duration(milliseconds: 300));
         await tester.tap(find.byIcon(Icons.fullscreen_rounded));
         await tester.pump(const Duration(milliseconds: 100));
         await tester.pump(const Duration(milliseconds: 100));
         expect(find.byIcon(Icons.fullscreen_exit_rounded), findsOneWidget);
+        await tester.tap(find.byType(ProtectedVideoView).last, warnIfMissed: false); // the controls show on a tap
+        await tester.pump(const Duration(milliseconds: 300));
         await tester.tap(find.byIcon(Icons.fullscreen_exit_rounded));
         await tester.pump(const Duration(milliseconds: 100));
         await tester.pump(const Duration(milliseconds: 100));

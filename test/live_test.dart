@@ -1419,6 +1419,27 @@ void main() {
       });
     });
 
+    testWidgets('nothing over the picture but the LIVE badge until a tap; the controls go again after 3 s', (tester) async {
+      await pumpRoom(tester, clearLive());
+      await tester.pump(const Duration(milliseconds: 200));
+      players.emit(<String, Object?>{'event': 'firstFrame'});
+      players.emit(<String, Object?>{'event': 'state', 'state': 'ready'});
+      players.emit(<String, Object?>{'event': 'playing', 'value': true});
+      await tester.pump(const Duration(milliseconds: 300));
+
+      double controls() => tester.widget<AnimatedOpacity>(find.ancestor(of: find.byIcon(Icons.pause_rounded), matching: find.byType(AnimatedOpacity)).first).opacity;
+      expect(controls(), 0, reason: 'no fullscreen, sound or settings button before a tap');
+      expect(find.byType(LiveBadge), findsOneWidget);
+
+      await tester.tap(find.byType(ProtectedVideoView).last, warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(controls(), 1);
+      await tester.pump(const Duration(seconds: 3));
+      expect(controls(), 0);
+      expect(find.byType(LiveBadge), findsOneWidget);
+      await leave(tester);
+    });
+
     testWidgets('a Live the Student paused is neither a stall nor restarted', (tester) async {
       final FakeBackend backend = await pumpRoom(tester, clearLive());
       await tester.pump(const Duration(milliseconds: 200));
@@ -1427,6 +1448,9 @@ void main() {
       players.emit(<String, Object?>{'event': 'playing', 'value': true});
       await tester.pump(const Duration(milliseconds: 100));
 
+      // The controls show on a tap on the picture (owner, 2026-11-21).
+      await tester.tap(find.byType(ProtectedVideoView).last, warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.byIcon(Icons.pause_rounded));
       await tester.pump(const Duration(milliseconds: 100));
       expect(players.commands[players.lastId]!.map((MethodCall c) => c.method), contains('pause'));

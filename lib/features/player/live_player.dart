@@ -212,7 +212,9 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
   final ValueNotifier<_Overlay> _overlay = ValueNotifier<_Overlay>(_overlayOf(const VideoState()));
   final ValueNotifier<int> _spot = ValueNotifier<int>(0);
   bool _muted = false;
-  bool _controls = true;
+  /// Owner, 2026-11-21: nothing over the picture until the Student taps it
+  /// (only the LIVE badge stays); a tap shows the controls for 3 s.
+  bool _controls = false;
   bool _loading = false;
   bool _disposed = false;
 
@@ -328,8 +330,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
       }
       video.play();
     }
-    _set(() => _controls = true);
-    _scheduleHide();
+    _set(() => _controls = false);
   }
 
   /// Stops the current playback; the telemetry session survives.
@@ -591,7 +592,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
       _join = join;
       _video = video;
       _stage = _LiveStage.playing;
-      _controls = true;
+      _controls = false;
     });
     _scheduleRenewal(join.renewAfter);
     _cycleWatermark();
@@ -1290,6 +1291,7 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
                 ),
               ),
             ),
+            const Positioned(top: 10, left: 10, child: IgnorePointer(child: LiveBadge())),
           ] else
             _stageNotice(context),
         ],
@@ -1464,22 +1466,6 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
                   color: Colors.white,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: NovaColors.heartRed,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  'LIVE',
-                  style: TextStyle(
-                    fontFamily: 'Geist',
-                    fontWeight: FontWeight.w800,
-                    fontSize: 10.5,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
               const Spacer(),
               IconButton(
                 onPressed: _toggleMute,
@@ -1506,6 +1492,32 @@ class _LivePlayerState extends State<LivePlayer> with WidgetsBindingObserver {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The red LIVE badge, the one thing always on a running Live's picture
+/// (owner, 2026-11-21).
+class LiveBadge extends StatelessWidget {
+  const LiveBadge({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: NovaColors.heartRed,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: const Text(
+        'LIVE',
+        style: TextStyle(
+          fontFamily: 'Geist',
+          fontWeight: FontWeight.w800,
+          fontSize: 10.5,
+          color: Colors.white,
         ),
       ),
     );
