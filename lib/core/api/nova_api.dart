@@ -5,6 +5,7 @@ import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../../data/json.dart';
 import 'api_exception.dart';
@@ -36,6 +37,33 @@ class NovaApi {
       // Dio, decides what counts as a failure.
       ..validateStatus = (_) => true;
     _dio.interceptors.add(CookieManager(this.cookieJar));
+    _dio.interceptors.add(InterceptorsWrapper(onRequest: (RequestOptions options, RequestInterceptorHandler handler) {
+      final String? version = appVersion;
+      if (version != null && version.isNotEmpty) options.headers[appVersionHeader] = version;
+      handler.next(options);
+    }));
+  }
+
+  /// Zero-DRM step 3 (owner plan 2026-11-21): the installed version
+  /// (`0.5.8+29`) on every request, once [loadAppVersion] read it, so the
+  /// server can refuse a version older than its minimum.
+  static const String appVersionHeader = 'X-Nova-App-Version';
+  static String? appVersion;
+
+  /// Reads the installed version from the store-updates channel (Android,
+  /// iPhone and the PC app answer it); never fails the start.
+  static Future<void> loadAppVersion([MethodChannel channel = const MethodChannel('nova/app_update')]) async {
+    try {
+      final Map<String, dynamic>? info = await channel.invokeMapMethod<String, dynamic>('version');
+      final String version = '${info?['version'] ?? ''}';
+      final String build = '${info?['build'] ?? ''}';
+      final String full = (build.isEmpty ? version : '$version+$build').replaceAll(RegExp('[^0-9A-Za-z.+_-]'), '');
+      if (full.isNotEmpty) appVersion = full.length > 40 ? full.substring(0, 40) : full;
+    } on PlatformException {
+      // No version known: the requests go without the header.
+    } on MissingPluginException {
+      // Tests and platforms without the channel.
+    }
   }
 
   /// D-121: tells the backend the request comes from the NOVA app, which

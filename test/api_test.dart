@@ -255,6 +255,23 @@ void main() {
       expect(held.ownedOfferIds, isNull);
     });
 
+    test('every request carries the installed app version once it is known (step 3)', () async {
+      final FakeBackend backend = FakeBackend(<String, FakeResponse>{
+        'GET /levels': const FakeResponse(200, <String, Object>{'data': <Object>[]}),
+      });
+      final NovaApi api = fakeApi(backend);
+      addTearDown(() => NovaApi.appVersion = null);
+
+      NovaApi.appVersion = null;
+      await api.get('/levels');
+      expect(backend.requests.last.headers.containsKey(NovaApi.appVersionHeader), isFalse);
+
+      NovaApi.appVersion = '0.5.8+29';
+      await api.get('/levels');
+      expect(backend.requests.last.headers[NovaApi.appVersionHeader], '0.5.8+29');
+      expect(backend.requests.last.headers[NovaApi.clientHeader], 'app-android');
+    });
+
     test('every page of Lives is read: page 1 alone hid the newest Lives (Live 103, 2026-11-19)', () async {
       Map<String, Object?> live(int id) => <String, Object?>{'id': id, 'title': 'Live $id', 'status': 'scheduled', 'scheduled_at': '2026-11-21T17:00:00+00:00'};
       final FakeBackend backend = FakeBackend(<String, FakeResponse>{

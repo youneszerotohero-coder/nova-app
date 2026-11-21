@@ -200,6 +200,7 @@ class AppState extends ChangeNotifier {
   /// catalogue — never for a Teacher, whom every Student endpoint refuses
   /// (D-143). Firebase starts alongside when this build has push.
   Future<void> boot() async {
+    if (api != null) await NovaApi.loadAppVersion();
     await _restoreLang();
     _startPush();
     await session.boot();
