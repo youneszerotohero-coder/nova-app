@@ -411,7 +411,9 @@ void main() {
       expect(Directionality.of(tester.element(slider)), TextDirection.ltr);
       expect(find.text('5:12 / 27:00'), findsOneWidget);
 
-      // The thumb follows the finger; the picture seeks once, on release.
+      // The thumb follows the finger; the picture seeks once, on release (the controls show on a tap first).
+      await tester.tap(find.byType(ProtectedVideoView).last, warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 300));
       final Rect bar = tester.getRect(slider);
       final TestGesture drag = await tester.startGesture(Offset(bar.left + bar.width * 0.2, bar.center.dy));
       await drag.moveTo(Offset(bar.left + bar.width * 0.5, bar.center.dy));
