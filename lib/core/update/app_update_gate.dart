@@ -84,7 +84,11 @@ class _AppUpdateGateState extends State<AppUpdateGate> with WidgetsBindingObserv
     _lastCheck = DateTime.now();
     try {
       final UpdateOffer? offer = await _updates.check();
-      if (offer == null || !mounted) return;
+      if (!mounted) return;
+      // Nothing newer any more (updated, or the store's answer corrected):
+      // the required page goes away without a relaunch.
+      if (_required != null && offer?.required != true) setState(() => _required = null);
+      if (offer == null) return;
       if (offer.required) return await _require(offer);
       switch (offer.action) {
         case UpdateAction.restart:
@@ -132,7 +136,11 @@ class _AppUpdateGateState extends State<AppUpdateGate> with WidgetsBindingObserv
     if (offer.storeUrl != null) return (widget.launch ?? _openStore)(offer.storeUrl!);
     // Android: Play needs fresh details for each flow.
     final UpdateOffer? fresh = await _updates.check();
-    if (fresh == null) return false;
+    if (fresh == null) {
+      // Play has nothing newer any more: the app is unblocked.
+      if (mounted) setState(() => _required = null);
+      return true;
+    }
     if (fresh.action == UpdateAction.immediate) return await _updates.start(immediate: true) != 'failed';
     if (fresh.storeUrl != null) return (widget.launch ?? _openStore)(fresh.storeUrl!);
     return false;

@@ -79,6 +79,13 @@ void main() {
     expect(compareVersions('1.0.1+5', '1.0.1'), greaterThan(0));
   });
 
+  test('the App Store version text is read as x.y.z only', () {
+    expect(appStoreVersion('0.5.8+29'), '0.5.8');
+    expect(appStoreVersion('24 (0.5.3)'), '0.5.3');
+    expect(appStoreVersion('1.10.2'), '1.10.2');
+    expect(appStoreVersion('nova'), '');
+  });
+
   group('PC app (Windows)', () {
     const String sha = 'a3f1c2d4e5b60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00';
 
@@ -182,6 +189,18 @@ void main() {
       // Not a version this iPhone cannot install, nor the installed one.
       expect(await updates(<String?, Map<String, dynamic>?>{'dz': _lookup('1.1.0', minimumOs: '18.0')}, _Memory(), mandatory: true).check(), isNull);
       expect(await updates(<String?, Map<String, dynamic>?>{'dz': _lookup('1.0.0')}, _Memory(), mandatory: true).check(), isNull);
+    });
+
+    test('a hand-typed store version with a build number is not newer than the installed one (2026-11-25)', () async {
+      Future<UpdateOffer?> check(String store) =>
+          updates(<String?, Map<String, dynamic>?>{'dz': _lookup(store)}, _Memory(), mandatory: true).check();
+      // Installed: 1.0.0.
+      expect(await check('1.0.0+29'), isNull);
+      expect(await check('3 (1.0.0)'), isNull);
+      expect(await check('no version'), isNull);
+      final UpdateOffer? newer = await check('1.0.1+30');
+      expect(newer?.required, isTrue);
+      expect(newer?.version, '1.0.1');
     });
 
     test('the default storefront is used when Algeria has no listing', () async {
@@ -372,6 +391,37 @@ void main() {
       expect(opened.single.toString(), 'https://apps.apple.com/dz/app/nova/id123456789');
       // Still required when the Student comes back without updating.
       expect(find.text('Update required'), findsOneWidget);
+    });
+
+    testWidgets('D-194: the required page goes away when a later check finds nothing newer', (tester) async {
+      _native(_iphone);
+      String store = '1.1.0';
+      await pumpGate(
+        tester,
+        StoreUpdates(channel: _channel, platform: TargetPlatform.iOS, memory: _Memory(), mandatory: true, fetchJson: (Uri _) async => _lookup(store)),
+        launch: (Uri _) async => true,
+      );
+      expect(find.text('Update required'), findsOneWidget);
+
+      // Back in the app and the store no longer lists anything newer.
+      store = '1.0.0';
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.text('Update required'), findsNothing);
+      expect(find.text('home').hitTestable(), findsOneWidget);
+    });
+
+    testWidgets('D-194 Android: Play has nothing newer any more, "Update" unblocks the app', (tester) async {
+      bool available = true;
+      _native((_) => _play(start: 'canceled', available: available));
+      await pumpGate(tester, StoreUpdates(channel: _channel, platform: TargetPlatform.android, memory: _Memory(), mandatory: true));
+      expect(find.text('Update required'), findsOneWidget);
+
+      available = false;
+      await tester.tap(find.text('Update'));
+      await tester.pumpAndSettle();
+      expect(find.text('Update required'), findsNothing);
     });
 
     testWidgets('D-194 Android: Play\'s full-screen flow first; cancelled, the required page retries it', (tester) async {

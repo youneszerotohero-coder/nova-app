@@ -185,7 +185,7 @@ class StoreUpdates {
   Future<UpdateOffer?> _ios() async {
     final Map<String, dynamic>? me = await _channel.invokeMapMethod<String, dynamic>('version');
     final String bundleId = '${me?['bundleId'] ?? ''}';
-    final String installed = '${me?['version'] ?? ''}';
+    final String installed = appStoreVersion('${me?['version'] ?? ''}');
     if (bundleId.isEmpty || installed.isEmpty) return null;
 
     for (final String? country in storefronts) {
@@ -196,7 +196,7 @@ class StoreUpdates {
       final Object? results = body?['results'];
       if (results is! List || results.isEmpty || results.first is! Map) continue;
       final Map<Object?, Object?> app = results.first as Map<Object?, Object?>;
-      final String store = '${app['version'] ?? ''}';
+      final String store = appStoreVersion('${app['version'] ?? ''}');
       final Uri? url = Uri.tryParse('${app['trackViewUrl'] ?? ''}');
       if (store.isEmpty || compareVersions(store, installed) <= 0) return null;
       // A version this iPhone cannot install is not offered.
@@ -335,6 +335,13 @@ class StoreUpdates {
     }
   }
 }
+
+/// The `x.y.z` in an App Store version text. The version is typed by hand in
+/// App Store Connect and has been published as `0.5.8+29` and `24 (0.5.3)`:
+/// read whole, `0.5.8+29` counted as newer than the installed `0.5.8` and
+/// required an update nobody could install (2026-11-25). Empty when the text
+/// holds no dotted version; nothing is then offered.
+String appStoreVersion(String text) => RegExp(r'\d+(?:\.\d+)+').firstMatch(text)?.group(0) ?? '';
 
 /// Compares dotted versions numerically (`1.10.0` > `1.9.2`); missing
 /// parts count as 0.
